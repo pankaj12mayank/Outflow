@@ -1,0 +1,489 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===========================================
+   OUTFLO - Premium Design System CSS
+   Dark-first glassmorphism with AI aesthetic
+   =========================================== */
+
+@layer base {
+  :root {
+    /* Background Colors */
+    --color-bg-primary: #0a0a0b;
+    --color-bg-secondary: #111113;
+    --color-bg-tertiary: #18181b;
+    --color-bg-elevated: #1f1f23;
+
+    /* Surface Colors */
+    --color-surface: #18181b;
+    --color-surface-glass: rgba(255, 255, 255, 0.03);
+    --color-surface-glass-hover: rgba(255, 255, 255, 0.06);
+
+    /* Border Colors */
+    --color-border: rgba(255, 255, 255, 0.06);
+    --color-border-hover: rgba(255, 255, 255, 0.12);
+    --color-border-strong: rgba(255, 255, 255, 0.15);
+
+    /* Text Colors */
+    --color-text-primary: #fafafa;
+    --color-text-secondary: #a1a1aa;
+    --color-text-tertiary: #71717a;
+    --color-text-muted: #52525b;
+
+    /* Accent Colors - Purple */
+    --color-purple: #a78bfa;
+    --color-purple-muted: #7c3aed;
+    --color-purple-dim: rgba(167, 139, 250, 0.15);
+    --color-purple-glow: rgba(167, 139, 250, 0.4);
+
+    /* Accent Colors - Green */
+    --color-green: #4ade80;
+    --color-green-muted: #22c55e;
+    --color-green-dim: rgba(74, 222, 128, 0.15);
+    --color-green-glow: rgba(74, 222, 128, 0.4);
+
+    /* Status Colors */
+    --color-success: #4ade80;
+    --color-warning: #fbbf24;
+    --color-error: #f87171;
+    --color-info: #60a5fa;
+
+    /* Radius */
+    --radius-sm: 0.375rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+    --radius-2xl: 1.5rem;
+    --radius-full: 9999px;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+    --shadow-glow-purple: 0 0 40px rgba(167, 139, 250, 0.3);
+    --shadow-glow-green: 0 0 40px rgba(74, 222, 128, 0.3);
+    --shadow-glow-sm: 0 0 20px rgba(167, 139, 250, 0.2);
+
+    /* UI Component Variables */
+    --radius: var(--radius-md);
+    --background: var(--color-bg-primary);
+    --foreground: var(--color-text-primary);
+    --primary: 263 75% 64%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 5% 18%;
+    --secondary-foreground: var(--color-text-primary);
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --muted: 240 5% 18%;
+    --muted-foreground: var(--color-text-tertiary);
+    --accent: 263 75% 64%;
+    --accent-foreground: 0 0% 100%;
+    --popover: var(--color-bg-secondary);
+    --popover-foreground: var(--color-text-primary);
+    --card: var(--color-bg-secondary);
+    --card-foreground: var(--color-text-primary);
+    --border: 240 5% 26%;
+    --input: var(--color-bg-tertiary);
+    --ring: var(--color-purple);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Selection */
+  ::selection {
+    @apply bg-[var(--color-purple-dim)] text-[var(--color-purple)];
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-[var(--color-border-strong)] rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-[var(--color-text-muted)];
+  }
+}
+
+@layer components {
+  /* ===========================================
+     GLASS CARD
+     Premium glassmorphism card effect
+     =========================================== */
+  .glass-card {
+    @apply relative overflow-hidden;
+    background: linear-gradient(
+      135deg,
+      rgba(24, 24, 27, 0.9) 0%,
+      rgba(31, 31, 35, 0.95) 100%
+    );
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    box-shadow: 
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  }
+
+  .glass-card::before {
+    content: "";
+    @apply absolute inset-0 pointer-events-none;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.03) 0%,
+      transparent 50%
+    );
+    border-radius: inherit;
+  }
+
+  .glass-card-hover:hover {
+    @apply border-[var(--color-border-hover)];
+    box-shadow: 
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 25px 50px -12px rgba(0, 0, 0, 0.5),
+      0 0 40px rgba(167, 139, 250, 0.1);
+  }
+
+  /* ===========================================
+     GLOWING ACCENT BUTTON
+     Premium glowing CTA button
+     =========================================== */
+  .btn-glow {
+    @apply relative inline-flex items-center justify-center font-medium transition-all duration-200;
+    background: linear-gradient(135deg, var(--color-purple-muted) 0%, var(--color-purple) 100%);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-md);
+    box-shadow: 0 0 30px rgba(167, 139, 250, 0.4);
+  }
+
+  .btn-glow:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 50px rgba(167, 139, 250, 0.5);
+  }
+
+  .btn-glow:active {
+    transform: translateY(0);
+    box-shadow: 0 0 20px rgba(167, 139, 250, 0.3);
+  }
+
+  .btn-glow-green {
+    background: linear-gradient(135deg, var(--color-green-muted) 0%, var(--color-green) 100%);
+    box-shadow: 0 0 30px rgba(74, 222, 128, 0.4);
+  }
+
+  .btn-glow-green:hover {
+    box-shadow: 0 0 50px rgba(74, 222, 128, 0.5);
+  }
+
+  /* ===========================================
+     GLASS BUTTON
+     Subtle glass effect button
+     =========================================== */
+  .btn-glass {
+    @apply relative inline-flex items-center justify-center font-medium transition-all duration-200;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--color-text-primary);
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-md);
+  }
+
+  .btn-glass:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .btn-glass:active {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  /* ===========================================
+     INPUT FIELD
+     Premium input with glow focus
+     =========================================== */
+  .input-premium {
+    @apply w-full h-11 px-4 text-sm transition-all duration-200;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-primary);
+  }
+
+  .input-premium::placeholder {
+    @apply text-[var(--color-text-tertiary)];
+  }
+
+  .input-premium:focus {
+    @apply outline-none;
+    border-color: var(--color-purple);
+    box-shadow: 0 0 0 3px var(--color-purple-dim), 0 0 20px rgba(167, 139, 250, 0.15);
+  }
+
+  .input-premium:disabled {
+    @apply opacity-50 cursor-not-allowed;
+    background: rgba(0, 0, 0, 0.2);
+  }
+
+  /* ===========================================
+     FLOATING CARD
+     Elevated floating card effect
+     =========================================== */
+  .floating-card {
+    @apply relative;
+    background: linear-gradient(
+      135deg,
+      rgba(24, 24, 27, 0.95) 0%,
+      rgba(31, 31, 35, 0.98) 100%
+    );
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    box-shadow: 
+      0 25px 50px -12px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .floating-card-elevated {
+    transform: translateY(0);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .floating-card-elevated:hover {
+    transform: translateY(-4px);
+    box-shadow: 
+      0 30px 60px -15px rgba(0, 0, 0, 0.7),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  /* ===========================================
+     BADGE
+     Premium badge styles
+     =========================================== */
+  .badge-purple {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    background: var(--color-purple-dim);
+    color: var(--color-purple);
+    border: 1px solid rgba(167, 139, 250, 0.2);
+  }
+
+  .badge-green {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    background: var(--color-green-dim);
+    color: var(--color-green);
+    border: 1px solid rgba(74, 222, 128, 0.2);
+  }
+
+  /* ===========================================
+     TABLE
+     Premium table styles
+     =========================================== */
+  .table-premium {
+    @apply w-full;
+  }
+
+  .table-premium thead {
+    @apply border-b border-[var(--color-border)];
+  }
+
+  .table-premium th {
+    @apply px-4 py-3 text-left text-xs font-medium uppercase tracking-wider;
+    color: var(--color-text-tertiary);
+  }
+
+  .table-premium tbody tr {
+    @apply transition-colors duration-150;
+  }
+
+  .table-premium tbody tr:hover {
+    @apply bg-[rgba(255,255,255,0.02)];
+  }
+
+  .table-premium td {
+    @apply px-4 py-4 text-sm;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  /* ===========================================
+     SKELETON LOADER
+     Premium skeleton animation
+     =========================================== */
+  .skeleton {
+    @apply relative overflow-hidden rounded;
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.06) 50%,
+      transparent 100%
+    );
+    animation: skeleton-shimmer 1.5s infinite;
+  }
+
+  @keyframes skeleton-shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  /* ===========================================
+     GRADIENT TEXT
+     Premium gradient text effect
+     =========================================== */
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, var(--color-purple) 0%, #c4b5fd 100%);
+  }
+
+  .text-gradient-green {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, var(--color-green) 0%, #86efac 100%);
+  }
+
+  /* ===========================================
+     MESH GRADIENT BACKGROUND
+     Animated mesh gradient
+     =========================================== */
+  .mesh-gradient {
+    background: 
+      radial-gradient(at 40% 20%, rgba(124, 58, 237, 0.15) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, rgba(74, 222, 128, 0.1) 0px, transparent 50%),
+      radial-gradient(at 0% 50%, rgba(167, 139, 250, 0.12) 0px, transparent 50%),
+      radial-gradient(at 80% 50%, rgba(96, 165, 250, 0.08) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, rgba(74, 222, 128, 0.1) 0px, transparent 50%);
+  }
+
+  /* ===========================================
+     GLOW EFFECT
+     Glowing box shadow effects
+     =========================================== */
+  .glow-purple {
+    box-shadow: 0 0 60px rgba(167, 139, 250, 0.3);
+  }
+
+  .glow-green {
+    box-shadow: 0 0 60px rgba(74, 222, 128, 0.3);
+  }
+
+  .glow-sm {
+    box-shadow: 0 0 30px rgba(167, 139, 250, 0.2);
+  }
+
+  /* ===========================================
+     NOISE TEXTURE
+     Subtle noise overlay
+     =========================================== */
+  .noise-overlay::before {
+    content: "";
+    @apply absolute inset-0 pointer-events-none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    opacity: 0.4;
+    z-index: 1;
+  }
+
+  /* ===========================================
+     BLUR BACKDROP
+     Premium blur backdrop
+     =========================================== */
+  .backdrop-blur-premium {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  .backdrop-blur-glass {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    background: rgba(24, 24, 27, 0.8);
+  }
+}
+
+@layer utilities {
+  /* ===========================================
+     ANIMATION UTILITIES
+     =========================================== */
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+
+  .animate-fade-up {
+    animation: fadeUp 0.5s ease-out forwards;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.3s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* ===========================================
+     TRANSITION UTILITIES
+     =========================================== */
+  .transition-premium {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .transition-spring {
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  /* ===========================================
+     STAGGER ANIMATION
+     =========================================== */
+  .stagger-1 { animation-delay: 0.1s; }
+  .stagger-2 { animation-delay: 0.2s; }
+  .stagger-3 { animation-delay: 0.3s; }
+  .stagger-4 { animation-delay: 0.4s; }
+  .stagger-5 { animation-delay: 0.5s; }
+}
