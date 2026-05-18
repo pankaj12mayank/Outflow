@@ -12,9 +12,8 @@ class OrganizationStatus(str, Enum):
 
 
 class MembershipRole(str, Enum):
-    OWNER = "owner"
     ADMIN = "admin"
-    MEMBER = "viewer"
+    TEAM_MEMBER = "team_member"
 
 
 class Organization(BaseModel):

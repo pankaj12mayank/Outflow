@@ -27,6 +27,7 @@ import {
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
+import { toast } from "@/app/components/toast";
 
 const jobs = [
   {
@@ -309,13 +310,12 @@ export default function JobMonitorPage() {
   };
 
   const handleDelete = (jobId: string) => {
-    if (confirm("Are you sure you want to delete this job?")) {
-      setJobList(prev => prev.filter(j => j.id !== jobId));
-    }
+    setJobList(prev => prev.filter(j => j.id !== jobId));
+    toast.delete("Scraping job");
   };
 
   const handleView = (jobId: string) => {
-    alert(`View details for job: ${jobId}`);
+    toast.info("Viewing job details", jobId);
   };
 
   const stats = {

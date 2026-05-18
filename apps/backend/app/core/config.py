@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     enable_startup_cache: bool = True
     cache_ttl_seconds: int = 300
 
+    system_owner_email: str = "admin@outflo.com"
+    system_owner_password: str = ""
+    system_owner_jwt_secret: str = ""
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if self.cors_origins and isinstance(self.cors_origins, str):

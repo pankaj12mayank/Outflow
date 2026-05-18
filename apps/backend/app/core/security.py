@@ -32,7 +32,12 @@ def verify_token(token: str) -> Optional[dict]:
         return None
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
+_executor = ThreadPoolExecutor(max_workers=4)
+
+def _verify_password_sync(plain_password: str, hashed_password: str) -> bool:
     try:
         password_bytes = plain_password.encode('utf-8')
         hash_bytes = hashed_password.encode('utf-8')
@@ -41,8 +46,15 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         print(f"Password verification error: {e}")
         return False
 
+async def verify_password(plain_password: str, hashed_password: str) -> bool:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(_executor, _verify_password_sync, plain_password, hashed_password)
 
-def get_password_hash(password: str) -> str:
+def _get_password_hash_sync(password: str) -> str:
     password_bytes = password.encode('utf-8')
     hashed = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
     return hashed.decode('utf-8')
+
+async def get_password_hash(password: str) -> str:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(_executor, _get_password_hash_sync, password)

@@ -68,7 +68,6 @@ class MessageResponse(BaseModel):
 @router.post("/login", response_model=LoginResponse)
 async def login(request: Request, login_data: LoginRequest):
     """System Owner login with JWT authentication"""
-    
     request_info = await get_request_info(request)
     
     allowed = await check_brute_force(login_data.email, request_info["ip_address"])
@@ -140,7 +139,7 @@ async def logout(
 async def get_me(current_user: dict = Depends(get_current_system_owner)):
     """Get current System Owner profile"""
     
-    user = SystemOwnerAuthService.get_system_owner()
+    user = await SystemOwnerAuthService.get_system_owner()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -370,7 +369,7 @@ async def change_password(
 async def get_security_status(current_user: dict = Depends(get_current_system_owner)):
     """Get security status overview"""
     
-    user = SystemOwnerAuthService.get_system_owner()
+    user = await SystemOwnerAuthService.get_system_owner()
     sessions = await SystemOwnerAuthService.get_sessions(current_user["user_id"])
     devices = await SystemOwnerAuthService.get_devices(current_user["user_id"])
     auth_logs = await SystemOwnerAuthService.get_auth_logs(10)
@@ -402,7 +401,7 @@ async def init_system_owner():
     """Initialize System Owner (run once during setup)"""
     
     try:
-        user = SystemOwnerAuthService.initialize_system_owner()
+        user = await SystemOwnerAuthService.initialize_system_owner()
         return {
             "message": "System Owner initialized successfully",
             "email": user["email"]

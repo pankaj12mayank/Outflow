@@ -16,6 +16,7 @@ import { Modal, ModalHeader, ModalContent, ModalFooter, ModalTitle, ModalDescrip
 import { FormField, FormLabel, FormInput, FormCheckbox, FormSection, FormActions } from "@/app/components/premium/form";
 import { Badge } from "@/app/components/premium/badge";
 import { PageSkeleton } from "@/app/components/premium/skeleton";
+import { toast } from "@/app/components/toast";
 
 interface Plan {
   _id: string;
@@ -100,7 +101,7 @@ export default function PlanBuilderPage() {
       await api.delete(`/api/v1/plans/${planId}`, { headers: { Authorization: `Bearer ${token}` } });
       fetchData();
     } catch (error) {
-      alert("Cannot delete default plan");
+      toast.error("Cannot delete plan", "Cannot delete default plan");
     }
   };
 

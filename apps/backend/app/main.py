@@ -8,6 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .core.config import settings
+import os
+os.environ.setdefault("SYSTEM_OWNER_EMAIL", settings.system_owner_email or "admin@outflo.com")
+os.environ.setdefault("SYSTEM_OWNER_PASSWORD", settings.system_owner_password or "Outflo@2024!")
+os.environ.setdefault("SYSTEM_OWNER_JWT_SECRET", settings.system_owner_jwt_secret or "so-jwt-secret-dev")
 from .core.logging import app_logger
 from .core.exceptions import (
     AppException, RequestValidationError,
@@ -115,6 +119,14 @@ async def health_check():
         "status": "healthy",
         "version": settings.app_version,
         "timestamp": time.time(),
+    }
+
+@app.get("/debug/env")
+async def debug_env():
+    import os
+    return {
+        "system_owner_email": os.environ.get("SYSTEM_OWNER_EMAIL", "NOT SET"),
+        "system_owner_password_set": bool(os.environ.get("SYSTEM_OWNER_PASSWORD")),
     }
 
 

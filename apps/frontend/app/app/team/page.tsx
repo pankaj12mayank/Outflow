@@ -9,7 +9,6 @@ import {
   MoreHorizontal,
   Mail,
   Shield,
-  Crown,
   UserMinus,
   Settings,
   Copy,
@@ -23,13 +22,14 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
 import { useAuth } from "@/app/hooks/useAuth";
+import { toast } from "@/app/components/toast";
 
 const teamMembers = [
   {
     id: 1,
     name: "Sarah Chen",
     email: "sarah@techscale.io",
-    role: "owner",
+    role: "admin",
     status: "active",
     avatar: "SC",
     joinedAt: "2026-01-15",
@@ -59,7 +59,7 @@ const teamMembers = [
     id: 4,
     name: "James Miller",
     email: "james@techscale.io",
-    role: "member",
+    role: "team_member",
     status: "active",
     avatar: "JM",
     joinedAt: "2026-03-01",
@@ -69,7 +69,7 @@ const teamMembers = [
     id: 5,
     name: "Lisa Park",
     email: "lisa@techscale.io",
-    role: "member",
+    role: "team_member",
     status: "pending",
     avatar: "LP",
     joinedAt: "2026-05-10",
@@ -77,16 +77,23 @@ const teamMembers = [
   },
 ];
 
+const roleLabels = {
+  admin: "Admin",
+  team_member: "Team Member",
+  member: "Team Member",
+  viewer: "Viewer",
+};
+
 const roleColors = {
-  owner: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
   admin: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+  team_member: "bg-blue-500/10 text-blue-400 border-blue-500/20",
   member: "bg-blue-500/10 text-blue-400 border-blue-500/20",
   viewer: "bg-gray-500/10 text-gray-400 border-gray-500/20",
 };
 
 const roleIcons = {
-  owner: Crown,
   admin: Shield,
+  team_member: Users,
   member: Users,
   viewer: Users,
 };
@@ -117,36 +124,37 @@ export default function TeamPage() {
 
   const handleInvite = () => {
     if (!inviteEmail.includes("@")) {
-      alert("Please enter a valid email");
+      toast.error("Invalid email", "Please enter a valid email address");
       return;
     }
     setPendingInvitesList([...pendingInvitesList, { email: inviteEmail, role: inviteRole, sentAt: "2026-05-16" }]);
     setInviteEmail("");
     setInviteRole("member");
     setShowInviteModal(false);
-    alert(`Invitation sent to ${inviteEmail}`);
+    toast.invite(inviteEmail);
   };
 
   const handleResendInvite = (email: string) => {
-    alert(`Invitation resent to ${email}`);
+    toast.invite(email);
   };
 
   const handleDeleteInvite = (email: string) => {
-    if (confirm(`Remove invitation for ${email}?`)) {
-      setPendingInvitesList(pendingInvitesList.filter(i => i.email !== email));
-    }
+    setPendingInvitesList(pendingInvitesList.filter(i => i.email !== email));
+    toast.success("Invitation removed", email);
   };
 
   const handleRemoveMember = (id: number) => {
+    const member = members.find(m => m.id === id);
     setMembers(members.filter(m => m.id !== id));
     setShowRemoveConfirm(null);
     setActiveMenu(null);
+    if (member) toast.delete(member.name);
   };
 
   const handleUpdateRole = (id: number, newRole: string) => {
     setMembers(members.map(m => m.id === id ? { ...m, role: newRole as any } : m));
     setActiveMenu(null);
-    alert("Role updated successfully!");
+    toast.update(`Role changed to ${roleLabels[newRole as keyof typeof roleLabels] || newRole}`);
   };
 
   return (

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useSystemOwnerAuth } from "@/app/hooks/useSystemOwnerAuth";
 import api from "@/app/lib/api";
+import { toast } from "@/app/components/toast";
 
 interface Block {
   _id: string;
@@ -91,7 +92,7 @@ export default function PageEditor() {
         name: page?.name,
         blocks: page?.blocks
       }, { headers: { Authorization: `Bearer ${token}` } });
-      alert("Saved successfully!");
+      toast.save();
     } catch (error) {
       console.error("Failed to save:", error);
     } finally {
@@ -108,7 +109,7 @@ export default function PageEditor() {
         headers: { Authorization: `Bearer ${token}` }
       });
       fetchPage();
-      alert("Sended successfully!");
+      toast.success("Page published");
     } catch (error) {
       console.error("Failed to publish:", error);
     }
@@ -158,7 +159,7 @@ export default function PageEditor() {
       await api.put(`/api/v1/cms/landing/seo/${pageId}`, seoData, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      alert("SEO saved!");
+      toast.save();
     } catch (error) {
       console.error("Failed to save SEO:", error);
     }

@@ -32,8 +32,7 @@ AUTH_CONFIG = {
 
 PERMISSIONS = {
     "super_admin": ["*"],
-    "owner": ["org:read", "org:update", "org:delete", "users:read", "users:create", "users:update", "users:delete", "billing:read", "billing:manage", "leads:*", "campaigns:*", "emails:*", "ai:*", "crm:*", "analytics:*"],
-    "admin": ["leads:*", "campaigns:*", "emails:*", "ai:*", "crm:*", "analytics:*", "users:read", "users:create", "users:update"],
+    "admin": ["org:read", "org:update", "users:read", "users:create", "users:update", "users:delete", "billing:read", "billing:manage", "leads:*", "campaigns:*", "emails:*", "ai:*", "crm:*", "analytics:*"],
     "team_member": ["leads:read", "leads:create", "leads:update", "campaigns:read", "emails:read", "crm:read", "crm:create", "crm:update"],
 }
 
@@ -262,10 +261,10 @@ class AuthService:
         user_coll = MongoDB.get_collection("users")
         user = {
             "email": data["email"],
-            "password_hash": get_password_hash(data["password"]),
+            "password_hash": await get_password_hash(data["password"]),
             "full_name": data["full_name"],
             "organization_id": organization["id"],
-            "role": "owner",
+            "role": "admin",
             "is_active": True,
             "is_email_verified": False,
             "created_at": datetime.utcnow(),
@@ -278,7 +277,7 @@ class AuthService:
         membership = {
             "user_id": user["id"],
             "organization_id": organization["id"],
-            "role": "owner",
+            "role": "admin",
             "status": "active",
             "accepted_at": datetime.utcnow(),
             "created_at": datetime.utcnow(),
@@ -317,7 +316,7 @@ class AuthService:
         if not user.get("is_active"):
             raise ValueError("Account is inactive")
 
-        if not verify_password(data["password"], user["password_hash"]):
+        if not await verify_password(data["password"], user["password_hash"]):
             RateLimiter.record_failed_attempt(data["email"], AUTH_CONFIG["MAX_LOGIN_ATTEMPTS"], AUTH_CONFIG["LOCKOUT_DURATION_MINUTES"])
             await self._log_login(user["id"], user.get("organization_id"), "failed", client_info, "invalid_password")
             raise ValueError("Invalid email or password")
@@ -472,7 +471,7 @@ class AuthService:
             raise ValueError(error)
 
         user_id = reset_doc.get("user_id")
-        password_hash = get_password_hash(new_password)
+        password_hash = await get_password_hash(new_password)
 
         user_coll = MongoDB.get_collection("users")
         await user_coll.update_one(
@@ -541,6 +540,10 @@ class AuthService:
         await log_coll.insert_one(log)
 
     def _user_to_dict(self, user: Dict, org: Dict) -> dict:
+        from datetime import datetime
+        created = user.get("created_at")
+        if isinstance(created, datetime):
+            created = created.isoformat()
         return {
             "id": user.get("id"),
             "email": user.get("email"),
@@ -552,7 +555,7 @@ class AuthService:
                 "name": org.get("name") if org else None,
                 "slug": org.get("slug") if org else None,
             } if org else None,
-            "created_at": user.get("created_at"),
+            "created_at": created,
         }
 
 

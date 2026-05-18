@@ -28,6 +28,7 @@ import {
   FileDown,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
+import { toast } from "@/app/components/toast";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
@@ -131,7 +132,7 @@ export default function LeadsPage() {
 
   const handleEnrichSelected = () => {
     if (selectedLeads.length > 0) {
-      alert(`Enriching ${selectedLeads.length} leads...`);
+      toast.info("Enriching leads...", `${selectedLeads.length} leads selected`);
       setSelectedLeads([]);
     }
   };
@@ -150,7 +151,7 @@ export default function LeadsPage() {
 
   const handleDeleteLead = (id: number) => {
     setShowDeleteConfirm(null);
-    alert(`Lead ${id} deleted`);
+    toast.delete(`Lead ${id}`);
   };
 
   const downloadSampleCSV = () => {
@@ -479,14 +480,14 @@ export default function LeadsPage() {
                           {activeMenu === lead.id && (
                             <div className="absolute right-0 top-full mt-1 z-50 w-40 p-1 rounded-lg bg-gray-900 border border-white/10 shadow-xl">
                               <button
-                                onClick={() => { setActiveMenu(null); alert(`View lead ${lead.id}`); }}
+                                onClick={() => { setActiveMenu(null); toast.info("Viewing lead", `${lead.first_name} ${lead.last_name}`); }}
                                 className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5 hover:text-white"
                               >
                                 <Eye className="w-4 h-4" />
                                 View
                               </button>
                               <button
-                                onClick={() => { setActiveMenu(null); alert(`Edit lead ${lead.id}`); }}
+                                onClick={() => { setActiveMenu(null); toast.info("Editing lead", `${lead.first_name} ${lead.last_name}`); }}
                                 className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5 hover:text-white"
                               >
                                 <Pencil className="w-4 h-4" />

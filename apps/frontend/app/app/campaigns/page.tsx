@@ -30,6 +30,7 @@ import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
+import { toast } from "@/app/components/toast";
 
 interface Campaign {
   id: number;
@@ -185,7 +186,7 @@ export default function CampaignsPage() {
     };
     setCampaignList([...campaignList, newCampaign]);
     setActiveMenu(null);
-    alert("Campaign duplicated!");
+    toast.duplicate(campaign.name);
   };
 
   const totalEmailsSent = campaignList.reduce((sum, c) => sum + c.sent, 0);

@@ -126,8 +126,8 @@ def require_super_admin(current_user: dict = Depends(get_current_user)) -> dict:
 
 
 def require_owner_or_admin(current_user: dict = Depends(get_current_user)) -> dict:
-    """Require owner or admin role."""
-    if current_user.get("role") not in ["owner", "admin", "super_admin"]:
+    """Require admin or super_admin role."""
+    if current_user.get("role") not in ["admin", "super_admin"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Owner or admin access required",
@@ -136,8 +136,8 @@ def require_owner_or_admin(current_user: dict = Depends(get_current_user)) -> di
 
 
 def require_owner(current_user: dict = Depends(get_current_user)) -> dict:
-    """Require owner role."""
-    if current_user.get("role") not in ["owner", "super_admin"]:
+    """Require admin role."""
+    if current_user.get("role") not in ["admin", "super_admin"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Owner access required",
@@ -183,5 +183,5 @@ def can_access_resource(role: str, resource: str) -> bool:
     return PermissionChecker.can_access_resource(role, resource)
 
 
-require_admin = require_roles(["admin", "owner", "super_admin"])
-require_team_member = require_roles(["admin", "owner", "team_member", "super_admin"])
+require_admin = require_roles(["admin", "super_admin"])
+require_team_member = require_roles(["admin", "team_member", "super_admin"])

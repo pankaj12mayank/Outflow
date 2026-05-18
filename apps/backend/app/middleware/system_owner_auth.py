@@ -92,7 +92,7 @@ async def log_security_event(event_type: str, details: dict):
     from datetime import datetime
     from app.db.mongodb import MongoDB
     
-    MongoDB.get_collection("security_events").insert_one({
+    await MongoDB.get_collection("security_events").insert_one({
         "event_type": event_type,
         "details": details,
         "timestamp": datetime.utcnow()
@@ -102,26 +102,33 @@ async def log_security_event(event_type: str, details: dict):
 async def check_brute_force(email: str, ip_address: str) -> bool:
     from datetime import datetime, timedelta
     
-    coll = MongoDB.get_collection("auth_logs")
-    window_start = datetime.utcnow() - timedelta(minutes=15)
-    
-    failed_count = await coll.count_documents({
-        "email": email,
-        "action": "login",
-        "status": "failed",
-        "ip_address": ip_address,
-        "timestamp": {"$gte": window_start}
-    })
-    
-    if failed_count >= 10:
-        await log_security_event("brute_force_detected", {
+    try:
+        coll = MongoDB.get_collection("auth_logs")
+        window_start = datetime.utcnow() - timedelta(minutes=15)
+        
+        failed_count = await coll.count_documents({
             "email": email,
+            "action": "login",
+            "status": "failed",
             "ip_address": ip_address,
-            "failed_attempts": failed_count
+            "timestamp": {"$gte": window_start}
         })
-        return False
-    
-    return True
+        
+        if failed_count >= 10:
+            try:
+                await log_security_event("brute_force_detected", {
+                    "email": email,
+                    "ip_address": ip_address,
+                    "failed_attempts": failed_count
+                })
+            except Exception:
+                pass  # Don't fail the check if logging fails
+            return False
+        
+        return True
+    except Exception:
+        # If check fails, allow the request
+        return True
 
 
 async def verify_device_trust(user_id: str, device_id: str) -> bool:

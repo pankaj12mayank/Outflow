@@ -1,4 +1,5 @@
 import axios from "axios";
+import { toast } from "@/app/components/toast";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -47,8 +48,28 @@ api.interceptors.response.use(
       } catch (refreshError) {
         localStorage.removeItem("access_token");
         localStorage.removeItem("refresh_token");
+        toast.error("Session expired", "Please log in again");
         window.location.href = "/login";
         return Promise.reject(refreshError);
+      }
+    }
+
+    if (error.response?.status === 500) {
+      toast.error("Server error", "Something went wrong. Please try again.");
+    }
+
+    if (error.response?.status === 403) {
+      toast.error("Access denied", "You don't have permission for this action.");
+    }
+
+    if (error.response?.status === 404) {
+      toast.error("Not found", "The requested resource doesn't exist.");
+    }
+
+    if (error.response?.data?.detail) {
+      const msg = error.response.data.detail;
+      if (typeof msg === "string") {
+        toast.error(msg);
       }
     }
 

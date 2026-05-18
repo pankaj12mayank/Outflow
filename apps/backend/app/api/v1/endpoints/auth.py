@@ -101,7 +101,7 @@ class MagicLinkVerifyRequest(BaseModel):
     token: str
 
 
-@router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED, 
+@router.post("/register", status_code=status.HTTP_201_CREATED, 
               summary="Register new user")
 async def register(data: RegisterRequest, request: Request):
     """Register new user with organization."""
@@ -112,7 +112,9 @@ async def register(data: RegisterRequest, request: Request):
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Registration failed")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.post("/login", response_model=AuthResponse, summary="Login with email and password")
@@ -125,7 +127,9 @@ async def login(data: LoginRequest, request: Request):
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Login failed")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, summary="Logout and invalidate session")

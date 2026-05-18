@@ -27,6 +27,7 @@ import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
+import { toast } from "@/app/components/toast";
 
 interface SequenceStep {
   id: string;
@@ -238,12 +239,12 @@ export default function SequencesPage() {
       completed: 0,
     };
     setSequenceList([...sequenceList, newSeq]);
-    alert("Sequence duplicated!");
+    toast.duplicate(seq.name);
   };
 
   const handleCreateSequence = () => {
     if (!newSequenceName.trim()) {
-      alert("Please enter a sequence name");
+      toast.required("sequence name");
       return;
     }
     const newSeq: Sequence = {

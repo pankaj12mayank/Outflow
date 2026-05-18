@@ -1,11 +1,15 @@
 import os
 import secrets
 import hashlib
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict
 from bson import ObjectId
 from jose import jwt, JWTError
 import ipaddress
+
+_executor = ThreadPoolExecutor(max_workers=4)
 
 from app.db.mongodb import MongoDB, serialize_doc
 from app.models.system_owner_models import (
@@ -25,17 +29,21 @@ MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_DURATION = 15 * 60
 
 
-def hash_password(password: str) -> str:
+def _hash_password_sync(password: str, salt: str) -> str:
     return hashlib.pbkdf2_hmac(
         'sha256', 
         password.encode(), 
-        SYSTEM_OWNER_EMAIL.encode(), 
+        salt.encode(), 
         100000
     ).hex()
 
+async def hash_password(password: str) -> str:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(_executor, _hash_password_sync, password, SYSTEM_OWNER_EMAIL)
 
-def verify_password(password: str, password_hash: str) -> bool:
-    return hash_password(password) == password_hash
+async def verify_password(password: str, password_hash: str) -> bool:
+    computed = await hash_password(password)
+    return computed == password_hash
 
 
 def create_access_token(user_id: str, email: str) -> Dict:
@@ -71,24 +79,25 @@ def verify_access_token(token: str) -> Optional[Dict]:
 
 class SystemOwnerAuthService:
     @staticmethod
-    def get_system_owner() -> Optional[Dict]:
+    async def get_system_owner() -> Optional[Dict]:
         coll = MongoDB.get_collection("system_owner_users")
-        doc = coll.find_one({"email": SYSTEM_OWNER_EMAIL})
+        doc = await coll.find_one({"email": SYSTEM_OWNER_EMAIL})
         return serialize_doc(doc) if doc else None
 
     @staticmethod
-    def initialize_system_owner() -> Dict:
+    async def initialize_system_owner() -> Dict:
         if not SYSTEM_OWNER_PASSWORD:
             raise ValueError("SYSTEM_OWNER_PASSWORD not set in environment")
         
-        existing = SystemOwnerAuthService.get_system_owner()
+        existing = await SystemOwnerAuthService.get_system_owner()
         if existing:
             return existing
         
         coll = MongoDB.get_collection("system_owner_users")
+        password_hash = await hash_password(SYSTEM_OWNER_PASSWORD)
         user_doc = {
             "email": SYSTEM_OWNER_EMAIL,
-            "password_hash": hash_password(SYSTEM_OWNER_PASSWORD),
+            "password_hash": password_hash,
             "full_name": "System Owner",
             "role": "system_owner",
             "is_active": True,
@@ -101,13 +110,13 @@ class SystemOwnerAuthService:
             "updated_at": datetime.utcnow(),
         }
         
-        result = coll.insert_one(user_doc)
+        result = await coll.insert_one(user_doc)
         user_doc["_id"] = str(result.inserted_id)
         return user_doc
 
     @staticmethod
     async def login(email: str, password: str, ip_address: str, user_agent: str, device_info: Dict) -> Dict:
-        user = SystemOwnerAuthService.get_system_owner()
+        user = await SystemOwnerAuthService.get_system_owner()
         
         if not user or email != SYSTEM_OWNER_EMAIL:
             await SystemOwnerAuthService._log_auth(
@@ -131,7 +140,7 @@ class SystemOwnerAuthService:
             )
             raise ValueError(f"Account locked until {locked_until}")
 
-        if not verify_password(password, user.get("password_hash", "")):
+        if not await verify_password(password, user.get("password_hash", "")):
             failed_attempts = user.get("failed_login_attempts", 0) + 1
             lock_data = {}
             
@@ -141,8 +150,8 @@ class SystemOwnerAuthService:
             else:
                 lock_data["failed_login_attempts"] = failed_attempts
             
-            MongoDB.get_collection("system_owner_users").update_one(
-                {"_id": ObjectId(user["_id"])},
+            await MongoDB.get_collection("system_owner_users").update_one(
+                {"_id": ObjectId(user["id"])},
                 {"$set": lock_data}
             )
             
@@ -152,8 +161,8 @@ class SystemOwnerAuthService:
             )
             raise ValueError("Invalid credentials")
 
-        MongoDB.get_collection("system_owner_users").update_one(
-            {"_id": ObjectId(user["_id"])},
+        await MongoDB.get_collection("system_owner_users").update_one(
+            {"_id": ObjectId(user["id"])},
             {"$set": {
                 "failed_login_attempts": 0,
                 "locked_until": None,
@@ -163,10 +172,10 @@ class SystemOwnerAuthService:
             }}
         )
 
-        tokens = create_access_token(user["_id"], email)
+        tokens = create_access_token(user["id"], email)
         
         await SystemOwnerAuthService._create_session(
-            user["_id"], tokens["access_token"], tokens["refresh_token"],
+            user["id"], tokens["access_token"], tokens["refresh_token"],
             ip_address, user_agent, device_info
         )
 
@@ -175,16 +184,16 @@ class SystemOwnerAuthService:
         )
 
         await SystemOwnerAuthService._log_activity(
-            user["_id"], "login", None, None, ip_address, user_agent
+            user["id"], "login", None, None, ip_address, user_agent
         )
 
         await SystemOwnerAuthService._track_device(
-            user["_id"], ip_address, user_agent, device_info
+            user["id"], ip_address, user_agent, device_info
         )
 
         return {
             "user": {
-                "id": user["_id"],
+                "id": user["id"],
                 "email": user["email"],
                 "full_name": user["full_name"],
                 "role": user["role"]
@@ -194,7 +203,7 @@ class SystemOwnerAuthService:
 
     @staticmethod
     async def refresh(refresh_token: str) -> Dict:
-        session = MongoDB.get_collection("system_owner_sessions").find_one({
+        session = await MongoDB.get_collection("system_owner_sessions").find_one({
             "refresh_token": refresh_token,
             "status": "active"
         })
@@ -203,19 +212,19 @@ class SystemOwnerAuthService:
             raise ValueError("Invalid refresh token")
         
         if datetime.utcnow() > session["expires_at"]:
-            MongoDB.get_collection("system_owner_sessions").update_one(
+            await MongoDB.get_collection("system_owner_sessions").update_one(
                 {"_id": ObjectId(session["_id"])},
                 {"$set": {"status": "expired"}}
             )
             raise ValueError("Refresh token expired")
 
-        user = SystemOwnerAuthService.get_system_owner()
+        user = await SystemOwnerAuthService.get_system_owner()
         if not user or not user.get("is_active"):
             raise ValueError("User not found or inactive")
 
-        tokens = create_access_token(user["_id"], user["email"])
+        tokens = create_access_token(user["id"], user["email"])
         
-        MongoDB.get_collection("system_owner_sessions").update_one(
+        await MongoDB.get_collection("system_owner_sessions").update_one(
             {"_id": ObjectId(session["_id"])},
             {"$set": {
                 "token": tokens["access_token"],
@@ -231,7 +240,7 @@ class SystemOwnerAuthService:
         sessions_coll = MongoDB.get_collection("system_owner_sessions")
         
         if all_devices:
-            sessions_coll.update_many(
+            await sessions_coll.update_many(
                 {"user_id": user_id},
                 {"$set": {
                     "status": "revoked",
@@ -240,7 +249,7 @@ class SystemOwnerAuthService:
                 }}
             )
         elif session_id:
-            sessions_coll.update_one(
+            await sessions_coll.update_one(
                 {"_id": ObjectId(session_id)},
                 {"$set": {
                     "status": "revoked",
@@ -249,10 +258,10 @@ class SystemOwnerAuthService:
                 }}
             )
 
-        user = SystemOwnerAuthService.get_system_owner()
+        user = await SystemOwnerAuthService.get_system_owner()
         if user:
             await SystemOwnerAuthService._log_activity(
-                user["_id"], "logout", None, None, "", ""
+                user["id"], "logout", None, None, "", ""
             )
 
     @staticmethod
@@ -266,7 +275,7 @@ class SystemOwnerAuthService:
 
     @staticmethod
     async def revoke_session(user_id: str, session_id: str) -> bool:
-        result = MongoDB.get_collection("system_owner_sessions").update_one(
+        result = await MongoDB.get_collection("system_owner_sessions").update_one(
             {"_id": ObjectId(session_id), "user_id": user_id},
             {"$set": {
                 "status": "revoked",
@@ -302,7 +311,7 @@ class SystemOwnerAuthService:
 
     @staticmethod
     async def trust_device(user_id: str, device_id: str) -> bool:
-        result = MongoDB.get_collection("devices").update_one(
+        result = await MongoDB.get_collection("devices").update_one(
             {"_id": ObjectId(device_id), "user_id": user_id},
             {"$set": {"is_trusted": True}}
         )
@@ -310,16 +319,16 @@ class SystemOwnerAuthService:
 
     @staticmethod
     async def change_password(user_id: str, current_password: str, new_password: str) -> bool:
-        user = SystemOwnerAuthService.get_system_owner()
-        if not user or user["_id"] != user_id:
+        user = await SystemOwnerAuthService.get_system_owner()
+        if not user or user["id"] != user_id:
             raise ValueError("User not found")
         
-        if not verify_password(current_password, user.get("password_hash", "")):
+        if not await verify_password(current_password, user.get("password_hash", "")):
             raise ValueError("Current password is incorrect")
         
-        new_hash = hash_password(new_password)
+        new_hash = await hash_password(new_password)
         
-        MongoDB.get_collection("system_owner_users").update_one(
+        await MongoDB.get_collection("system_owner_users").update_one(
             {"_id": ObjectId(user_id)},
             {"$set": {
                 "password_hash": new_hash,
@@ -327,7 +336,7 @@ class SystemOwnerAuthService:
             }}
         )
 
-        MongoDB.get_collection("system_owner_sessions").update_many(
+        await MongoDB.get_collection("system_owner_sessions").update_many(
             {"user_id": user_id},
             {"$set": {
                 "status": "revoked",
@@ -348,12 +357,12 @@ class SystemOwnerAuthService:
         if not payload or payload.get("type") != "system_owner_access":
             return None
         
-        user = SystemOwnerAuthService.get_system_owner()
+        user = await SystemOwnerAuthService.get_system_owner()
         if not user or not user.get("is_active"):
             return None
         
         return {
-            "user_id": user["_id"],
+            "user_id": user["id"],
             "email": user["email"],
             "role": user["role"]
         }
@@ -378,7 +387,7 @@ class SystemOwnerAuthService:
             "revoked_reason": None
         }
         
-        MongoDB.get_collection("system_owner_sessions").insert_one(session_doc)
+        await MongoDB.get_collection("system_owner_sessions").insert_one(session_doc)
 
     @staticmethod
     async def _log_auth(email: str, action: str, status: str, ip_address: str, 
@@ -396,7 +405,7 @@ class SystemOwnerAuthService:
             "timestamp": datetime.utcnow()
         }
         
-        MongoDB.get_collection("auth_logs").insert_one(log_doc)
+        await MongoDB.get_collection("auth_logs").insert_one(log_doc)
 
     @staticmethod
     async def _log_activity(user_id: str, action: str, resource_type: str, 
@@ -412,7 +421,7 @@ class SystemOwnerAuthService:
             "timestamp": datetime.utcnow()
         }
         
-        MongoDB.get_collection("activity_logs").insert_one(log_doc)
+        await MongoDB.get_collection("activity_logs").insert_one(log_doc)
 
     @staticmethod
     async def _track_device(user_id: str, ip_address: str, user_agent: str, device_info: Dict):
@@ -421,7 +430,7 @@ class SystemOwnerAuthService:
         if not device_id:
             return
         
-        existing = MongoDB.get_collection("devices").find_one({
+        existing = await MongoDB.get_collection("devices").find_one({
             "user_id": user_id,
             "device_id": device_id
         })
@@ -439,18 +448,18 @@ class SystemOwnerAuthService:
             "is_current": True
         }
         
-        MongoDB.get_collection("devices").update_many(
+        await MongoDB.get_collection("devices").update_many(
             {"user_id": user_id, "is_current": True},
             {"$set": {"is_current": False}}
         )
         
         if existing:
-            MongoDB.get_collection("devices").update_one(
+            await MongoDB.get_collection("devices").update_one(
                 {"_id": existing["_id"]},
                 {"$set": {**device_doc}}
             )
         else:
-            MongoDB.get_collection("devices").insert_one(device_doc)
+            await MongoDB.get_collection("devices").insert_one(device_doc)
 
     @staticmethod
     def _get_location_from_ip(ip_address: str) -> Optional[str]:
@@ -466,7 +475,7 @@ class RateLimitService:
         entry = await coll.find_one({"identifier": identifier})
         
         if not entry:
-            coll.insert_one({
+            await coll.insert_one({
                 "identifier": identifier,
                 "count": 1,
                 "window_start": now,
@@ -476,7 +485,7 @@ class RateLimitService:
         
         window_start = entry.get("window_start")
         if (now - window_start).total_seconds() > window_seconds:
-            coll.update_one(
+            await coll.update_one(
                 {"_id": entry["_id"]},
                 {"$set": {"count": 1, "window_start": now, "blocked_until": None}}
             )
@@ -491,7 +500,7 @@ class RateLimitService:
         if new_count > max_requests:
             blocked = now + timedelta(seconds=window_seconds)
         
-        coll.update_one(
+        await coll.update_one(
             {"_id": entry["_id"]},
             {"$set": {"count": new_count, "blocked_until": blocked}}
         )
@@ -500,4 +509,4 @@ class RateLimitService:
 
     @staticmethod
     async def reset_rate_limit(identifier: str):
-        MongoDB.get_collection("rate_limits").delete_one({"identifier": identifier})
+        await MongoDB.get_collection("rate_limits").delete_one({"identifier": identifier})

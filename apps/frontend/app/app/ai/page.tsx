@@ -28,13 +28,10 @@ import {
   Trash2,
   Copy,
   Wand2,
-  Target,
-  Mail,
-  Lightbulb,
-  RotateCcw,
-  Play,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
+import { toast } from "@/app/components/toast";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Card } from "@/app/components/ui/card";
@@ -282,13 +279,13 @@ export default function AISettingsPage() {
 
   const handleCopyPrompt = (prompt: any) => {
     navigator.clipboard.writeText(prompt.description);
-    alert("Prompt copied to clipboard!");
+    toast.copy();
   };
 
   const handleSavePrompt = () => {
     setShowPromptEditor(false);
     setEditingPrompt(null);
-    alert("Prompt saved successfully!");
+    toast.save();
   };
 
   return (

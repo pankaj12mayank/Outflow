@@ -38,7 +38,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "settings:read", "settings:update",
     "users:read", "users:create", "users:update", "users:delete",
   ],
-  organization_admin: [
+  admin: [
     "organizations:read",
     "analytics:read", "analytics:export",
     "invoices:read",
@@ -85,7 +85,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function addPermissionsToUser(user: User): User {
   if (!user) return user as any;
   const role = user?.role || "team_member";
-  const permissions = user?.permissions?.length > 0 
+  const permissions = user?.permissions?.length > 0
     ? user.permissions 
     : DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS["team_member"];
   return { ...user, permissions };

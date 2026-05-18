@@ -11,7 +11,6 @@ from pydantic import BaseModel
 
 class UserRole(str, Enum):
     SUPER_ADMIN = "super_admin"
-    OWNER = "owner"
     ADMIN = "admin"
     TEAM_MEMBER = "team_member"
 

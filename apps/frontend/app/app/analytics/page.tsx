@@ -30,6 +30,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
+import { toast } from "@/app/components/toast";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Card } from "@/app/components/ui/card";
@@ -335,7 +336,7 @@ export default function AnalyticsPage() {
   };
 
   const handleExport = (format: string = "csv") => {
-    alert(`Exporting analytics data as ${format.toUpperCase()}...`);
+    toast.info("Exporting data...", `Format: ${format.toUpperCase()}`);
   };
 
   return (

@@ -20,6 +20,7 @@ import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { useAuth } from "@/app/hooks/useAuth";
+import { toast } from "@/app/components/toast";
 
 const tabs = [
   { id: "profile", label: "Profile", icon: User },
@@ -55,11 +56,11 @@ export default function SettingsPage() {
 
   const handleChangePassword = () => {
     if (passwordForm.new !== passwordForm.confirm) {
-      alert("New passwords don't match!");
+      toast.error("Password mismatch", "New passwords don't match");
       return;
     }
     if (passwordForm.new.length < 6) {
-      alert("Password must be at least 6 characters!");
+      toast.error("Password too short", "Must be at least 6 characters");
       return;
     }
     setPasswordForm({ current: "", new: "", confirm: "" });
@@ -73,7 +74,7 @@ export default function SettingsPage() {
 
   const handleCreateAPIKey = () => {
     if (!newKeyName) {
-      alert("Please enter a key name");
+      toast.error("Key name required", "Please enter a key name");
       return;
     }
     const newKey = {
@@ -87,7 +88,7 @@ export default function SettingsPage() {
     setNewKeyName("");
     setNewKeyPurpose("");
     setShowCreateKeyModal(false);
-    alert(`API Key created: ${newKey.key}\n\nPlease save this key - it won't be shown again!`);
+    toast.success("API Key created", "Save it securely - won't be shown again");
   };
 
   const handleRegenerateKey = (id: number) => {
@@ -106,7 +107,7 @@ export default function SettingsPage() {
 
   const handleCopyKey = (key: string) => {
     navigator.clipboard.writeText(key);
-    alert("Key copied to clipboard!");
+    toast.copy();
   };
 
   return (

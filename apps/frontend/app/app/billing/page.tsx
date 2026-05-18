@@ -19,6 +19,7 @@ import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Input } from "@/app/components/ui/input";
+import { toast } from "@/app/components/toast";
 
 const plans = [
   {
@@ -62,29 +63,29 @@ export default function BillingPage() {
   const [cvc, setCvc] = useState("");
 
   const handleDownloadInvoice = (invoice: any) => {
-    alert(`Downloading invoice ${invoice.id}...`);
+    toast.info("Downloading invoice...", invoice.id);
   };
 
   const handleDownloadAllInvoices = () => {
-    alert(`Downloading all invoices as ZIP...`);
+    toast.info("Downloading all invoices as ZIP...");
   };
 
   const handleUpdatePayment = () => {
     if (!cardNumber || !expiry || !cvc) {
-      alert("Please fill all card details");
+      toast.error("Card details required", "Please fill all card details");
       return;
     }
     setShowPaymentModal(false);
     setCardNumber("");
     setExpiry("");
     setCvc("");
-    alert("Payment method updated successfully!");
+    toast.success("Payment method updated");
   };
 
   const handleChangePlan = (plan: string) => {
     setSelectedPlan(plan);
     setShowSubscriptionModal(false);
-    alert(`Plan changed to ${plan}!`);
+    toast.success("Plan changed", `Switched to ${plan}`);
   };
 
   return (
