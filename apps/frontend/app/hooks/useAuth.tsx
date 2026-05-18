@@ -1,14 +1,15 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import api from "@/app/lib/api";
 
-interface User {
+export interface User {
   id: number;
   email: string;
   full_name: string;
   role: string;
+  permissions: string[];
   is_email_verified: boolean;
   is_super_admin: boolean;
   organization: {
@@ -18,13 +19,55 @@ interface User {
   } | null;
 }
 
-interface AuthState {
+export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
+  system_owner: [
+    "organizations:read", "organizations:create", "organizations:update", "organizations:delete",
+    "plans:read", "plans:create", "plans:update", "plans:delete",
+    "pricing:read", "pricing:create", "pricing:update", "pricing:delete",
+    "smtp:read", "smtp:create", "smtp:update", "smtp:delete",
+    "cms:read", "cms:create", "cms:update", "cms:delete",
+    "analytics:read", "analytics:export",
+    "invoices:read", "invoices:create", "invoices:update",
+    "features:read", "features:create", "features:update", "features:delete",
+    "billing:read", "billing:update",
+    "teams:read", "teams:create", "teams:update", "teams:delete",
+    "leads:read", "leads:create", "leads:update", "leads:delete", "leads:enrich",
+    "campaigns:read", "campaigns:create", "campaigns:update", "campaigns:delete", "campaigns:start", "campaigns:pause",
+    "sequences:read", "sequences:create", "sequences:update", "sequences:delete",
+    "scraping:read", "scraping:create", "scraping:update", "scraping:delete",
+    "settings:read", "settings:update",
+    "users:read", "users:create", "users:update", "users:delete",
+  ],
+  organization_admin: [
+    "organizations:read",
+    "analytics:read", "analytics:export",
+    "invoices:read",
+    "features:read",
+    "billing:read", "billing:update",
+    "teams:read", "teams:create", "teams:update", "teams:delete",
+    "leads:read", "leads:create", "leads:update", "leads:delete", "leads:enrich",
+    "campaigns:read", "campaigns:create", "campaigns:update", "campaigns:delete", "campaigns:start", "campaigns:pause",
+    "sequences:read", "sequences:create", "sequences:update", "sequences:delete",
+    "scraping:read", "scraping:create", "scraping:update", "scraping:delete",
+    "settings:read", "settings:update",
+  ],
+  team_member: [
+    "teams:read",
+    "leads:read", "leads:create", "leads:update",
+    "campaigns:read",
+    "sequences:read",
+    "scraping:read",
+    "settings:read",
+  ],
+};
+
+export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
 
-interface AuthContextType extends AuthState {
+export interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, fullName: string, orgName: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -39,6 +82,15 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+export function addPermissionsToUser(user: User): User {
+  if (!user) return user as any;
+  const role = user?.role || "team_member";
+  const permissions = user?.permissions?.length > 0 
+    ? user.permissions 
+    : DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS["team_member"];
+  return { ...user, permissions };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -48,26 +100,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading: true,
   });
 
-  useEffect(() => {
-    checkAuth();
+  const clearAuth = useCallback(() => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    delete api.defaults.headers.common["Authorization"];
+    setState({ user: null, isAuthenticated: false, isLoading: false });
   }, []);
 
-  useEffect(() => {
-    const publicPaths = ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/landing"];
-    const isPublic = publicPaths.some((path) => pathname?.startsWith(path));
-    const isAppPath = pathname?.startsWith("/app");
-
-    if (!state.isAuthenticated && !isPublic && !state.isLoading && isAppPath) {
-      router.push("/login");
-    }
-  }, [state.isAuthenticated, state.isLoading, pathname, router]);
-
-  const checkAuth = async () => {
+  const checkAuth = useCallback(async () => {
     const accessToken = localStorage.getItem("access_token");
     const refreshToken = localStorage.getItem("refresh_token");
 
     if (!accessToken || !refreshToken) {
-      setState({ user: null, isAuthenticated: false, isLoading: false });
+      setState(prev => ({ ...prev, isLoading: false }));
       return;
     }
 
@@ -75,8 +120,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await api.get("/api/v1/auth/me", {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
+      const userWithPermissions = addPermissionsToUser(response.data);
       setState({
-        user: response.data,
+        user: userWithPermissions,
         isAuthenticated: true,
         isLoading: false,
       });
@@ -93,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         clearAuth();
       }
     }
-  };
+  }, [clearAuth]);
 
   const refreshTokenFn = async (refresh: string): Promise<boolean> => {
     try {
@@ -110,16 +156,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const clearAuth = () => {
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-    delete api.defaults.headers.common["Authorization"];
-    setState({ user: null, isAuthenticated: false, isLoading: false });
-  };
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  useEffect(() => {
+    const publicPaths = ["/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/landing"];
+    const isPublic = publicPaths.some((path) => pathname?.startsWith(path));
+    const isAppPath = pathname?.startsWith("/app");
+
+    if (!state.isAuthenticated && !isPublic && !state.isLoading && isAppPath) {
+      router.push("/login");
+    }
+  }, [state.isAuthenticated, state.isLoading, pathname, router]);
 
   const login = async (email: string, password: string) => {
     const response = await api.post("/api/v1/auth/login", { email, password });
-    const { user, tokens } = response.data;
+    const { user: rawUser, tokens } = response.data;
+    const user = addPermissionsToUser(rawUser);
 
     localStorage.setItem("access_token", tokens.access_token);
     localStorage.setItem("refresh_token", tokens.refresh_token);
@@ -137,7 +191,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       full_name: fullName,
       organization_name: orgName,
     });
-    const { user, tokens } = response.data;
+    const { user: rawUser, tokens } = response.data;
+    const user = addPermissionsToUser(rawUser);
 
     localStorage.setItem("access_token", tokens.access_token);
     localStorage.setItem("refresh_token", tokens.refresh_token);
@@ -176,7 +231,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyMagicLink = async (token: string) => {
     const response = await api.post("/api/v1/auth/magic-link/verify", { token });
-    const { user, tokens } = response.data;
+    const { user: rawUser, tokens } = response.data;
+    const user = addPermissionsToUser(rawUser);
 
     localStorage.setItem("access_token", tokens.access_token);
     localStorage.setItem("refresh_token", tokens.refresh_token);
@@ -213,7 +269,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifyEmail = async (token: string) => {
     await api.post("/api/v1/auth/verify-email", { token });
     if (state.user) {
-      setState({ ...state, user: { ...state.user, is_email_verified: true } });
+      setState(prev => ({ ...prev, user: { ...prev.user!, is_email_verified: true } }));
     }
   };
 
@@ -238,7 +294,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useAuth() {
+export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider");
@@ -271,32 +327,14 @@ export function usePermissions() {
     if (!user) return false;
 
     const permissions = getPermissionsForRole(user.role);
-    return permissions.includes("*") || permissions.includes(`${resource}:${action}`) || permissions.includes(`${resource}:*`);
+    return permissions.includes("*") || 
+           permissions.includes(`${resource}:${action}`) || 
+           permissions.includes(`${resource}:*`);
   };
 
   return { hasPermission, permissions: user ? getPermissionsForRole(user.role) : [] };
 }
 
-function getPermissionsForRole(role: string): string[] {
-  const rolePermissions: Record<string, string[]> = {
-    super_admin: ["*"],
-    owner: [
-      "org:read", "org:update", "org:delete",
-      "users:read", "users:create", "users:update", "users:delete",
-      "billing:read", "billing:manage",
-      "leads:*", "campaigns:*", "emails:*", "ai:*", "crm:*", "analytics:*",
-    ],
-    admin: [
-      "leads:*", "campaigns:*", "emails:*", "ai:*", "crm:*", "analytics:*",
-      "users:read", "users:create", "users:update",
-    ],
-    member: [
-      "leads:read", "leads:create", "leads:update",
-      "campaigns:read",
-      "emails:read",
-      "crm:read", "crm:create", "crm:update",
-    ],
-  };
-
-  return rolePermissions[role] || [];
+export function getPermissionsForRole(role: string): string[] {
+  return DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS["team_member"];
 }

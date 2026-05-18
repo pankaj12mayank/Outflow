@@ -432,3 +432,31 @@ class OrganizationRepository(BaseRepository):
         coll = MongoDB.get_collection("organizations")
         doc = await coll.find_one({"slug": slug, "is_active": True})
         return serialize_doc(doc) if doc else None
+
+
+class TeamMemberRepository(BaseRepository):
+    """Team member repository."""
+
+    collection_name = "team_members"
+
+    async def get_active_members(self) -> List[Dict]:
+        """Get all active team members."""
+        return await self.get_many_by({"is_active": True})
+
+    async def get_by_email(self, email: str) -> Optional[Dict]:
+        """Get team member by email."""
+        return await self.get_one_by({"email": email})
+
+
+class TeamInvitationRepository(BaseRepository):
+    """Team invitation repository."""
+
+    collection_name = "team_invitations"
+
+    async def get_pending_invitations(self) -> List[Dict]:
+        """Get all pending invitations."""
+        return await self.get_many_by({"status": "pending"})
+
+    async def get_by_email(self, email: str) -> Optional[Dict]:
+        """Get invitation by email."""
+        return await self.get_one_by({"email": email})

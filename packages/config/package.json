@@ -1,7 +1,0 @@
-{
-  "name": "@outflo/config",
-  "version": "1.0.0",
-  "description": "Shared configuration for Outflo",
-  "main": "src/index.ts",
-  "types": "src/index.ts"
-}

@@ -8,7 +8,7 @@ import { useAuth } from "@/app/hooks/useAuth";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Loader2, Mail, Lock, AlertCircle, Zap } from "lucide-react";
+import { Loader2, Mail, Lock, AlertCircle, Zap, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 
 export default function LoginPage() {
@@ -16,6 +16,7 @@ export default function LoginPage() {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -98,13 +99,20 @@ export default function LoginPage() {
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <Input
                 id="password"
-                type="password"
+                type={showPassword ? "text" : "password"}
                 placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="pl-10 bg-white/5 border-white/10"
+                className="pl-10 pr-10 bg-white/5 border-white/10"
                 required
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
             </div>
           </div>
 
@@ -117,25 +125,6 @@ export default function LoginPage() {
             ) : (
               "Sign in"
             )}
-          </Button>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-white/10" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="px-2 bg-transparent text-gray-400">Or</span>
-            </div>
-          </div>
-
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            onClick={() => router.push("/login?magic=true")}
-          >
-            <Mail className="mr-2 h-4 w-4" />
-            Sign in with Magic Link
           </Button>
         </form>
 

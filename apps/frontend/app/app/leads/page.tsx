@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import {
   Search,
   Plus,
@@ -21,6 +22,10 @@ import {
   AlertCircle,
   ExternalLink,
   Zap,
+  Eye,
+  Pencil,
+  Trash2,
+  FileDown,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
@@ -116,9 +121,48 @@ const statusConfig = {
 };
 
 export default function LeadsPage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLeads, setSelectedLeads] = useState<number[]>([]);
   const [enrichmentFilter, setEnrichmentFilter] = useState<string>("all");
+  const [activeMenu, setActiveMenu] = useState<number | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null);
+
+  const handleEnrichSelected = () => {
+    if (selectedLeads.length > 0) {
+      alert(`Enriching ${selectedLeads.length} leads...`);
+      setSelectedLeads([]);
+    }
+  };
+
+  const handleSendEmail = (email: string) => {
+    window.location.href = `mailto:${email}`;
+  };
+
+  const handleCall = (phone: string) => {
+    window.location.href = `tel:${phone}`;
+  };
+
+  const handleVisitWebsite = (website: string) => {
+    window.open(`https://${website}`, "_blank");
+  };
+
+  const handleDeleteLead = (id: number) => {
+    setShowDeleteConfirm(null);
+    alert(`Lead ${id} deleted`);
+  };
+
+  const downloadSampleCSV = () => {
+    const csvContent = "name,email,phone,company,title,website\nJohn Doe,john@company.com,+1234567890,Acme Inc,CEO,acme.com\nJane Smith,jane@startup.io,+0987654321,Startup.io,CTO,startup.io";
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sample_leads.csv";
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
 
   const filteredLeads = leads.filter((lead) => {
     const matchesSearch =
@@ -146,15 +190,41 @@ export default function LeadsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="gap-2">
-            <Upload className="w-4 h-4" />
-            Import
-          </Button>
-          <Button variant="outline" className="gap-2">
+          <div className="relative group">
+            <Button variant="outline" className="gap-2">
+              <Upload className="w-4 h-4" />
+              Import
+            </Button>
+            <div className="absolute left-0 top-full mt-1 z-50 w-48 p-1 rounded-lg bg-gray-900 border border-white/10 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+              <button
+                onClick={() => router.push("/app/scraping/csv-import")}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5 hover:text-white"
+              >
+                <Upload className="w-4 h-4" />
+                Import CSV
+              </button>
+              <button
+                onClick={downloadSampleCSV}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5 hover:text-white"
+              >
+                <FileDown className="w-4 h-4" />
+                Download Sample
+              </button>
+            </div>
+          </div>
+          <Button 
+            variant="outline" 
+            className="gap-2"
+            onClick={handleEnrichSelected}
+            disabled={selectedLeads.length === 0}
+          >
             <RefreshCw className="w-4 h-4" />
             Enrich Selected
           </Button>
-          <Button className="gap-2">
+          <Button 
+            className="gap-2"
+            onClick={() => setShowAddModal(true)}
+          >
             <Plus className="w-4 h-4" />
             Add Lead
           </Button>
@@ -366,25 +436,93 @@ export default function LeadsPage() {
                       </span>
                     </td>
                     <td className="p-4">
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 relative">
                         {lead.email && (
-                          <Button variant="ghost" size="sm" className="w-8 h-8 p-0">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="w-8 h-8 p-0"
+                            onClick={() => handleSendEmail(lead.email!)}
+                          >
                             <Mail className="w-4 h-4" />
                           </Button>
                         )}
                         {lead.phone && (
-                          <Button variant="ghost" size="sm" className="w-8 h-8 p-0">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="w-8 h-8 p-0"
+                            onClick={() => handleCall(lead.phone!)}
+                          >
                             <Phone className="w-4 h-4" />
                           </Button>
                         )}
                         {lead.website && (
-                          <Button variant="ghost" size="sm" className="w-8 h-8 p-0">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="w-8 h-8 p-0"
+                            onClick={() => handleVisitWebsite(lead.website)}
+                          >
                             <Globe className="w-4 h-4" />
                           </Button>
                         )}
-                        <Button variant="ghost" size="sm" className="w-8 h-8 p-0">
-                          <MoreHorizontal className="w-4 h-4" />
-                        </Button>
+                        <div className="relative">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="w-8 h-8 p-0"
+                            onClick={() => setActiveMenu(activeMenu === lead.id ? null : lead.id)}
+                          >
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                          {activeMenu === lead.id && (
+                            <div className="absolute right-0 top-full mt-1 z-50 w-40 p-1 rounded-lg bg-gray-900 border border-white/10 shadow-xl">
+                              <button
+                                onClick={() => { setActiveMenu(null); alert(`View lead ${lead.id}`); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5 hover:text-white"
+                              >
+                                <Eye className="w-4 h-4" />
+                                View
+                              </button>
+                              <button
+                                onClick={() => { setActiveMenu(null); alert(`Edit lead ${lead.id}`); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5 hover:text-white"
+                              >
+                                <Pencil className="w-4 h-4" />
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => { setActiveMenu(null); setShowDeleteConfirm(lead.id); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-red-400 hover:bg-red-500/10"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {showDeleteConfirm === lead.id && (
+                          <div className="absolute right-0 top-full mt-1 z-50 w-56 p-4 rounded-lg bg-gray-900 border border-red-500/20 shadow-xl">
+                            <p className="text-sm text-white mb-3">Are you sure you want to delete this lead?</p>
+                            <div className="flex gap-2">
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => setShowDeleteConfirm(null)}
+                              >
+                                Cancel
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                className="bg-red-500 hover:bg-red-600"
+                                onClick={() => handleDeleteLead(lead.id)}
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </td>
                   </motion.tr>

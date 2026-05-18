@@ -1,139 +1,209 @@
 "use client";
 
-import { forwardRef, InputHTMLAttributes, TextareaHTMLAttributes } from "react";
-import { motion } from "framer-motion";
+import { forwardRef, InputHTMLAttributes } from "react";
+import { motion, HTMLMotionProps } from "framer-motion";
 import { cn } from "@/app/lib/utils";
+import { Eye, EyeOff, Search, X } from "lucide-react";
+import { useState } from "react";
 
-interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
-  label?: string;
-  error?: string;
-  hint?: string;
+interface InputProps extends Omit<HTMLMotionProps<"input">, "children"> {
+  variant?: "default" | "filled" | "underline" | "minimal";
+  inputSize?: "sm" | "md" | "lg";
+  error?: boolean;
+  success?: boolean;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
-  variant?: "default" | "filled" | "ghost";
+  clearable?: boolean;
+  onClear?: () => void;
+  showPasswordToggle?: boolean;
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
   (
     {
       className,
-      label,
-      error,
-      hint,
+      variant = "default",
+      inputSize = "md",
+      error = false,
+      success = false,
       leftIcon,
       rightIcon,
-      variant = "default",
+      clearable = false,
+      onClear,
+      showPasswordToggle = false,
+      type,
       ...props
     },
     ref
   ) => {
-    const baseStyles = `
-      w-full h-11 px-4 text-sm transition-all duration-200
-      flex items-center gap-3
-      border rounded-lg
-      focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--color-bg-primary)]
-    `;
+    const [showPassword, setShowPassword] = useState(false);
+    const isPassword = type === "password";
 
     const variants = {
       default: `
-        bg-[rgba(0,0,0,0.4)] border-[var(--color-border)]
-        placeholder:text-[var(--color-text-tertiary)]
-        focus:border-[var(--color-purple)] focus:ring-[var(--color-purple-dim)]
+        bg-[var(--color-bg-tertiary)] border border-[var(--color-border)]
+        placeholder:text-[var(--color-text-muted)]
       `,
       filled: `
-        bg-[var(--color-bg-tertiary)] border-[var(--color-border)]
+        bg-[rgba(0,0,0,0.3)] border border-transparent
         placeholder:text-[var(--color-text-tertiary)]
-        focus:border-[var(--color-purple)] focus:ring-[var(--color-purple-dim)]
       `,
-      ghost: `
-        bg-transparent border-transparent
+      underline: `
+        bg-transparent border-b border-[var(--color-border)] rounded-none
+        placeholder:text-[var(--color-text-muted)]
+        focus:border-[var(--color-purple)]
+      `,
+      minimal: `
+        bg-transparent border border-transparent
         placeholder:text-[var(--color-text-tertiary)]
-        focus:bg-[rgba(255,255,255,0.03)] focus:border-[var(--color-border)]
+        hover:border-[var(--color-border)]
       `,
     };
 
-    const errorStyles = error
-      ? "border-[var(--color-error)] focus:ring-[rgba(248,113,113,0.15)]"
-      : "";
+    const sizes = {
+      sm: "h-9 px-3 text-xs rounded-md",
+      md: "h-11 px-4 text-sm rounded-xl",
+      lg: "h-14 px-5 text-base rounded-xl",
+    };
+
+    const stateStyles = error
+      ? "border-red-500/50 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+      : success
+      ? "border-green-500/50 focus:border-green-500 focus:ring-2 focus:ring-green-500/20"
+      : "focus:border-[var(--color-purple)] focus:ring-2 focus:ring-[var(--color-purple-dim)] focus:shadow-[0_0_0_4px_rgba(167,139,250,0.1)]";
 
     return (
-      <div className="w-full space-y-1.5">
-        {label && (
-          <label className="block text-sm font-medium text-[var(--color-text-secondary)]">
-            {label}
-          </label>
-        )}
+      <motion.div
+        ref={ref as any}
+        className="relative"
+        initial={{ opacity: 0, y: -4 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
         <div className="relative">
           {leftIcon && (
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)]">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] z-10">
               {leftIcon}
-            </span>
+            </div>
           )}
-          <input
-            ref={ref}
+          
+          <motion.input
+            type={isPassword && showPassword ? "text" : type}
             className={cn(
-              baseStyles,
+              "w-full transition-all duration-200",
+              "text-[var(--color-text-primary)]",
+              "outline-none disabled:opacity-50 disabled:cursor-not-allowed",
+              "file:border-0 file:bg-transparent file:text-sm file:font-medium",
               variants[variant],
-              errorStyles,
+              sizes[inputSize],
+              stateStyles,
               leftIcon && "pl-10",
-              rightIcon && "pr-10",
+              (rightIcon || clearable || (isPassword && showPasswordToggle)) && "pr-10",
               className
             )}
-            {...props}
+            whileFocus={{ scale: 1.01 }}
+            transition={{ duration: 0.15 }}
+            {...(props as any)}
           />
-          {rightIcon && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)]">
-              {rightIcon}
-            </span>
-          )}
+
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+            {clearable && props.value && (
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={onClear}
+                className="p-1 rounded-md text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-elevated)] transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </motion.button>
+            )}
+            
+            {isPassword && showPasswordToggle && (
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => setShowPassword(!showPassword)}
+                className="p-1 rounded-md text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-elevated)] transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </motion.button>
+            )}
+            
+            {!clearable && !isPassword && rightIcon && (
+              <span className="text-[var(--color-text-tertiary)]">{rightIcon}</span>
+            )}
+          </div>
         </div>
+
         {error && (
-          <p className="text-xs text-[var(--color-error)]">{error}</p>
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="absolute -bottom-5 left-0 flex items-center gap-1 text-xs text-red-400"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {error}
+          </motion.div>
         )}
-        {hint && !error && (
-          <p className="text-xs text-[var(--color-text-tertiary)]">{hint}</p>
-        )}
-      </div>
+      </motion.div>
     );
   }
 );
 
 Input.displayName = "Input";
 
-interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
-  label?: string;
-  error?: string;
-  hint?: string;
+interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+  variant?: "default" | "filled" | "minimal";
+  autoResize?: boolean;
 }
 
 const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className, label, error, hint, ...props }, ref) => {
+  ({ className, variant = "default", autoResize = false, ...props }, ref) => {
+    const variants = {
+      default: `
+        bg-[var(--color-bg-tertiary)] border border-[var(--color-border)]
+        placeholder:text-[var(--color-text-muted)]
+      `,
+      filled: `
+        bg-[rgba(0,0,0,0.3)] border border-transparent
+        placeholder:text-[var(--color-text-tertiary)]
+      `,
+      minimal: `
+        bg-transparent border border-transparent
+        placeholder:text-[var(--color-text-tertiary)]
+        focus:border-[var(--color-border)]
+      `,
+    };
+
+    const handleInput = (e: React.FormEvent<HTMLTextAreaElement>) => {
+      if (autoResize) {
+        e.currentTarget.style.height = "auto";
+        e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+      }
+    };
+
+    const { onDrag, onDragStart, onDragEnd, onAnimationStart, onAnimationEnd, ...safeProps } = props as any;
+
     return (
-      <div className="w-full space-y-1.5">
-        {label && (
-          <label className="block text-sm font-medium text-[var(--color-text-secondary)]">
-            {label}
-          </label>
+      <motion.textarea
+        ref={ref}
+        className={cn(
+          "w-full min-h-[100px] px-4 py-3 text-sm rounded-xl resize-none",
+          "text-[var(--color-text-primary)]",
+          "transition-all duration-200",
+          "outline-none focus:border-[var(--color-purple)] focus:ring-2 focus:ring-[var(--color-purple-dim)]",
+          "disabled:opacity-50 disabled:cursor-not-allowed",
+          variants[variant],
+          className
         )}
-        <textarea
-          ref={ref}
-          className={cn(
-            `w-full min-h-[120px] px-4 py-3 text-sm transition-all duration-200
-            bg-[rgba(0,0,0,0.4)] border border-[var(--color-border)] rounded-lg
-            placeholder:text-[var(--color-text-tertiary)]
-            focus:outline-none focus:border-[var(--color-purple)] focus:ring-2
-            focus:ring-[var(--color-purple-dim)] focus:ring-offset-2
-            focus:ring-offset-[var(--color-bg-primary)]`,
-            error && "border-[var(--color-error)]",
-            className
-          )}
-          {...props}
-        />
-        {error && <p className="text-xs text-[var(--color-error)]">{error}</p>}
-        {hint && !error && (
-          <p className="text-xs text-[var(--color-text-tertiary)]">{hint}</p>
-        )}
-      </div>
+        whileFocus={{ scale: 1.005 }}
+        transition={{ duration: 0.15 }}
+        onInput={handleInput}
+        {...safeProps}
+      />
     );
   }
 );

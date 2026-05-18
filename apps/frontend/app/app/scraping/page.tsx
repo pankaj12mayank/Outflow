@@ -23,6 +23,7 @@ import {
   Target,
   Users,
   TrendingUp,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
@@ -54,12 +55,13 @@ const scrapingTools = [
     stats: { total: 456, success: 432, failed: 24 },
   },
   {
-    id: "csv",
+    id: "csv-import",
     name: "CSV Import",
     description: "Import leads from CSV files with smart mapping",
     icon: FileSpreadsheet,
     color: "yellow",
     stats: { total: 2341, success: 2298, failed: 43 },
+    path: "/app/scraping/csv-import",
   },
 ];
 
@@ -125,6 +127,12 @@ function StatCard({ label, value, icon: Icon, color }: any) {
 
 export default function ScrapingPage() {
   const [activeTab, setActiveTab] = useState<"tools" | "jobs">("tools");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefreshStats = () => {
+    setIsRefreshing(true);
+    setTimeout(() => setIsRefreshing(false), 1500);
+  };
 
   return (
     <div className="space-y-8">
@@ -134,9 +142,14 @@ export default function ScrapingPage() {
           <p className="text-gray-400">Lead discovery and enrichment tools</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="gap-2" onClick={() => {}}>
-            <RefreshCw className="w-4 h-4" />
-            Refresh Stats
+          <Button 
+            variant="outline" 
+            className="gap-2" 
+            onClick={handleRefreshStats}
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
+            {isRefreshing ? "Refreshing..." : "Refresh Stats"}
           </Button>
         </div>
       </div>
@@ -224,7 +237,7 @@ export default function ScrapingPage() {
                 </div>
               </div>
 
-              <Link href={`/app/scraping/${tool.id}`}>
+              <Link href={tool.path || `/app/scraping/${tool.id}`}>
                 <Button className="w-full gap-2">
                   Open Tool
                   <ChevronRight className="w-4 h-4" />

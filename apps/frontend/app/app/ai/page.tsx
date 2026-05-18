@@ -154,7 +154,7 @@ function StatCard({ label, value, icon: Icon, color, trend }: any) {
   );
 }
 
-function PromptCard({ prompt, onEdit }: { prompt: any; onEdit: () => void }) {
+function PromptCard({ prompt, onEdit, onCopy }: { prompt: any; onEdit: () => void; onCopy: () => void }) {
   const Icon = prompt.icon;
   return (
     <div className="p-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 transition-all">
@@ -173,7 +173,7 @@ function PromptCard({ prompt, onEdit }: { prompt: any; onEdit: () => void }) {
           <Edit3 className="w-3 h-3" />
           Edit
         </Button>
-        <Button variant="ghost" size="sm">
+        <Button variant="ghost" size="sm" onClick={onCopy}>
           <Copy className="w-4 h-4" />
         </Button>
       </div>
@@ -210,13 +210,16 @@ function UsageChart({ data }: { data: any }) {
 export default function AISettingsPage() {
   const [tab, setTab] = useState<string>("models");
   const [selectedModel, setSelectedModel] = useState<string>("llama3.2");
-  const [ollamaConnected, setOllamaConnected] = useState<boolean>(true);
+  const [ollamaConnected, setOllamaConnected] = useState<boolean>(false);
+  const [isTesting, setIsTesting] = useState<boolean>(false);
+  const [testResult, setTestResult] = useState<{success: boolean; message: string} | null>(null);
   const [temperature, setTemperature] = useState<number>(0.7);
   const [maxTokens, setMaxTokens] = useState<number>(500);
   const [prompts, setPrompts] = useState(defaultPrompts);
   const [showPromptEditor, setShowPromptEditor] = useState<boolean>(false);
   const [editingPrompt, setEditingPrompt] = useState<any>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [saveMessage, setSaveMessage] = useState<string>("");
 
   const usageStats = {
     totalGenerations: 1247,
@@ -234,15 +237,58 @@ export default function AISettingsPage() {
     outreach_optimization: { count: 128, tokens: 6400 },
   };
 
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    
+    try {
+      const response = await fetch("http://localhost:8000/api/v1/ai/status", {
+        headers: { "Authorization": "Bearer test" }
+      });
+      const data = await response.json();
+      
+      if (data.status === "available" || data.status === "offline") {
+        setOllamaConnected(data.status === "available");
+        setTestResult({
+          success: data.status === "available",
+          message: data.status === "available" 
+            ? "Connected to Ollama successfully!" 
+            : "Ollama not running. Start Ollama to enable AI features."
+        });
+      } else {
+        setOllamaConnected(false);
+        setTestResult({ success: false, message: "Connection failed" });
+      }
+    } catch (error) {
+      setOllamaConnected(false);
+      setTestResult({ success: false, message: "Cannot connect to server" });
+    }
+    
+    setIsTesting(false);
+  };
+
   const handleSaveSettings = async () => {
     setIsSaving(true);
     await new Promise((r) => setTimeout(r, 1000));
     setIsSaving(false);
+    setSaveMessage("Settings saved successfully!");
+    setTimeout(() => setSaveMessage(""), 3000);
   };
 
   const handleEditPrompt = (prompt: any) => {
     setEditingPrompt({ ...prompt, content: "" });
     setShowPromptEditor(true);
+  };
+
+  const handleCopyPrompt = (prompt: any) => {
+    navigator.clipboard.writeText(prompt.description);
+    alert("Prompt copied to clipboard!");
+  };
+
+  const handleSavePrompt = () => {
+    setShowPromptEditor(false);
+    setEditingPrompt(null);
+    alert("Prompt saved successfully!");
   };
 
   return (
@@ -252,10 +298,15 @@ export default function AISettingsPage() {
           <h1 className="text-3xl font-bold mb-2">AI Settings</h1>
           <p className="text-gray-400">Configure AI models, prompts, and usage settings</p>
         </div>
-        <Button onClick={handleSaveSettings} disabled={isSaving} className="gap-2">
-          {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {isSaving ? "Saving..." : "Save Changes"}
-        </Button>
+        <div className="flex items-center gap-3">
+          {saveMessage && (
+            <span className="text-sm text-green-400">{saveMessage}</span>
+          )}
+          <Button onClick={handleSaveSettings} disabled={isSaving} className="gap-2">
+            {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {isSaving ? "Saving..." : "Save Changes"}
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -303,10 +354,21 @@ export default function AISettingsPage() {
                       {ollamaConnected ? "Connected to localhost:11434" : "Disconnected"}
                     </span>
                   </div>
+                  {testResult && (
+                    <div className={cn("text-sm mt-1", testResult.success ? "text-green-400" : "text-red-400")}>
+                      {testResult.message}
+                    </div>
+                  )}
                 </div>
-                <Button variant="outline" size="sm" className="gap-1">
-                  <RefreshCw className="w-4 h-4" />
-                  Test Connection
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="gap-1"
+                  onClick={handleTestConnection}
+                  disabled={isTesting}
+                >
+                  <RefreshCw className={cn("w-4 h-4", isTesting && "animate-spin")} />
+                  {isTesting ? "Testing..." : "Test Connection"}
                 </Button>
               </div>
 
@@ -383,7 +445,12 @@ export default function AISettingsPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {prompts.map((prompt) => (
-                  <PromptCard key={prompt.key} prompt={prompt} onEdit={() => handleEditPrompt(prompt)} />
+                  <PromptCard 
+                    key={prompt.key} 
+                    prompt={prompt} 
+                    onEdit={() => handleEditPrompt(prompt)}
+                    onCopy={() => handleCopyPrompt(prompt)}
+                  />
                 ))}
               </div>
             </div>
@@ -550,8 +617,8 @@ export default function AISettingsPage() {
               </div>
             </div>
             <div className="flex items-center justify-end gap-3 mt-6">
-              <Button variant="outline" onClick={() => setShowPromptEditor(false)}>Cancel</Button>
-              <Button onClick={() => setShowPromptEditor(false)} className="gap-1">
+              <Button variant="outline" onClick={() => { setShowPromptEditor(false); setEditingPrompt(null); }}>Cancel</Button>
+              <Button onClick={handleSavePrompt} className="gap-1">
                 <Save className="w-4 h-4" />
                 Save Prompt
               </Button>

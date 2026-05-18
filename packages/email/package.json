@@ -1,6 +1,0 @@
-{
-  "name": "@outflo/email",
-  "version": "1.0.0",
-  "description": "Email utilities for Outflo",
-  "main": "src/__init__.py"
-}

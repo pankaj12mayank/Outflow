@@ -22,7 +22,10 @@ async def list_jobs(
     current_user: dict = Depends(get_current_user),
 ):
     """List scraping jobs."""
-    return []
+    from app.services.mongo_services import ScrapingJobService
+    user_id = current_user.get("sub")
+    jobs = await ScrapingJobService.find_by_user(user_id)
+    return jobs
 
 
 @router.post("/jobs")

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   CreditCard,
@@ -12,10 +13,12 @@ import {
   ArrowRight,
   Receipt,
   Clock,
+  X,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
+import { Input } from "@/app/components/ui/input";
 
 const plans = [
   {
@@ -51,6 +54,39 @@ const usage = [
 ];
 
 export default function BillingPage() {
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState("Professional");
+  const [cardNumber, setCardNumber] = useState("");
+  const [expiry, setExpiry] = useState("");
+  const [cvc, setCvc] = useState("");
+
+  const handleDownloadInvoice = (invoice: any) => {
+    alert(`Downloading invoice ${invoice.id}...`);
+  };
+
+  const handleDownloadAllInvoices = () => {
+    alert(`Downloading all invoices as ZIP...`);
+  };
+
+  const handleUpdatePayment = () => {
+    if (!cardNumber || !expiry || !cvc) {
+      alert("Please fill all card details");
+      return;
+    }
+    setShowPaymentModal(false);
+    setCardNumber("");
+    setExpiry("");
+    setCvc("");
+    alert("Payment method updated successfully!");
+  };
+
+  const handleChangePlan = (plan: string) => {
+    setSelectedPlan(plan);
+    setShowSubscriptionModal(false);
+    alert(`Plan changed to ${plan}!`);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

@@ -1,10 +1,11 @@
 import time
 import uuid
 import logging
+import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from contextlib import asynccontextmanager
 
 from .core.config import settings
 from .core.logging import app_logger
@@ -22,19 +23,32 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    startup_start = time.perf_counter()
     app_logger.info("Outflo starting up", version=settings.app_version, env=settings.app_env)
+
+    # Connect to MongoDB
+    mongo_start = time.perf_counter()
     try:
         await MongoDB.connect()
-        app_logger.info("MongoDB connected")
+        mongo_elapsed = (time.perf_counter() - mongo_start) * 1000
+        app_logger.info(f"MongoDB connected in {mongo_elapsed:.1f}ms")
     except Exception as e:
         app_logger.warning(f"MongoDB connection skipped: {e}")
 
-    try:
-        from .tasks import polling_service
-        await polling_service.start()
-        app_logger.info("Polling service started")
-    except Exception as e:
-        app_logger.warning(f"Polling service not available: {e}")
+    # Lazy-load polling service after startup to speed up initial response
+    async def start_polling():
+        try:
+            from .tasks import polling_service
+            await polling_service.start()
+            app_logger.info("Polling service started")
+        except Exception as e:
+            app_logger.warning(f"Polling service not available: {e}")
+
+    # Start polling service in background (non-blocking)
+    asyncio.create_task(start_polling())
+
+    total_elapsed = (time.perf_counter() - startup_start) * 1000
+    app_logger.info(f"Outflo startup completed in {total_elapsed:.1f}ms")
 
     yield
 

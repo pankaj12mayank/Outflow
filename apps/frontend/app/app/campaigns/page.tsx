@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
 import {
   Plus,
   Search,
@@ -21,6 +22,9 @@ import {
   Zap,
   X,
   Send,
+  Eye,
+  Copy,
+  Edit3,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
@@ -135,6 +139,8 @@ export default function CampaignsPage() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [showModal, setShowModal] = useState(false);
   const [campaignList, setCampaignList] = useState(campaigns);
+  const [activeMenu, setActiveMenu] = useState<number | null>(null);
+  const router = useRouter();
 
   const filteredCampaigns = campaignList.filter((campaign) => {
     const matchesSearch =
@@ -158,7 +164,28 @@ export default function CampaignsPage() {
   };
 
   const deleteCampaign = (id: number) => {
-    setCampaignList((prev) => prev.filter((c) => c.id !== id));
+    if (confirm("Are you sure you want to delete this campaign?")) {
+      setCampaignList((prev) => prev.filter((c) => c.id !== id));
+    }
+  };
+
+  const handleViewCampaign = (id: number) => {
+    router.push(`/app/campaigns/${id}`);
+    setActiveMenu(null);
+  };
+
+  const handleDuplicateCampaign = (campaign: Campaign) => {
+    const newCampaign = {
+      ...campaign,
+      id: Date.now(),
+      name: `${campaign.name} (Copy)`,
+      status: "draft" as const,
+      sent: 0,
+      replied: 0,
+    };
+    setCampaignList([...campaignList, newCampaign]);
+    setActiveMenu(null);
+    alert("Campaign duplicated!");
   };
 
   const totalEmailsSent = campaignList.reduce((sum, c) => sum + c.sent, 0);
@@ -305,14 +332,19 @@ export default function CampaignsPage() {
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-xl font-bold">{campaign.name}</h3>
+                      <h3 
+                        className="text-xl font-bold cursor-pointer hover:text-purple-400 transition-colors"
+                        onClick={() => handleViewCampaign(campaign.id)}
+                      >
+                        {campaign.name}
+                      </h3>
                       <Badge className={cn("capitalize", statusColors[campaign.status as keyof typeof statusColors])}>
                         {campaign.status}
                       </Badge>
                     </div>
                     <p className="text-gray-400">{campaign.description}</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 relative">
                     {campaign.status === "draft" && (
                       <Button size="sm" className="gap-2" onClick={() => toggleCampaignStatus(campaign.id)}>
                         <Play className="w-4 h-4" />
@@ -339,9 +371,29 @@ export default function CampaignsPage() {
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="icon">
-                      <MoreHorizontal className="w-4 h-4" />
-                    </Button>
+                    <div className="relative">
+                      <Button variant="ghost" size="icon" onClick={() => setActiveMenu(activeMenu === campaign.id ? null : campaign.id)}>
+                        <MoreHorizontal className="w-4 h-4" />
+                      </Button>
+                      {activeMenu === campaign.id && (
+                        <div className="absolute right-0 top-full mt-1 z-50 w-40 p-1 rounded-lg bg-gray-900 border border-white/10 shadow-xl">
+                          <button
+                            onClick={() => handleViewCampaign(campaign.id)}
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5 hover:text-white"
+                          >
+                            <Eye className="w-4 h-4" />
+                            View
+                          </button>
+                          <button
+                            onClick={() => handleDuplicateCampaign(campaign)}
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5 hover:text-white"
+                          >
+                            <Copy className="w-4 h-4" />
+                            Duplicate
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 

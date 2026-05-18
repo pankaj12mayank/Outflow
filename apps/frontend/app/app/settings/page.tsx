@@ -33,18 +33,92 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("profile");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+  
+  const [passwordForm, setPasswordForm] = useState({ current: "", new: "", confirm: "" });
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [apiKeys, setApiKeys] = useState([
+    { id: 1, name: "Production Key", key: "sk_live_xxxxxxxxxxxxxxxxxxxx", created: "2026-05-01", purpose: "Live production integration" },
+    { id: 2, name: "Development Key", key: "sk_test_xxxxxxxxxxxxxxxxxxxx", created: "2026-04-15", purpose: "Testing and development" },
+  ]);
+  const [showCreateKeyModal, setShowCreateKeyModal] = useState(false);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [newKeyPurpose, setNewKeyPurpose] = useState("");
 
-  const handleSave = async () => {
+  const handleSave = async (message: string = "Saved successfully!") => {
     setIsSaving(true);
     await new Promise((resolve) => setTimeout(resolve, 1000));
     setIsSaving(false);
+    setSaveMessage(message);
+    setTimeout(() => setSaveMessage(""), 3000);
+  };
+
+  const handleChangePassword = () => {
+    if (passwordForm.new !== passwordForm.confirm) {
+      alert("New passwords don't match!");
+      return;
+    }
+    if (passwordForm.new.length < 6) {
+      alert("Password must be at least 6 characters!");
+      return;
+    }
+    setPasswordForm({ current: "", new: "", confirm: "" });
+    handleSave("Password changed successfully!");
+  };
+
+  const handleToggle2FA = () => {
+    setTwoFactorEnabled(!twoFactorEnabled);
+    handleSave(twoFactorEnabled ? "2FA disabled!" : "2FA enabled!");
+  };
+
+  const handleCreateAPIKey = () => {
+    if (!newKeyName) {
+      alert("Please enter a key name");
+      return;
+    }
+    const newKey = {
+      id: Date.now(),
+      name: newKeyName,
+      key: `sk_${Math.random().toString(36).substring(2, 18)}`,
+      created: new Date().toISOString().split("T")[0],
+      purpose: newKeyPurpose || "Custom integration"
+    };
+    setApiKeys([...apiKeys, newKey]);
+    setNewKeyName("");
+    setNewKeyPurpose("");
+    setShowCreateKeyModal(false);
+    alert(`API Key created: ${newKey.key}\n\nPlease save this key - it won't be shown again!`);
+  };
+
+  const handleRegenerateKey = (id: number) => {
+    if (confirm("Are you sure you want to regenerate this key? The old key will stop working.")) {
+      setApiKeys(apiKeys.map(k => k.id === id ? { ...k, key: `sk_${Math.random().toString(36).substring(2, 18)}` } : k));
+      handleSave("Key regenerated successfully!");
+    }
+  };
+
+  const handleDeleteKey = (id: number) => {
+    if (confirm("Are you sure you want to delete this API key?")) {
+      setApiKeys(apiKeys.filter(k => k.id !== id));
+      handleSave("Key deleted!");
+    }
+  };
+
+  const handleCopyKey = (key: string) => {
+    navigator.clipboard.writeText(key);
+    alert("Key copied to clipboard!");
   };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Settings</h1>
-        <p className="text-gray-400">Manage your account and organization settings</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Settings</h1>
+          <p className="text-gray-400">Manage your account and organization settings</p>
+        </div>
+        {saveMessage && (
+          <span className="text-green-400 text-sm bg-green-400/10 px-3 py-1 rounded-lg">{saveMessage}</span>
+        )}
       </div>
 
       <div className="flex gap-8">
@@ -142,7 +216,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex justify-end mt-6">
-                  <Button onClick={handleSave} disabled={isSaving} className="gap-2">
+                  <Button onClick={() => handleSave()} disabled={isSaving} className="gap-2">
                     {isSaving ? "Saving..." : "Save Changes"}
                     <Save className="w-4 h-4" />
                   </Button>
@@ -191,7 +265,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex justify-end mt-6">
-                  <Button onClick={handleSave} className="gap-2">
+                  <Button onClick={() => handleSave()} className="gap-2">
                     Save Changes
                     <Save className="w-4 h-4" />
                   </Button>
@@ -230,7 +304,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="flex justify-end mt-6">
-                <Button onClick={handleSave} className="gap-2">
+                <Button onClick={() => handleSave()} className="gap-2">
                   Save Preferences
                   <Save className="w-4 h-4" />
                 </Button>
@@ -249,30 +323,54 @@ export default function SettingsPage() {
                 <div className="space-y-4 max-w-md">
                   <div>
                     <label className="block text-sm font-medium mb-2">Current Password</label>
-                    <Input type="password" className="bg-white/5 border-white/10" />
+                    <Input 
+                      type="password" 
+                      className="bg-white/5 border-white/10"
+                      value={passwordForm.current}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, current: e.target.value })}
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">New Password</label>
-                    <Input type="password" className="bg-white/5 border-white/10" />
+                    <Input 
+                      type="password" 
+                      className="bg-white/5 border-white/10"
+                      value={passwordForm.new}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, new: e.target.value })}
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">Confirm New Password</label>
-                    <Input type="password" className="bg-white/5 border-white/10" />
+                    <Input 
+                      type="password" 
+                      className="bg-white/5 border-white/10"
+                      value={passwordForm.confirm}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
+                    />
                   </div>
                 </div>
-                <Button className="mt-6 gap-2">
+                <Button className="mt-6 gap-2" onClick={handleChangePassword}>
                   <Key className="w-4 h-4" />
                   Update Password
                 </Button>
               </div>
 
               <div className="p-6 rounded-2xl border border-white/5 bg-gradient-to-b from-white/5 to-transparent">
-                <h2 className="text-xl font-bold mb-4">Two-Factor Authentication</h2>
-                <p className="text-gray-400 mb-4">Add an extra layer of security to your account</p>
-                <Button variant="outline" className="gap-2">
-                  <Shield className="w-4 h-4" />
-                  Enable 2FA
-                </Button>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold mb-2">Two-Factor Authentication</h2>
+                    <p className="text-gray-400">Add an extra layer of security to your account</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer"
+                      checked={twoFactorEnabled}
+                      onChange={handleToggle2FA}
+                    />
+                    <div className="w-11 h-6 bg-white/10 rounded-full peer peer-checked:bg-purple-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all" />
+                  </label>
+                </div>
               </div>
             </motion.div>
           )}
@@ -285,18 +383,22 @@ export default function SettingsPage() {
             >
               <h2 className="text-xl font-bold mb-6">API Keys</h2>
               <p className="text-gray-400 mb-6">
-                Use API keys to integrate Outflo with your existing tools and systems.
+                Use API keys to integrate Outflo with your existing tools and systems. Each key has a specific purpose for better security and tracking.
               </p>
               
               <div className="space-y-4">
-                {[
-                  { name: "Production Key", key: "sk_live_xxxxxxxxxxxxxxxxxxxx", created: "2026-05-01" },
-                  { name: "Development Key", key: "sk_test_xxxxxxxxxxxxxxxxxxxx", created: "2026-04-15" },
-                ].map((apiKey) => (
-                  <div key={apiKey.name} className="p-4 rounded-xl bg-white/5 border border-white/10">
+                {apiKeys.map((apiKey) => (
+                  <div key={apiKey.id} className="p-4 rounded-xl bg-white/5 border border-white/10">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium">{apiKey.name}</span>
-                      <Button variant="ghost" size="sm">Regenerate</Button>
+                      <div>
+                        <span className="font-medium">{apiKey.name}</span>
+                        <span className="text-xs text-gray-400 ml-2">• {apiKey.purpose}</span>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => handleCopyKey(apiKey.key)}>Copy</Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleRegenerateKey(apiKey.id)}>Regenerate</Button>
+                        <Button variant="ghost" size="sm" className="text-red-400" onClick={() => handleDeleteKey(apiKey.id)}>Delete</Button>
+                      </div>
                     </div>
                     <div className="font-mono text-sm text-gray-400 mb-2">{apiKey.key}</div>
                     <div className="text-xs text-gray-500">Created {apiKey.created}</div>
@@ -304,10 +406,42 @@ export default function SettingsPage() {
                 ))}
               </div>
 
-              <Button className="mt-6 gap-2">
+              <Button className="mt-6 gap-2" onClick={() => setShowCreateKeyModal(true)}>
                 <Key className="w-4 h-4" />
                 Create New Key
               </Button>
+
+              {showCreateKeyModal && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 mt-32">
+                  <div className="bg-gray-900 p-6 rounded-xl border border-white/10 w-96">
+                    <h3 className="text-lg font-bold mb-4">Create API Key</h3>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm mb-2">Key Name</label>
+                        <Input 
+                          value={newKeyName}
+                          onChange={(e) => setNewKeyName(e.target.value)}
+                          placeholder="e.g., Production Key"
+                          className="bg-white/5 border-white/10"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm mb-2">Purpose (optional)</label>
+                        <Input 
+                          value={newKeyPurpose}
+                          onChange={(e) => setNewKeyPurpose(e.target.value)}
+                          placeholder="e.g., CRM integration"
+                          className="bg-white/5 border-white/10"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2 mt-4">
+                      <Button variant="outline" onClick={() => setShowCreateKeyModal(false)}>Cancel</Button>
+                      <Button onClick={handleCreateAPIKey}>Create</Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
         </div>

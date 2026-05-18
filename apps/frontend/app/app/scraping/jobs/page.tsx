@@ -180,11 +180,19 @@ function StatCard({ label, value, icon: Icon, color, trend }: any) {
   );
 }
 
-function JobRow({ job }: { job: any }) {
+function JobRow({ job, onPause, onResume, onDelete, onView }: { job: any; onPause: (id: string) => void; onResume: (id: string) => void; onDelete: (id: string) => void; onView: (id: string) => void }) {
   const status = statusConfig[job.status];
   const StatusIcon = status.icon;
   const typeInfo = typeIcons[job.type];
   const TypeIcon = typeInfo?.icon || Activity;
+
+  const typeColorMap: Record<string, string> = {
+    purple: "bg-purple-500/10 text-purple-400",
+    green: "bg-green-500/10 text-green-400",
+    blue: "bg-blue-500/10 text-blue-400",
+    yellow: "bg-yellow-500/10 text-yellow-400",
+    gray: "bg-gray-500/10 text-gray-400",
+  };
 
   return (
     <motion.div
@@ -193,8 +201,8 @@ function JobRow({ job }: { job: any }) {
       className="p-5 border-b border-white/5 hover:bg-white/5 transition-colors"
     >
       <div className="flex items-center gap-5">
-        <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", `bg-${typeInfo?.color || "gray"}-500/10`)}>
-          <TypeIcon className={cn("w-6 h-6", `text-${typeInfo?.color || "gray"}-400`)} />
+        <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", typeColorMap[typeInfo?.color || "gray"].split(" ").slice(0, 1).join(" "))}>
+          <TypeIcon className={cn("w-6 h-6", typeColorMap[typeInfo?.color || "gray"].split(" ").slice(1))} />
         </div>
 
         <div className="flex-1 min-w-0">
@@ -257,20 +265,20 @@ function JobRow({ job }: { job: any }) {
           <div className="flex items-center gap-1">
             {job.status === "running" && (
               <>
-                <Button variant="ghost" size="sm" className="w-8 h-8 p-0">
+                <Button variant="ghost" size="sm" className="w-8 h-8 p-0" onClick={() => onPause(job.id)}>
                   <Pause className="w-4 h-4" />
                 </Button>
               </>
             )}
-            {job.status === "failed" && (
-              <Button variant="ghost" size="sm" className="w-8 h-8 p-0">
-                <RotateCcw className="w-4 h-4" />
+            {(job.status === "pending" || job.status === "failed") && (
+              <Button variant="ghost" size="sm" className="w-8 h-8 p-0" onClick={() => onResume(job.id)}>
+                <Play className="w-4 h-4" />
               </Button>
             )}
-            <Button variant="ghost" size="sm" className="w-8 h-8 p-0">
+            <Button variant="ghost" size="sm" className="w-8 h-8 p-0" onClick={() => onView(job.id)}>
               <Eye className="w-4 h-4" />
             </Button>
-            <Button variant="ghost" size="sm" className="w-8 h-8 p-0">
+            <Button variant="ghost" size="sm" className="w-8 h-8 p-0" onClick={() => onDelete(job.id)}>
               <Trash2 className="w-4 h-4" />
             </Button>
           </div>
@@ -283,8 +291,32 @@ function JobRow({ job }: { job: any }) {
 export default function JobMonitorPage() {
   const [filter, setFilter] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(false);
+  const [jobList, setJobList] = useState(jobs);
 
-  const filteredJobs = filter === "all" ? jobs : jobs.filter((j) => j.status === filter);
+  const filteredJobs = filter === "all" ? jobList : jobList.filter((j) => j.status === filter);
+
+  const handleRefresh = () => {
+    setIsLoading(true);
+    setTimeout(() => setIsLoading(false), 1500);
+  };
+
+  const handlePause = (jobId: string) => {
+    setJobList(prev => prev.map(j => j.id === jobId ? { ...j, status: "pending" } : j));
+  };
+
+  const handleResume = (jobId: string) => {
+    setJobList(prev => prev.map(j => j.id === jobId ? { ...j, status: "running" } : j));
+  };
+
+  const handleDelete = (jobId: string) => {
+    if (confirm("Are you sure you want to delete this job?")) {
+      setJobList(prev => prev.filter(j => j.id !== jobId));
+    }
+  };
+
+  const handleView = (jobId: string) => {
+    alert(`View details for job: ${jobId}`);
+  };
 
   const stats = {
     total: jobs.length,
@@ -303,9 +335,9 @@ export default function JobMonitorPage() {
           <p className="text-gray-400">Track and manage all scraping jobs</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="gap-2" onClick={() => setIsLoading(true)}>
-            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
-            Refresh
+          <Button variant="outline" className="gap-2" onClick={handleRefresh} disabled={isLoading}>
+            <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
+            {isLoading ? "Refreshing..." : "Refresh"}
           </Button>
         </div>
       </div>
@@ -361,7 +393,14 @@ export default function JobMonitorPage() {
 
         <div className="max-h-[600px] overflow-y-auto">
           {filteredJobs.map((job) => (
-            <JobRow key={job.id} job={job} />
+            <JobRow 
+              key={job.id} 
+              job={job} 
+              onPause={handlePause}
+              onResume={handleResume}
+              onDelete={handleDelete}
+              onView={handleView}
+            />
           ))}
         </div>
 

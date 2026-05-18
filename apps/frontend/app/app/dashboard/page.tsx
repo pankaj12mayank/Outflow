@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import {
   Users,
   Target,
@@ -14,9 +16,11 @@ import {
   ChevronRight,
   Plus,
   Activity,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/app/hooks";
 import { cn } from "@/app/lib/utils";
+import { ScrollReveal, ScrollProgress } from "@/app/components/premium";
 
 const stats: {
   name: string;
@@ -205,20 +209,63 @@ function StatCard({
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const router = useRouter();
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [dateRange, setDateRange] = useState("Last 30 days");
+
+  const dateOptions = [
+    "Last 7 days",
+    "Last 30 days",
+    "Last 90 days",
+    "This month",
+    "Last month",
+    "Custom",
+  ];
 
   return (
     <div className="space-y-8">
+      <ScrollProgress />
+
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold mb-2">Welcome back, {user?.full_name?.split(" ")[0] || "User"}</h1>
-          <p className="text-gray-400">Here's what's happening with your outreach today.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 hover:border-white/20 text-white font-medium transition-all">
+        <ScrollReveal animation="slide-up">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Welcome back, {user?.full_name?.split(" ")[0] || "User"}</h1>
+            <p className="text-gray-400">Here's what's happening with your outreach today.</p>
+          </div>
+        </ScrollReveal>
+        <div className="flex items-center gap-3 relative">
+          <button
+            onClick={() => setShowDatePicker(!showDatePicker)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 hover:border-white/20 text-white font-medium transition-all"
+          >
             <Calendar className="w-4 h-4" />
-            Last 30 days
+            {dateRange}
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-medium transition-all">
+          {showDatePicker && (
+            <div className="absolute top-full mt-2 right-0 z-50 w-48 p-2 rounded-xl bg-gray-900 border border-white/10 shadow-xl">
+              {dateOptions.map((option) => (
+                <button
+                  key={option}
+                  onClick={() => {
+                    setDateRange(option);
+                    setShowDatePicker(false);
+                  }}
+                  className={cn(
+                    "w-full text-left px-3 py-2 rounded-lg text-sm transition-all",
+                    dateRange === option
+                      ? "bg-purple-500/10 text-purple-400"
+                      : "text-gray-400 hover:text-white hover:bg-white/5"
+                  )}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={() => router.push("/app/campaigns")}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-medium transition-all"
+          >
             <Plus className="w-4 h-4" />
             New Campaign
           </button>
@@ -227,14 +274,13 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat, i) => (
-          <motion.div
+          <ScrollReveal
             key={stat.name}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
+            animation="slide-up"
+            delay={i * 100}
           >
             <StatCard {...stat} />
-          </motion.div>
+          </ScrollReveal>
         ))}
       </div>
 
@@ -242,7 +288,10 @@ export default function DashboardPage() {
         <div className="lg:col-span-2 p-6 rounded-2xl border border-white/5 bg-gradient-to-b from-white/5 to-transparent">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold">Top Campaigns</h2>
-            <button className="text-sm text-purple-400 hover:text-purple-300 font-medium">
+            <button 
+              onClick={() => router.push("/app/campaigns")}
+              className="text-sm text-purple-400 hover:text-purple-300 font-medium"
+            >
               View all
             </button>
           </div>
@@ -253,6 +302,7 @@ export default function DashboardPage() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.1 }}
+                onClick={() => router.push(`/app/campaigns/${i + 1}`)}
                 className="flex items-center gap-4 p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
               >
                 <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
@@ -300,12 +350,15 @@ export default function DashboardPage() {
       </div>
 
       <div className="p-6 rounded-2xl border border-white/5 bg-gradient-to-b from-white/5 to-transparent">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold">Upcoming Tasks</h2>
-          <button className="text-sm text-purple-400 hover:text-purple-300 font-medium">
-            View calendar
-          </button>
-        </div>
+<div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold">Upcoming Tasks</h2>
+            <button 
+              onClick={() => router.push("/app/calendar")}
+              className="text-sm text-purple-400 hover:text-purple-300 font-medium"
+            >
+              View calendar
+            </button>
+          </div>
         <div className="grid md:grid-cols-3 gap-4">
           {upcomingTasks.map((task, i) => (
             <motion.div

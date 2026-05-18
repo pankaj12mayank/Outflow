@@ -4,6 +4,7 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncI
 from pymongo import ASCENDING, DESCENDING, IndexModel
 from pydantic import BaseModel, Field
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ class MongoDB:
         cls._database = cls._client[config.database_name]
         logger.info(f"Connected to MongoDB: {config.database_name}")
 
-        await cls._create_indexes()
+        asyncio.get_event_loop().create_task(cls._create_indexes())
 
     @classmethod
     async def disconnect(cls) -> None:
@@ -191,6 +192,11 @@ class MongoDB:
             "login_logs": [
                 IndexModel([("user_id", ASCENDING)]),
                 IndexModel([("created_at", DESCENDING)]),
+            ],
+            "password_resets": [
+                IndexModel([("email", ASCENDING)]),
+                IndexModel([("token_hash", ASCENDING)], unique=True),
+                IndexModel([("expires_at", ASCENDING)]),
             ],
         }
 

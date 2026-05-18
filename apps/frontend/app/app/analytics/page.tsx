@@ -329,6 +329,15 @@ export default function AnalyticsPage() {
     { id: "this_quarter", label: "This Quarter" },
   ];
 
+  const handleRefresh = () => {
+    setIsLoading(true);
+    setTimeout(() => setIsLoading(false), 1500);
+  };
+
+  const handleExport = (format: string = "csv") => {
+    alert(`Exporting analytics data as ${format.toUpperCase()}...`);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -337,11 +346,11 @@ export default function AnalyticsPage() {
           <p className="text-gray-400">Track performance across all campaigns and activities</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" className="gap-1" onClick={() => setIsLoading(true)}>
+          <Button variant="outline" size="sm" className="gap-1" onClick={handleRefresh} disabled={isLoading}>
             <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
-            Refresh
+            {isLoading ? "Loading..." : "Refresh"}
           </Button>
-          <Button variant="outline" size="sm" className="gap-1">
+          <Button variant="outline" size="sm" className="gap-1" onClick={() => handleExport("csv")}>
             <Download className="w-4 h-4" />
             Export
           </Button>

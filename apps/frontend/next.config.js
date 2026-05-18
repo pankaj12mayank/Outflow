@@ -10,8 +10,6 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: [
       "lucide-react",
-      "@tanstack/react-query",
-      "@tanstack/react-query-devtools",
     ],
   },
   

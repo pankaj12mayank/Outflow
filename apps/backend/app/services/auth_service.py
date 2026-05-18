@@ -59,9 +59,25 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
 
 
 def get_client_info(request) -> dict:
+    client_host = "127.0.0.1"
+    user_agent = "unknown"
+    
+    if request is not None:
+        try:
+            if hasattr(request, 'client') and request.client:
+                client_host = getattr(request.client, 'host', '127.0.0.1') or '127.0.0.1'
+        except:
+            client_host = "127.0.0.1"
+        
+        try:
+            if hasattr(request, 'headers'):
+                user_agent = request.headers.get("user-agent", "unknown") or "unknown"
+        except:
+            user_agent = "unknown"
+    
     return {
-        "ip_address": request.client.host if request else None,
-        "user_agent": request.headers.get("user-agent") if request else None,
+        "ip_address": client_host,
+        "user_agent": user_agent,
     }
 
 
@@ -293,6 +309,7 @@ class AuthService:
             raise ValueError(f"Account locked. Try again in {lockout_remaining} seconds.")
 
         user = await self._get_user_by_email_any_org(data["email"])
+        
         if not user:
             await self._log_login(None, None, "failed", client_info, "user_not_found")
             raise ValueError("Invalid email or password")
@@ -404,6 +421,97 @@ class AuthService:
             "created_at": datetime.utcnow(),
         }
         await session_coll.insert_one(session)
+
+    async def request_password_reset(self, email: str) -> Dict:
+        user = await self._get_user_by_email_any_org(email)
+        if not user:
+            return {"message": "If email exists, reset link has been sent"}
+
+        reset_token = generate_token(48)
+        token_hash = hash_token(reset_token)
+
+        reset_coll = MongoDB.get_collection("password_resets")
+        await reset_coll.delete_many({"email": email})
+
+        reset_doc = {
+            "email": email,
+            "token_hash": token_hash,
+            "user_id": user["id"],
+            "expires_at": datetime.utcnow() + timedelta(minutes=AUTH_CONFIG["PASSWORD_RESET_EXPIRE_MINUTES"]),
+            "created_at": datetime.utcnow(),
+            "used": False,
+        }
+        await reset_coll.insert_one(reset_doc)
+
+        reset_url = f"http://localhost:3000/reset-password?token={reset_token}"
+
+        try:
+            await EmailService.send_password_reset(email, reset_url)
+        except Exception as e:
+            print(f"Failed to send reset email: {e}")
+
+        return {"message": "Password reset email sent", "token": reset_token}
+
+    async def reset_password(self, token: str, new_password: str) -> Dict:
+        token_hash = hash_token(token)
+
+        reset_coll = MongoDB.get_collection("password_resets")
+        reset_doc = await reset_coll.find_one({
+            "token_hash": token_hash,
+            "used": False,
+        })
+
+        if not reset_doc:
+            raise ValueError("Invalid or expired reset token")
+
+        if reset_doc.get("expires_at") < datetime.utcnow():
+            raise ValueError("Reset token has expired")
+
+        is_valid, error = validate_password_strength(new_password)
+        if not is_valid:
+            raise ValueError(error)
+
+        user_id = reset_doc.get("user_id")
+        password_hash = get_password_hash(new_password)
+
+        user_coll = MongoDB.get_collection("users")
+        await user_coll.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$set": {"password_hash": password_hash, "updated_at": datetime.utcnow().isoformat()}}
+        )
+
+        await reset_coll.update_one(
+            {"_id": reset_doc["_id"]},
+            {"$set": {"used": True, "used_at": datetime.utcnow()}}
+        )
+
+        return {"message": "Password reset successfully"}
+
+    async def get_user_sessions(self, user_id: str) -> List[Dict]:
+        session_coll = MongoDB.get_collection("sessions")
+        sessions = await session_coll.find({
+            "user_id": user_id,
+            "is_active": True,
+            "expires_at": {"$gt": datetime.utcnow().isoformat()}
+        }).sort("created_at", -1).to_list(length=50)
+
+        return [{
+            "id": str(s.get("_id")),
+            "device_type": s.get("device_type"),
+            "browser": s.get("browser"),
+            "os": s.get("os"),
+            "ip_address": s.get("ip_address"),
+            "created_at": s.get("created_at"),
+            "expires_at": s.get("expires_at"),
+        } for s in sessions]
+
+    async def revoke_session(self, user_id: str, session_id: str) -> bool:
+        session_coll = MongoDB.get_collection("sessions")
+        result = await session_coll.update_one(
+            {"_id": ObjectId(session_id), "user_id": user_id},
+            {"$set": {"is_active": False, "revoked_at": datetime.utcnow().isoformat()}}
+        )
+        return result.modified_count > 0
 
     async def _log_login(self, user_id: Optional[str], organization_id: Optional[str], status: str, client_info: dict, failure_reason: Optional[str] = None):
         log_coll = MongoDB.get_collection("login_logs")

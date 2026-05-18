@@ -82,6 +82,9 @@ class Settings(BaseSettings):
     polling_emails: int = 10000
     polling_tasks: int = 5000
 
+    enable_startup_cache: bool = True
+    cache_ttl_seconds: int = 300
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if self.cors_origins and isinstance(self.cors_origins, str):

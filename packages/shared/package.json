@@ -1,7 +1,0 @@
-{
-  "name": "@outflo/shared",
-  "version": "1.0.0",
-  "description": "Shared types and constants for Outflo",
-  "main": "src/index.ts",
-  "types": "src/index.ts"
-}

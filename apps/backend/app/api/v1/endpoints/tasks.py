@@ -23,9 +23,17 @@ class TaskResponse(BaseModel):
 async def list_tasks(
     skip: int = 0,
     limit: int = 100,
+    status: str = None,
     current_user: dict = Depends(get_current_user),
 ):
-    return []
+    from app.repositories.mongo_repositories import TaskRepository
+    org_id = current_user.get("organization_id")
+    task_repo = TaskRepository(org_id)
+    if status:
+        tasks = await task_repo.get_many_by({"status": status})
+    else:
+        tasks = await task_repo.get_all(skip, limit)
+    return tasks
 
 
 @router.post("", response_model=TaskResponse)

@@ -196,14 +196,20 @@ const stepTypeColors = {
 
 export default function SequencesPage() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [showStepModal, setShowStepModal] = useState(false);
+  const [showNewSequenceModal, setShowNewSequenceModal] = useState(false);
   const [selectedStepType, setSelectedStepType] = useState<string>("email");
   const [sequenceList, setSequenceList] = useState(sequences);
+  const [newSequenceName, setNewSequenceName] = useState("");
 
-  const filteredSequences = sequenceList.filter((seq) =>
-    seq.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    seq.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredSequences = sequenceList.filter((seq) => {
+    const matchesSearch = 
+      seq.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      seq.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = statusFilter === "all" || seq.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   const toggleSequenceStatus = (id: number) => {
     setSequenceList((prev) =>
@@ -216,6 +222,48 @@ export default function SequencesPage() {
     );
   };
 
+  const handleDeleteSequence = (id: number) => {
+    if (confirm("Are you sure you want to delete this sequence?")) {
+      setSequenceList((prev) => prev.filter((s) => s.id !== id));
+    }
+  };
+
+  const handleDuplicateSequence = (seq: Sequence) => {
+    const newSeq: Sequence = {
+      ...seq,
+      id: Date.now(),
+      name: `${seq.name} (Copy)`,
+      status: "draft",
+      active: 0,
+      completed: 0,
+    };
+    setSequenceList([...sequenceList, newSeq]);
+    alert("Sequence duplicated!");
+  };
+
+  const handleCreateSequence = () => {
+    if (!newSequenceName.trim()) {
+      alert("Please enter a sequence name");
+      return;
+    }
+    const newSeq: Sequence = {
+      id: Date.now(),
+      name: newSequenceName,
+      description: "New sequence",
+      steps: [],
+      active: 0,
+      completed: 0,
+      avgResponseRate: 0,
+      avgTimeToResponse: "-",
+      status: "draft",
+      lastUsed: "Never",
+      channels: ["email"],
+    };
+    setSequenceList([...sequenceList, newSeq]);
+    setNewSequenceName("");
+    setShowNewSequenceModal(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -225,11 +273,30 @@ export default function SequencesPage() {
             Create multi-step outreach sequences for your campaigns
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setShowNewSequenceModal(true)}>
           <Plus className="w-4 h-4" />
           New Sequence
         </Button>
       </div>
+
+      {/* New Sequence Modal */}
+      {showNewSequenceModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-gray-900 p-6 rounded-xl border border-white/10 w-96">
+            <h3 className="text-lg font-bold mb-4">Create New Sequence</h3>
+            <Input
+              value={newSequenceName}
+              onChange={(e) => setNewSequenceName(e.target.value)}
+              placeholder="Sequence name"
+              className="mb-4"
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowNewSequenceModal(false)}>Cancel</Button>
+              <Button onClick={handleCreateSequence}>Create</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <motion.div
@@ -296,14 +363,32 @@ export default function SequencesPage() {
         </motion.div>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-        <Input
-          placeholder="Search sequences..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10 bg-white/5 border-white/10 max-w-md"
-        />
+      <div className="flex items-center gap-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <Input
+            placeholder="Search sequences..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 bg-white/5 border-white/10"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          {["all", "active", "paused", "draft"].map((status) => (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-sm font-medium transition-all capitalize",
+                statusFilter === status
+                  ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                  : "text-gray-400 hover:text-white hover:bg-white/5"
+              )}
+            >
+              {status}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="space-y-4">
@@ -367,11 +452,11 @@ export default function SequencesPage() {
                         </>
                       )}
                     </Button>
-                    <Button variant="ghost" size="icon">
+                    <Button variant="ghost" size="icon" onClick={() => handleDuplicateSequence(sequence)}>
                       <Copy className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="icon">
-                      <MoreHorizontal className="w-4 h-4" />
+                    <Button variant="ghost" size="icon" className="text-red-400" onClick={() => handleDeleteSequence(sequence.id)}>
+                      <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>

@@ -29,4 +29,8 @@ async def list_users(
     limit: int = 100,
     current_user: dict = Depends(get_current_user),
 ):
-    return []
+    from app.repositories.mongo_repositories import UserRepository
+    org_id = current_user.get("organization_id")
+    user_repo = UserRepository(org_id)
+    users = await user_repo.get_active_users()
+    return users[:limit]
