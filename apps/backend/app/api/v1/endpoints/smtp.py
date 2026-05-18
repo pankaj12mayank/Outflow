@@ -10,8 +10,13 @@ from app.services.smtp_service import (
     SmtpService, SmtpTestingService, EmailSendingService,
     SmtpAnalyticsService, SmtpMonitoringService
 )
+from app.middleware.system_owner_auth import get_current_system_owner
 
 router = APIRouter(prefix="/smtp", tags=["SMTP"])
+
+
+def _so_auth():
+    return Depends(get_current_system_owner)
 
 
 @router.get("/configs", response_model=List[dict])
@@ -25,7 +30,10 @@ async def get_smtp_configs(
 
 
 @router.post("/configs", response_model=dict)
-async def create_smtp_config(config: SmtpConfigCreate):
+async def create_smtp_config(
+    config: SmtpConfigCreate,
+    _user: dict = Depends(get_current_system_owner),
+):
     config_dict = config.model_dump()
     return await SmtpService.create_config(config_dict)
 
@@ -39,7 +47,11 @@ async def get_smtp_config(config_id: str):
 
 
 @router.put("/configs/{config_id}", response_model=dict)
-async def update_smtp_config(config_id: str, config: SmtpConfigCreate):
+async def update_smtp_config(
+    config_id: str,
+    config: SmtpConfigCreate,
+    _user: dict = Depends(get_current_system_owner),
+):
     config_dict = {k: v for k, v in config.model_dump().items() if v is not None}
     result = await SmtpService.update_config(config_id, config_dict)
     if not result:
@@ -48,7 +60,10 @@ async def update_smtp_config(config_id: str, config: SmtpConfigCreate):
 
 
 @router.delete("/configs/{config_id}")
-async def delete_smtp_config(config_id: str):
+async def delete_smtp_config(
+    config_id: str,
+    _user: dict = Depends(get_current_system_owner),
+):
     deleted = await SmtpService.delete_config(config_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="SMTP config not found")

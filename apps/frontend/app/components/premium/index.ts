@@ -46,7 +46,7 @@ export { AnimatedText, FadeIn, StaggerChildren, StaggerItem, ScaleOnHover, Pulse
 
 export { Alert, AlertBanner, Toast } from "./alert";
 
-export { ChartContainer, LineChart, AreaChart, BarChart, DonutChart, Sparkline, StatCard, MiniChart } from "./chart";
+// Charts/recharts: import from "@/app/components/premium/chart" (keeps barrel from pulling recharts on every page).
 
 export { Breadcrumb, BreadcrumbItem, BreadcrumbSeparator } from "./navigation";
 export type { BreadcrumbProps, BreadcrumbItemProps, BreadcrumbSeparatorProps } from "./navigation";

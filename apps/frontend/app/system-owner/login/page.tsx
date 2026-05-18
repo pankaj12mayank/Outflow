@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { SYSTEM_OWNER_EMAIL } from "@/app/lib/auth-constants";
 import { motion, AnimatePresence } from "framer-motion";
 import { Eye, EyeOff, Loader2, Shield, Lock, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useSystemOwnerAuth } from "@/app/hooks/useSystemOwnerAuth";
@@ -13,8 +14,11 @@ interface ValidationState {
 
 export default function SystemOwnerLoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login: systemOwnerLogin } = useSystemOwnerAuth();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(
+    () => searchParams.get("email") || SYSTEM_OWNER_EMAIL
+  );
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);

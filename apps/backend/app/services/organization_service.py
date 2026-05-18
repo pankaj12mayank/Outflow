@@ -24,6 +24,20 @@ class OrganizationService:
         limit: int = 20
     ) -> Dict:
         filter_dict = {}
+        # Only organizations with at least one registered user (exclude seed/demo orphans)
+        user_org_ids = await MongoDB.get_collection("users").distinct("organization_id")
+        valid_ids = []
+        for oid in user_org_ids:
+            if not oid:
+                continue
+            try:
+                valid_ids.append(ObjectId(oid) if isinstance(oid, str) else oid)
+            except Exception:
+                pass
+        if valid_ids:
+            filter_dict["_id"] = {"$in": valid_ids}
+        else:
+            return {"organizations": [], "total": 0, "page": 1, "page_size": limit}
         
         if query:
             filter_dict["$or"] = [
@@ -58,19 +72,29 @@ class OrganizationService:
         for org in organizations:
             org_dict = serialize_doc(org)
             
+            org_id = org_dict.get("id") or str(org.get("_id"))
             member_count = await MongoDB.get_collection("memberships").count_documents({
-                "organization_id": org.get("_id"),
-                "is_active": True
+                "organization_id": org_id,
+                "$or": [{"status": "active"}, {"is_active": True}],
             })
             org_dict["member_count"] = member_count
+
+            admin_user = await MongoDB.get_collection("users").find_one(
+                {"organization_id": org_id, "role": {"$in": ["admin", "organization_admin"]}},
+                {"password_hash": 0},
+            )
+            if admin_user:
+                org_dict["admin"] = serialize_doc(admin_user)
             
-            subscription = await SubscriptionService.get_subscription(str(org.get("_id")))
+            subscription = await SubscriptionService.get_subscription(org_id)
             if subscription:
                 plan = await PlanService.get_plan(subscription.get("plan_id"))
                 org_dict["subscription"] = {
                     "status": subscription.get("status"),
                     "plan": plan.get("name") if plan else "Unknown",
-                    "billing_cycle": subscription.get("billing_cycle")
+                    "plan_id": subscription.get("plan_id"),
+                    "billing_cycle": subscription.get("billing_cycle"),
+                    "current_period_end": subscription.get("current_period_end"),
                 }
             
             org_list.append(org_dict)
@@ -376,28 +400,57 @@ class ImpersonationService:
 class OrganizationMembersService:
     @staticmethod
     async def get_members(organization_id: str) -> List[Dict]:
-        pipeline = [
-            {"$match": {"organization_id": organization_id, "is_active": True}},
-            {"$lookup": {
-                "from": "users",
-                "localField": "user_id",
-                "foreignField": "_id",
-                "as": "user"
+        memberships = await MongoDB.get_collection("memberships").find(
+            {"organization_id": organization_id}
+        ).sort("created_at", -1).to_list(length=100)
+
+        users_coll = MongoDB.get_collection("users")
+        result = []
+        for m in memberships:
+            m = serialize_doc(m)
+            uid = m.get("user_id")
+            user = None
+            if uid:
+                try:
+                    user = await users_coll.find_one(
+                        {"_id": ObjectId(uid)},
+                        {"password_hash": 0},
+                    )
+                except Exception:
+                    user = await users_coll.find_one(
+                        {"_id": uid},
+                        {"password_hash": 0},
+                    )
+            if user:
+                u = serialize_doc(user)
+                result.append({
+                    "id": m.get("id"),
+                    "user_id": u.get("id"),
+                    "email": u.get("email"),
+                    "full_name": u.get("full_name"),
+                    "role": m.get("role") or u.get("role"),
+                    "is_active": u.get("is_active", True),
+                    "status": m.get("status", "active"),
+                    "created_at": m.get("created_at") or u.get("created_at"),
+                })
+        return result
+
+    @staticmethod
+    async def set_member_active(organization_id: str, user_id: str, is_active: bool) -> bool:
+        await MongoDB.get_collection("users").update_one(
+            {"_id": ObjectId(user_id), "organization_id": organization_id},
+            {"$set": {"is_active": is_active, "updated_at": datetime.utcnow()}},
+        )
+        await MongoDB.get_collection("memberships").update_one(
+            {"organization_id": organization_id, "user_id": user_id},
+            {"$set": {
+                "status": "active" if is_active else "inactive",
+                "is_active": is_active,
+                "updated_at": datetime.utcnow(),
             }},
-            {"$unwind": {"path": "$user", "preserveNullAndEmptyArrays": True}},
-            {"$project": {
-                "user.password_hash": 0
-            }},
-            {"$sort": {"joined_at": -1}}
-        ]
-        
-        members = await MongoDB.get_collection("memberships").aggregate(pipeline).to_list(length=100)
-        return [serialize_doc(m) for m in members]
+        )
+        return True
 
     @staticmethod
     async def remove_member(organization_id: str, user_id: str) -> bool:
-        result = await MongoDB.get_collection("memberships").update_one(
-            {"organization_id": organization_id, "user_id": user_id},
-            {"$set": {"is_active": False}}
-        )
-        return result.modified_count > 0
+        return await OrganizationMembersService.set_member_active(organization_id, user_id, False)

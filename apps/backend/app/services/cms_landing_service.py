@@ -290,6 +290,12 @@ class BlockTemplateService:
 
 
 DEFAULT_LANDING_CONTENT = {
+    "branding": {
+        "site_name": "Outflo",
+        "logo_url": "",
+        "favicon_url": "",
+        "tagline": "AI Outreach Automation",
+    },
     "hero": {
         "badge": "AI-Powered Outreach Platform",
         "title": "Scale Your Outreach with AI That Actually Works",

@@ -1,5 +1,5 @@
 import axios from "axios";
-import { toast } from "@/app/components/toast";
+import { toast } from "@/app/components/toast/toast-store";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -87,9 +87,19 @@ api.interceptors.response.use(
         } else {
           localStorage.removeItem("access_token");
           localStorage.removeItem("refresh_token");
-          toast.error("Session expired", "Please log in again");
-          if (!window.location.pathname.startsWith("/login")) {
-            window.location.href = "/login";
+          const path = window.location.pathname;
+          const isPublic =
+            path === "/" ||
+            path.startsWith("/landing") ||
+            path.startsWith("/login") ||
+            path.startsWith("/register") ||
+            path.startsWith("/forgot-password") ||
+            path.startsWith("/reset-password");
+          if (!isPublic) {
+            toast.error("Session expired", "Please log in again");
+            if (!path.startsWith("/login")) {
+              window.location.href = "/login";
+            }
           }
         }
         return Promise.reject(refreshError);

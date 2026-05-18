@@ -62,10 +62,10 @@ cd /d "%PROJECT_ROOT%apps\frontend"
 
 if not exist "node_modules" (
     echo   Installing npm packages...
-    call npm install --legacy-peer-deps -q
+    call npm install -q
     echo   [OK] npm packages installed
 ) else (
-    call npm install --legacy-peer-deps -q
+    call npm install -q
     echo   [OK] npm packages ready
 )
 
@@ -88,6 +88,8 @@ echo.
 echo   Stopping any existing services...
 taskkill /F /IM python.exe >nul 2>&1
 taskkill /F /IM node.exe >nul 2>&1
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":3000" ^| findstr LISTENING') do taskkill /F /PID %%a >nul 2>&1
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":3001" ^| findstr LISTENING') do taskkill /F /PID %%a >nul 2>&1
 timeout /t 2 /nobreak >nul
 
 echo   Starting backend server...
@@ -95,8 +97,8 @@ start "OUTFLO_BACKEND" cmd /k "cd /d "%PROJECT_ROOT%apps\backend" && venv\Script
 
 timeout /t 5 /nobreak >nul
 
-echo   Starting frontend server...
-start "OUTFLO_FRONTEND" cmd /k "cd /d "%PROJECT_ROOT%apps\frontend" && npm run dev"
+echo   Starting frontend server (clean .next cache)...
+start "OUTFLO_FRONTEND" cmd /k "cd /d "%PROJECT_ROOT%apps\frontend" && set PORT=3000&& npm run dev:clean"
 
 timeout /t 3 /nobreak >nul
 
@@ -124,7 +126,7 @@ echo   - URL:      http://localhost:3000/login
 echo   - Register new organization at /register
 echo.
 echo   Opening browser...
-start http://localhost:3000
+start http://localhost:3000/landing
 echo.
 echo   Press any key to exit...
 pause >nul

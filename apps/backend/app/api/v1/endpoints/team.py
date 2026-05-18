@@ -107,8 +107,28 @@ async def invite_team_member(
     invitation_in: dict,
     current_user: dict = Depends(get_current_user_with_role),
 ):
+    from app.db.mongodb import MongoDB
+    from app.services.plan_service import PlanService, SubscriptionService
+
     org_id = current_user.get("organization_id")
+    sub = await SubscriptionService.get_subscription(org_id)
+    plan = None
+    if sub and sub.get("plan_id"):
+        plan = await PlanService.get_plan(sub["plan_id"])
+    if not plan:
+        plan = await PlanService.get_default_plan()
+    team_limit = PlanService.get_team_member_limit(plan) if plan else 1
+
+    active_users = await MongoDB.get_collection("users").count_documents(
+        {"organization_id": org_id, "is_active": {"$ne": False}}
+    )
     invite_repo = TeamInvitationRepository(org_id)
+    pending = await invite_repo.get_pending_invitations()
+    if active_users + len(pending) >= team_limit:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Team member limit reached ({team_limit}) for your current plan. Upgrade to add more.",
+        )
     invitation_data = {
         "email": invitation_in.get("email"),
         "role": invitation_in.get("role", "member"),

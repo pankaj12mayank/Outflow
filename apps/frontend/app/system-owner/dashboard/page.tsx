@@ -13,14 +13,15 @@ import {
 } from "lucide-react";
 import { useSystemOwnerAuth } from "@/app/hooks/useSystemOwnerAuth";
 import api from "@/app/lib/api";
-import { Button, Card, CardHeader, CardContent, CardTitle, CardDescription, StatCard } from "@/app/components/premium";
+import { Button, Card, CardHeader, CardContent, CardTitle, CardDescription } from "@/app/components/premium";
+import { StatCard } from "@/app/components/premium/chart";
 import { ChartContainer, LineChart, AreaChart, BarChart, DonutChart, Sparkline } from "@/app/components/premium/chart";
 import { Skeleton, StatsSkeleton, ChartSkeleton, DashboardSkeleton } from "@/app/components/premium/skeleton";
 import { Badge, StatusBadge, CountBadge } from "@/app/components/premium/badge";
 import { Tabs, TabList, TabTrigger, TabContent } from "@/app/components/premium/tabs";
 import { Breadcrumb, BreadcrumbItem } from "@/app/components/premium/navigation";
 import { Alert, AlertBanner } from "@/app/components/premium/alert";
-import { ScrollReveal, ScrollProgress } from "@/app/components/premium";
+import { ScrollReveal, ScrollProgress } from "@/app/components/premium/sections";
 
 interface DashboardData {
   overview: any;
@@ -208,7 +209,6 @@ export default function SystemOwnerDashboard() {
   const tabs = [
     { id: "overview", label: "Overview", icon: Shield },
     { id: "revenue", label: "Revenue", icon: DollarSign },
-    { id: "platform", label: "Platform", icon: Server },
     { id: "health", label: "Health", icon: Activity },
   ];
 
@@ -526,10 +526,8 @@ export default function SystemOwnerDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg-primary)]">
-      <ScrollProgress />
-
-      <header className="border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)]/50 backdrop-blur-xl sticky top-0 z-50">
+    <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <header className="hidden">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -546,13 +544,6 @@ export default function SystemOwnerDashboard() {
             </div>
             
             <div className="flex items-center gap-4">
-              <Breadcrumb>
-                <BreadcrumbItem href="/system-owner">
-                  <Home className="w-4 h-4" />
-                </BreadcrumbItem>
-                <BreadcrumbItem isActive>Dashboard</BreadcrumbItem>
-              </Breadcrumb>
-
               {lastUpdated && (
                 <div className="flex items-center gap-2 text-xs text-[var(--color-text-tertiary)]">
                   <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
@@ -560,13 +551,6 @@ export default function SystemOwnerDashboard() {
                 </div>
               )}
               
-              <Button 
-                variant="secondary" 
-                size="sm"
-                onClick={() => router.push("/system-owner/setup")}
-              >
-                Platform Setup
-              </Button>
               <Button 
                 variant="secondary" 
                 size="sm"
@@ -595,7 +579,7 @@ export default function SystemOwnerDashboard() {
 
       <main className="max-w-7xl mx-auto px-6 py-8">
         <AnimatePresence mode="wait">
-          {tabContent[activeTab as keyof typeof tabContent]}
+          {tabContent[activeTab as keyof typeof tabContent] ?? tabContent.overview}
         </AnimatePresence>
       </main>
     </div>

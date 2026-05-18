@@ -8,8 +8,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/app/hooks/useAuth";
-import { Button } from "@/app/components/premium";
-import { Input } from "@/app/components/premium";
+import { Button } from "@/app/components/premium/button";
+import { Input } from "@/app/components/premium/input";
 
 type OnboardingStep = 1 | 2 | 3 | 4 | 5;
 

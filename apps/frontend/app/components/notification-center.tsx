@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Bell, Check, CheckCheck, Trash2, X, AlertCircle, CreditCard, Mail, Zap, Search, PauseCircle } from 'lucide-react';
-import { useAuth } from '@/app/hooks';
+import { useAuth } from "@/app/hooks/useAuth";
 
 interface Notification {
   _id: string;

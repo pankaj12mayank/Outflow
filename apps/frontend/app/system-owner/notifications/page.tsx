@@ -8,7 +8,7 @@ import { Label } from '@/app/components/ui/label';
 import { Badge } from '@/app/components/ui/badge';
 import { Tabs, TabList, TabTrigger, TabContent, Modal, ModalHeader, ModalContent, ModalFooter, ModalTitle } from '@/app/components/premium';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table';
-import { useSystemOwnerAuth } from '@/app/hooks';
+import { useSystemOwnerAuth } from "@/app/hooks/useSystemOwnerAuth";
 
 interface Notification {
   _id: string;

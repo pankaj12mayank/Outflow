@@ -19,11 +19,36 @@ from app.models.plan_models import (
 router = APIRouter(prefix="/plans", tags=["Plans"])
 
 
+@router.get("/landing")
+async def get_landing_plans():
+    """Public pricing for landing page."""
+    plans = await PlanService.get_landing_plans()
+    return {"pricing": plans}
+
+
 @router.get("")
-async def get_plans(include_archived: bool = False):
+async def get_plans(include_archived: bool = Query(False)):
     """Get all plans."""
     plans = await PlanService.get_all_plans(include_archived)
     return {"plans": plans, "count": len(plans)}
+
+
+@router.post("/seed-templates")
+async def seed_plan_templates(current_user: dict = Depends(get_current_system_owner)):
+    """Create Free / Starter / Pro once from built-in templates (no duplicates)."""
+    templates = await PlanBuilderService.get_default_plan_templates()
+    created = []
+    for t in templates:
+        try:
+            t["template_key"] = t["name"].lower()
+            t["show_on_landing"] = True
+            doc = await PlanService.create_plan(t)
+            created.append(doc)
+        except ValueError:
+            existing = await PlanService.get_plan_by_key(t["name"])
+            if existing:
+                created.append(existing)
+    return {"plans": created, "message": "Templates ensured"}
 
 
 @router.get("/templates")
@@ -48,7 +73,10 @@ async def create_plan(
     current_user: dict = Depends(get_current_system_owner)
 ):
     """Create a new plan."""
-    plan_doc = await PlanService.create_plan(plan.model_dump())
+    try:
+        plan_doc = await PlanService.create_plan(plan.model_dump())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return plan_doc
 
 
@@ -71,10 +99,15 @@ async def delete_plan(
     current_user: dict = Depends(get_current_system_owner)
 ):
     """Delete (archive) a plan."""
+    plan = await PlanService.get_plan(plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    if plan.get("is_default"):
+        raise HTTPException(status_code=400, detail="Cannot delete the default plan")
     result = await PlanService.delete_plan(plan_id)
     if not result:
-        raise HTTPException(status_code=400, detail="Cannot delete default plan")
-    return {"message": "Plan archived successfully"}
+        raise HTTPException(status_code=400, detail="Cannot delete plan")
+    return {"message": "Plan removed successfully"}
 
 
 @router.post("/{plan_id}/set-default")

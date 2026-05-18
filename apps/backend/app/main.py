@@ -3,9 +3,12 @@ import uuid
 import logging
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
+
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from .core.config import settings
 import os
@@ -41,6 +44,12 @@ async def lifespan(app: FastAPI):
             owner = await SystemOwnerAuthService.ensure_system_owner()
             if owner:
                 app_logger.info("System owner account ready", email=owner.get("email"))
+            try:
+                from .services.billing_lifecycle_service import BillingLifecycleService
+                await BillingLifecycleService.seed_billing_templates()
+                app_logger.info("Billing email templates ready")
+            except Exception as be:
+                app_logger.warning(f"Billing templates seed skipped: {be}")
         except Exception as e:
             app_logger.warning(f"System owner bootstrap skipped: {e}")
 
@@ -120,6 +129,14 @@ app.add_exception_handler(Exception, generic_exception_handler)
 
 
 app.include_router(api_router, prefix="/api/v1")
+
+_branding_storage = Path(__file__).resolve().parent.parent / "storage" / "branding"
+_branding_storage.mkdir(parents=True, exist_ok=True)
+app.mount(
+    "/api/v1/cms/landing/assets",
+    StaticFiles(directory=str(_branding_storage)),
+    name="landing_branding_assets",
+)
 
 
 @app.get("/")

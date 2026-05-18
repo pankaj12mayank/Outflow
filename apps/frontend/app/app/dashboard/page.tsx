@@ -18,9 +18,9 @@ import {
   Activity,
   X,
 } from "lucide-react";
-import { useAuth } from "@/app/hooks";
+import { useAuth } from "@/app/hooks/useAuth";
 import { cn } from "@/app/lib/utils";
-import { ScrollReveal, ScrollProgress } from "@/app/components/premium";
+import { ScrollReveal, ScrollProgress } from "@/app/components/premium/sections";
 
 const stats: {
   name: string;

@@ -2,10 +2,10 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/app/hooks";
+import { useAuth } from "@/app/hooks/useAuth";
 import { Card, CardHeader, CardTitle, CardContent } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
-import { useCampaigns } from "@/app/hooks";
+import { useCampaigns } from "@/app/hooks/useCampaigns";
 import { Badge } from "@/app/components/ui/badge";
 
 export default function DashboardPage() {

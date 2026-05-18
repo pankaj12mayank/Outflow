@@ -31,10 +31,23 @@ class PlanService:
     async def get_all_plans(include_archived: bool = False) -> List[Dict]:
         query = {}
         if not include_archived:
-            query["status"] = PlanStatus.ACTIVE.value
+            query["status"] = {"$in": [PlanStatus.ACTIVE.value, PlanStatus.INACTIVE.value]}
         
         plans = await MongoDB.get_collection("plans").find(query).sort("sort_order", 1).to_list(length=100)
         return [serialize_doc(p) for p in plans]
+
+    @staticmethod
+    def get_team_member_limit(plan: Dict) -> int:
+        """Max team members allowed for a plan (from features or limits)."""
+        for f in plan.get("features", []):
+            if f.get("feature_key") == "team_members" and f.get("enabled"):
+                lim = f.get("limit")
+                if lim is not None and lim > 0:
+                    return int(lim)
+        for lim in plan.get("limits", []):
+            if lim.get("resource") == "team_members":
+                return int(lim.get("limit", 1))
+        return 1
 
     @staticmethod
     async def get_plan(plan_id: str) -> Optional[Dict]:
@@ -55,7 +68,49 @@ class PlanService:
         return serialize_doc(plan) if plan else None
 
     @staticmethod
+    async def get_landing_plans() -> List[Dict]:
+        """Plans visible on public landing pricing section."""
+        plans = await MongoDB.get_collection("plans").find(
+            {
+                "status": PlanStatus.ACTIVE.value,
+                "show_on_landing": True,
+            }
+        ).sort("sort_order", 1).to_list(length=20)
+        result = []
+        for p in plans:
+            p = serialize_doc(p)
+            feature_lines = []
+            for f in p.get("features", []):
+                if f.get("enabled"):
+                    name = f.get("feature_key", "").replace("_", " ").title()
+                    lim = f.get("limit")
+                    if lim and lim > 0:
+                        feature_lines.append(f"{name} ({lim})")
+                    elif lim == -1:
+                        feature_lines.append(f"Unlimited {name}")
+                    else:
+                        feature_lines.append(name)
+            if not feature_lines and p.get("description"):
+                feature_lines = [p["description"]]
+            result.append({
+                "name": p.get("name"),
+                "price": str(int(p.get("price_monthly", 0))),
+                "features": feature_lines[:8] or ["Contact us for details"],
+                "popular": bool(p.get("is_popular")),
+                "active": True,
+            })
+        return result
+
+    @staticmethod
     async def create_plan(plan_data: Dict) -> Dict:
+        name = (plan_data.get("name") or "").strip()
+        if name:
+            dup = await MongoDB.get_collection("plans").find_one(
+                {"name": {"$regex": f"^{name}$", "$options": "i"}, "status": PlanStatus.ACTIVE.value}
+            )
+            if dup:
+                raise ValueError(f"Plan '{name}' already exists")
+
         if plan_data.get("is_default"):
             await MongoDB.get_collection("plans").update_many(
                 {"is_default": True},
@@ -78,6 +133,8 @@ class PlanService:
             "limits": plan_data.get("limits", []),
             "trial_days": plan_data.get("trial_days", 0),
             "sort_order": plan_data.get("sort_order", next_order),
+            "show_on_landing": plan_data.get("show_on_landing", True),
+            "template_key": plan_data.get("template_key"),
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow(),
         }

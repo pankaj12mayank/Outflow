@@ -1,13 +1,28 @@
-export * from "./use-ai";
-export * from "./use-leads";
-export * from "./use-scraping";
-export * from "./use-analytics";
-export * from "./use-polling";
+/**
+ * Public hooks barrel — keep exports explicit to avoid circular deps / webpack chunk errors.
+ */
 export { useAuth, AuthProvider, addPermissionsToUser, getPermissionsForRole, type User } from "./useAuth";
-export * from "./useCampaigns";
-export * from "./use-admin";
-export * from "./usePermission";
-export * from "./use-scroll-animation";
 export { useSystemOwnerAuth, SystemOwnerAuthProvider } from "./useSystemOwnerAuth";
-export * from "./usePlanFeatures";
-export { toast } from "@/app/components/toast";
+export { useCampaigns, useCampaign } from "./useCampaigns";
+export {
+  useAdminOrgs,
+  useAdminOrg,
+  useSuspendOrg,
+  useReactivateOrg,
+  usePlatformStats,
+  useBillingStats,
+  useMonitoringStats,
+  useAbuseReports,
+  useResolveAbuseReport,
+  usePlans,
+  useCreatePlan,
+  useUpdatePlan,
+  useAdminLimits,
+  useUpdateLimits,
+  useFeatureFlags,
+  useUpdateFeatureFlag,
+  useGlobalSettings,
+  useUpdateGlobalSetting,
+  useSystemAlerts,
+  useAdminLogs,
+} from "./use-admin";

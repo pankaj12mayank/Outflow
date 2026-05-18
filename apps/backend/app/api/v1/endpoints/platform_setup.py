@@ -12,8 +12,17 @@ from app.db.mongodb import MongoDB
 from app.services.smtp_service import SmtpService, SmtpTestingService, EmailSendingService
 from app.services.monitoring_service import MonitoringService
 from app.services.ai.bootstrap import ai_runtime_status
+from app.services.platform_settings_service import PlatformSettingsService
 
 router = APIRouter(prefix="/system-owner/platform", tags=["System Owner Platform"])
+
+
+class AiSettingsUpdate(BaseModel):
+    ai_provider: str = "ollama"
+    openai_api_key: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+    ollama_base_url: Optional[str] = "http://localhost:11434"
+    ollama_model: Optional[str] = "llama3.2"
 
 
 class TestEmailRequest(BaseModel):
@@ -93,3 +102,45 @@ async def send_platform_test_email(
     if not sent.get("success", True) and sent.get("status") == "failed":
         raise HTTPException(status_code=400, detail=sent.get("error", "Failed to send email"))
     return {"success": True, "message": f"Test email sent to {data.recipient}", "details": sent}
+
+
+@router.get("/ai-settings")
+async def get_ai_settings(_user: dict = Depends(get_current_system_owner)):
+    stored = await PlatformSettingsService.get_settings()
+    ai = stored.get("ai") or {}
+    runtime = await PlatformSettingsService.get_ai_for_runtime()
+    status = await ai_runtime_status()
+    return {
+        "stored": {
+            "ai_provider": ai.get("ai_provider") or runtime["ai_provider"],
+            "openai_api_key_set": bool(ai.get("openai_api_key") or runtime.get("openai_api_key")),
+            "anthropic_api_key_set": bool(ai.get("anthropic_api_key") or runtime.get("anthropic_api_key")),
+            "ollama_base_url": ai.get("ollama_base_url") or runtime["ollama_base_url"],
+            "ollama_model": ai.get("ollama_model") or runtime["ollama_model"],
+            "openai_api_key": ai.get("openai_api_key", ""),
+            "anthropic_api_key": ai.get("anthropic_api_key", ""),
+        },
+        "runtime": status,
+    }
+
+
+@router.put("/ai-settings")
+async def save_ai_settings(
+    body: AiSettingsUpdate,
+    _user: dict = Depends(get_current_system_owner),
+):
+    import os
+
+    saved = await PlatformSettingsService.update_ai_settings(body.model_dump(exclude_none=True))
+    ai = saved.get("ai") or {}
+    if ai.get("ai_provider"):
+        os.environ["AI_PROVIDER"] = ai["ai_provider"]
+    if ai.get("openai_api_key"):
+        os.environ["OPENAI_API_KEY"] = ai["openai_api_key"]
+    if ai.get("anthropic_api_key"):
+        os.environ["ANTHROPIC_API_KEY"] = ai["anthropic_api_key"]
+    if ai.get("ollama_base_url"):
+        os.environ["OLLAMA_BASE_URL"] = ai["ollama_base_url"]
+    if ai.get("ollama_model"):
+        os.environ["OLLAMA_MODEL"] = ai["ollama_model"]
+    return {"message": "AI settings saved", "stored": saved.get("ai")}

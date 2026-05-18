@@ -252,6 +252,7 @@ class AuthService:
             "slug": org_slug,
             "is_active": True,
             "plan": "free",
+            "source": "app_register",
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow(),
         }
@@ -286,7 +287,20 @@ class AuthService:
 
         await self._create_session(user, organization["id"], browser, os, client_info)
         await self._log_login(user["id"], organization["id"], "success", client_info)
-        await EmailService.send_welcome_email(data["email"], data["full_name"])
+        try:
+            from app.services.billing_lifecycle_service import BillingLifecycleService
+            await BillingLifecycleService.seed_billing_templates()
+            await BillingLifecycleService.emit_event(
+                "onboarding",
+                organization["id"],
+                user_email=data["email"],
+                user_name=data["full_name"],
+                org_name=data["organization_name"],
+                plan_name="Free",
+                status="succeeded",
+            )
+        except Exception:
+            await EmailService.send_welcome_email(data["email"], data["full_name"])
 
         tokens = self._create_tokens(user, organization["id"])
         return {

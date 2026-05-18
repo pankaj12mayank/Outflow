@@ -12,6 +12,7 @@ class BillingCycle(str, Enum):
 
 class PlanStatus(str, Enum):
     ACTIVE = "active"
+    INACTIVE = "inactive"
     ARCHIVED = "archived"
     DRAFT = "draft"
 
@@ -159,6 +160,7 @@ class PlanUpdateRequest(BaseModel):
     limits: Optional[List[Dict]] = None
     trial_days: Optional[int] = None
     sort_order: Optional[int] = None
+    show_on_landing: Optional[bool] = None
 
 
 class FeatureFlagCreate(BaseModel):

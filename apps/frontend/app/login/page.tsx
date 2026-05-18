@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAuth } from "@/app/hooks/useAuth";
+import { isSystemOwnerEmail } from "@/app/lib/auth-constants";
+import api from "@/app/lib/api";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
@@ -26,9 +28,21 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
+      if (isSystemOwnerEmail(email)) {
+        const res = await api.post("/api/v1/system-owner-auth/login", {
+          email: email.trim(),
+          password,
+        });
+        localStorage.setItem("system_owner_token", res.data.tokens.access_token);
+        localStorage.setItem("system_owner_refresh_token", res.data.tokens.refresh_token);
+        router.push("/system-owner/dashboard");
+        return;
+      }
       await login(email, password);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || "Invalid email or password");
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { detail?: string } } };
+      const detail = ax.response?.data?.detail;
+      setError(typeof detail === "string" ? detail : "Invalid email or password");
     } finally {
       setIsLoading(false);
     }
@@ -59,14 +73,10 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="flex items-center gap-2 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm"
-            >
+            <div className="flex items-center gap-2 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
               <AlertCircle className="w-5 h-5 flex-shrink-0" />
               {error}
-            </motion.div>
+            </div>
           )}
 
           <div className="space-y-2">
@@ -88,10 +98,7 @@ export default function LoginPage() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="password">Password</Label>
-              <Link
-                href="/forgot-password"
-                className="text-sm text-purple-400 hover:text-purple-300"
-              >
+              <Link href="/forgot-password" className="text-sm text-purple-400 hover:text-purple-300">
                 Forgot password?
               </Link>
             </div>
@@ -100,7 +107,7 @@ export default function LoginPage() {
               <Input
                 id="password"
                 type={showPassword ? "text" : "password"}
-                placeholder="Enter your password"
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="pl-10 pr-10 bg-white/5 border-white/10"
@@ -109,7 +116,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
@@ -119,8 +126,8 @@ export default function LoginPage() {
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Signing in...
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Signing in…
               </>
             ) : (
               "Sign in"
@@ -129,9 +136,9 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-sm text-gray-400 mt-6">
-          Don't have an account?{" "}
-          <Link href="/register" className="text-purple-400 hover:text-purple-300 font-medium">
-            Sign up
+          Don&apos;t have an account?{" "}
+          <Link href="/register" className="text-purple-400 hover:text-purple-300">
+            Register
           </Link>
         </p>
       </motion.div>

@@ -2,7 +2,11 @@
 Landing Page CMS API Endpoints
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import os
+import uuid
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from typing import Optional, List
 from datetime import datetime
 
@@ -270,13 +274,29 @@ async def get_landing_content():
 @router3.put("/content")
 async def update_landing_content(
     content_data: dict,
-    section: str = Query(..., description="Section to update: hero, features, stats, pricing, faqs, footer"),
-    current_user: dict = Depends(get_current_system_owner)
+    section: str = Query(..., description="Section: branding, hero, features, stats, pricing, faqs, footer"),
+    current_user: dict = Depends(get_current_system_owner),
 ):
     """Update landing page content section."""
     from app.services.cms_landing_service import LandingContentService
     result = await LandingContentService.update_section(section, content_data)
     return {"message": f"{section} section updated", "content": result}
+
+
+@router3.put("/content/full")
+async def update_full_landing_content(
+    body: dict,
+    current_user: dict = Depends(get_current_system_owner),
+):
+    """Replace entire landing content document."""
+    from app.services.cms_landing_service import LandingContentService
+    content = body.get("content") or body
+    await MongoDB.get_collection(LandingContentService.COLLECTION).update_one(
+        {"type": "landing_page"},
+        {"$set": {"content": content, "updated_at": datetime.utcnow()}},
+        upsert=True,
+    )
+    return {"message": "Landing content saved", "content": content}
 
 
 @router3.post("/content/reset")
@@ -287,3 +307,51 @@ async def reset_landing_content(
     from app.services.cms_landing_service import LandingContentService
     await LandingContentService.reset_to_default()
     return {"message": "Content reset to defaults"}
+
+
+BRANDING_DIR = Path(__file__).resolve().parents[4] / "storage" / "branding"
+BRANDING_DIR.mkdir(parents=True, exist_ok=True)
+ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico"}
+
+
+@router3.post("/upload/branding")
+async def upload_branding_asset(
+    file: UploadFile = File(...),
+    kind: str = Query("logo", description="logo or favicon"),
+    current_user: dict = Depends(get_current_system_owner),
+):
+    """Upload logo or favicon; returns public URL synced with landing CMS."""
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in ALLOWED_EXT:
+        raise HTTPException(status_code=400, detail="Invalid file type")
+
+    safe_kind = "favicon" if kind == "favicon" else "logo"
+    name = f"{safe_kind}_{uuid.uuid4().hex}{ext}"
+    dest = BRANDING_DIR / name
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 5MB)")
+    dest.write_bytes(data)
+
+    url = f"/api/v1/cms/landing/assets/{name}"
+    from app.services.cms_landing_service import LandingContentService
+    from app.db.mongodb import MongoDB
+
+    content = await LandingContentService.get_landing_content()
+    branding = content.get("branding") or {}
+    if safe_kind == "favicon":
+        branding["favicon_url"] = url
+    else:
+        branding["logo_url"] = url
+    content["branding"] = branding
+    await MongoDB.get_collection(LandingContentService.COLLECTION).update_one(
+        {"type": "landing_page"},
+        {"$set": {"content.branding": branding, "updated_at": datetime.utcnow()}},
+        upsert=True,
+    )
+    try:
+        from app.services.platform_settings_service import PlatformSettingsService
+        await PlatformSettingsService.update_branding(branding)
+    except Exception:
+        pass
+    return {"url": url, "kind": safe_kind, "branding": branding}

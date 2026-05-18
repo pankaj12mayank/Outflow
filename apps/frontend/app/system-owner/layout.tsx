@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { SystemOwnerAuthProvider, useSystemOwnerAuth } from "@/app/hooks/useSystemOwnerAuth";
+import { SystemOwnerShell } from "./components/SystemOwnerShell";
 
 function SystemOwnerRouteGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -31,7 +32,7 @@ function SystemOwnerRouteGuard({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  return <>{children}</>;
+  return <SystemOwnerShell>{children}</SystemOwnerShell>;
 }
 
 export default function SystemOwnerLayout({

@@ -6,6 +6,8 @@ import {
   Brain,
   Settings,
   Zap,
+  Target,
+  Mail,
   MessageSquare,
   FileText,
   BarChart3,
@@ -28,7 +30,7 @@ import {
   Trash2,
   Copy,
   Wand2,
-  Sparkles,
+  Lightbulb,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { toast } from "@/app/components/toast";

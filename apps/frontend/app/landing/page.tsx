@@ -2,14 +2,13 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
 import api from "@/app/lib/api";
 import {
   Zap, Users, Target, BarChart3, Shield, Mail, ArrowRight,
   Check, ChevronDown, Sparkles, Brain, TrendingUp, Clock,
   Calendar, Bot, Menu, X, Play, Star, Quote, ChevronUp,
 } from "lucide-react";
-import { ScrollProgress, ScrollReveal, Counter } from "@/app/components/premium";
+import { ScrollProgress, ScrollReveal, Counter } from "@/app/components/premium/sections";
 
 const DEFAULT_CONTENT = {
   hero: {
@@ -62,9 +61,20 @@ interface LandingContent {
   footer: { company: string; email: string; copyright: string };
 }
 
-const ICONS: Record<string, any> = {
-  Bot, Target, TrendingUp, Mail, BarChart3, Shield, Sparkles, Brain, Users, Zap, Clock, Calendar
-};
+const ICONS = {
+  Bot,
+  Target,
+  TrendingUp,
+  Mail,
+  BarChart3,
+  Shield,
+  Sparkles,
+  Brain,
+  Users,
+  Zap,
+  Clock,
+  Calendar,
+} as const;
 
 export default function LandingPage() {
   const [content, setContent] = useState<LandingContent>(DEFAULT_CONTENT);
@@ -79,9 +89,17 @@ export default function LandingPage() {
 
   const fetchContent = async () => {
     try {
-      const response = await api.get("/api/v1/cms/landing/content");
-      if (response.data?.content) {
-        setContent(response.data.content);
+      const [cmsRes, plansRes] = await Promise.all([
+        api.get("/api/v1/cms/landing/content"),
+        api.get("/api/v1/plans/landing"),
+      ]);
+      if (cmsRes.data?.content) {
+        const merged = { ...cmsRes.data.content };
+        const pricing = plansRes.data?.pricing;
+        if (pricing?.length) {
+          merged.pricing = pricing;
+        }
+        setContent(merged);
       }
     } catch (error) {
       console.log("Using default landing content");
@@ -131,14 +149,8 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <AnimatePresence>
-          {mobileMenuOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="md:hidden border-t border-white/5 bg-[#0a0a0f]"
-            >
+        {mobileMenuOpen ? (
+            <div className="md:hidden border-t border-white/5 bg-[#0a0a0f] animate-fade-in">
               <div className="px-6 py-4 space-y-4">
                 <button onClick={() => { scrollToSection("features"); setMobileMenuOpen(false); }} className="block w-full text-left text-gray-400 hover:text-white">Features</button>
                 <button onClick={() => { scrollToSection("pricing"); setMobileMenuOpen(false); }} className="block w-full text-left text-gray-400 hover:text-white">Pricing</button>
@@ -146,9 +158,8 @@ export default function LandingPage() {
                 <Link href="/login" className="block text-gray-400 hover:text-white">Sign in</Link>
                 <Link href="/register" className="block px-4 py-2 bg-purple-500 rounded-lg text-center font-medium">Start Free</Link>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
+        ) : null}
       </nav>
 
       {/* Hero Section */}
@@ -157,11 +168,7 @@ export default function LandingPage() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-purple-500/20 rounded-full blur-[120px]" />
         
         <div className="max-w-4xl mx-auto text-center relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
+          <div className="animate-fade-up">
             <span className="inline-block px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full text-sm text-purple-400 mb-6">
               {content.hero.badge}
             </span>
@@ -186,7 +193,7 @@ export default function LandingPage() {
             </div>
             
             <p className="mt-6 text-sm text-gray-500">{content.hero.trustText}</p>
-          </motion.div>
+          </div>
         </div>
 
         {/* Stats */}
@@ -217,7 +224,8 @@ export default function LandingPage() {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {content.features.filter(f => f.active).map((feature, i) => {
-              const IconComponent = ICONS[feature.icon] || Bot;
+              const IconComponent =
+                ICONS[feature.icon as keyof typeof ICONS] ?? Bot;
               return (
                 <ScrollReveal
                   key={feature.title}
@@ -316,22 +324,15 @@ export default function LandingPage() {
                   className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
                 >
                   <span className="font-medium">{faq.question}</span>
-                  <motion.div animate={{ rotate: openFaq === i ? 180 : 0 }}>
+                  <div className={cn("transition-transform duration-200", openFaq === i && "rotate-180")}>
                     <ChevronDown className="w-5 h-5 text-gray-400" />
-                  </motion.div>
+                  </div>
                 </button>
-                <AnimatePresence>
-                  {openFaq === i && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      className="px-6 pb-4"
-                    >
+                {openFaq === i ? (
+                    <div className="px-6 pb-4 animate-fade-in">
                       <p className="text-gray-400">{faq.answer}</p>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                    </div>
+                  ) : null}
               </ScrollReveal>
             ))}
           </div>

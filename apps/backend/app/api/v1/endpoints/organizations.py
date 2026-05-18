@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 from datetime import datetime
 
+from app.db.mongodb import MongoDB, serialize_doc
 from app.middleware.system_owner_auth import get_current_system_owner
 from app.services.organization_service import (
     OrganizationService, OrganizationAnalyticsService,
@@ -52,10 +53,31 @@ async def get_organization(
     organization_id: str,
     current_user: dict = Depends(get_current_system_owner)
 ):
-    """Get organization details."""
+    """Get organization details with plan, subscription, and members."""
+    from app.services.plan_service import PlanService, SubscriptionService
+
     org = await OrganizationService.get_organization(organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
+
+    members = await OrganizationMembersService.get_members(organization_id)
+    org["members"] = members
+
+    subscription = await SubscriptionService.get_subscription(organization_id)
+    if not subscription:
+        subs = await MongoDB.get_collection("subscriptions").find(
+            {"organization_id": organization_id}
+        ).sort("created_at", -1).limit(1).to_list(length=1)
+        if subs:
+            subscription = serialize_doc(subs[0])
+
+    if subscription:
+        plan = await PlanService.get_plan(subscription.get("plan_id"))
+        org["subscription"] = {
+            **subscription,
+            "plan_name": plan.get("name") if plan else "Unknown",
+            "team_limit": PlanService.get_team_member_limit(plan) if plan else 1,
+        }
     return org
 
 
@@ -145,6 +167,19 @@ async def get_organization_members(
     """Get organization members."""
     members = await OrganizationMembersService.get_members(organization_id)
     return {"members": members, "count": len(members)}
+
+
+@router.patch("/{organization_id}/members/{user_id}/status")
+async def set_member_status(
+    organization_id: str,
+    user_id: str,
+    body: dict,
+    current_user: dict = Depends(get_current_system_owner),
+):
+    """Activate or deactivate an org admin/user (blocks system access when inactive)."""
+    is_active = bool(body.get("is_active", True))
+    await OrganizationMembersService.set_member_active(organization_id, user_id, is_active)
+    return {"message": "Member updated", "is_active": is_active}
 
 
 @router.delete("/{organization_id}/members/{user_id}")
