@@ -15,6 +15,7 @@ from app.api.v1.endpoints.smtp import router as smtp_router
 from app.api.v1.endpoints.billing import router as billing_router
 from app.api.v1.endpoints.monitoring import router as monitoring_router
 from app.api.v1.endpoints.notifications import router as notifications_router
+from app.api.v1.endpoints.platform_setup import router as platform_setup_router
 
 # Import new endpoints
 try:
@@ -62,6 +63,7 @@ api_router.include_router(smtp_router)
 api_router.include_router(billing_router)
 api_router.include_router(monitoring_router)
 api_router.include_router(notifications_router)
+api_router.include_router(platform_setup_router)
 
 if meetings_router:
     api_router.include_router(meetings_router)

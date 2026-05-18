@@ -101,6 +101,10 @@ class MagicLinkVerifyRequest(BaseModel):
     token: str
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
 @router.post("/register", status_code=status.HTTP_201_CREATED, 
               summary="Register new user")
 async def register(data: RegisterRequest, request: Request):
@@ -143,11 +147,11 @@ async def logout(request: Request, current_user: dict = Depends(get_current_user
 
 
 @router.post("/refresh", response_model=TokenResponse, summary="Refresh access token")
-async def refresh_token(refresh_token: str):
+async def refresh_token(data: RefreshTokenRequest):
     """Refresh access token using refresh token."""
     try:
         auth_service = AuthService()
-        tokens = await auth_service.refresh_tokens(refresh_token)
+        tokens = await auth_service.refresh_tokens(data.refresh_token)
         return tokens
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
@@ -185,10 +189,14 @@ async def change_password(
 @router.post("/forgot-password", status_code=status.HTTP_200_OK, summary="Request password reset")
 async def forgot_password(data: ForgotPasswordRequest):
     """Request password reset email."""
+    from app.core.config import settings
     auth_service = AuthService()
     try:
-        await auth_service.request_password_reset(data.email)
-        return {"message": "Password reset email sent if account exists"}
+        result = await auth_service.request_password_reset(data.email)
+        response = {"message": result.get("message", "Password reset email sent if account exists")}
+        if settings.debug and result.get("reset_url"):
+            response["reset_url"] = result["reset_url"]
+        return response
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

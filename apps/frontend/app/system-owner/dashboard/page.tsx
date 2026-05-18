@@ -563,6 +563,13 @@ export default function SystemOwnerDashboard() {
               <Button 
                 variant="secondary" 
                 size="sm"
+                onClick={() => router.push("/system-owner/setup")}
+              >
+                Platform Setup
+              </Button>
+              <Button 
+                variant="secondary" 
+                size="sm"
                 onClick={fetchData}
                 isLoading={isRefreshing}
                 leftIcon={<RefreshCw className={isRefreshing ? "animate-spin" : "w-4 h-4"} />}

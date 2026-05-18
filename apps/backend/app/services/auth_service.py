@@ -442,14 +442,19 @@ class AuthService:
         }
         await reset_coll.insert_one(reset_doc)
 
-        reset_url = f"http://localhost:3000/reset-password?token={reset_token}"
+        from app.core.config import settings
+        app_url = getattr(settings, "app_url", None) or "http://localhost:3000"
+        reset_url = f"{app_url.rstrip('/')}/reset-password?token={reset_token}"
 
         try:
             await EmailService.send_password_reset(email, reset_url)
         except Exception as e:
             print(f"Failed to send reset email: {e}")
 
-        return {"message": "Password reset email sent", "token": reset_token}
+        return {
+            "message": "If the account exists, a password reset link has been sent",
+            "reset_url": reset_url,
+        }
 
     async def reset_password(self, token: str, new_password: str) -> Dict:
         token_hash = hash_token(token)
@@ -544,12 +549,15 @@ class AuthService:
         created = user.get("created_at")
         if isinstance(created, datetime):
             created = created.isoformat()
+        role = user.get("role", "team_member")
         return {
             "id": user.get("id"),
             "email": user.get("email"),
             "full_name": user.get("full_name"),
-            "role": user.get("role"),
+            "role": role,
             "is_email_verified": user.get("is_email_verified", False),
+            "is_super_admin": role in ("super_admin", "admin"),
+            "permissions": PermissionChecker.get_user_permissions(role),
             "organization": {
                 "id": org.get("id") if org else None,
                 "name": org.get("name") if org else None,

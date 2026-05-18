@@ -17,6 +17,7 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [resetUrl, setResetUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -25,7 +26,10 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
 
     try {
-      await forgotPassword(email);
+      const result = await forgotPassword(email);
+      if (result.reset_url) {
+        setResetUrl(result.reset_url);
+      }
       setSuccess(true);
     } catch (err: any) {
       setError(err.response?.data?.detail || "Failed to send reset link");
@@ -54,8 +58,18 @@ export default function ForgotPasswordPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-center text-sm text-muted-foreground">
-                Click the link in your email to reset your password. The link will expire in 1 hour.
+                {resetUrl
+                  ? "Development mode: use the reset link below (no email was sent)."
+                  : "Click the link in your email to reset your password. The link will expire in 1 hour."}
               </p>
+              {resetUrl && (
+                <a
+                  href={resetUrl}
+                  className="block text-center text-sm text-primary hover:underline break-all"
+                >
+                  Open password reset page
+                </a>
+              )}
             </CardContent>
             <CardFooter className="flex flex-col space-y-4">
               <Button

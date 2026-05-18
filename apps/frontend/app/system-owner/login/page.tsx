@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Eye, EyeOff, Loader2, Shield, Lock, AlertCircle, CheckCircle2 } from "lucide-react";
-import api from "@/app/lib/api";
+import { useSystemOwnerAuth } from "@/app/hooks/useSystemOwnerAuth";
 
 interface ValidationState {
   email: { valid: boolean; message: string };
@@ -13,6 +13,7 @@ interface ValidationState {
 
 export default function SystemOwnerLoginPage() {
   const router = useRouter();
+  const { login: systemOwnerLogin } = useSystemOwnerAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -106,18 +107,17 @@ export default function SystemOwnerLoginPage() {
     setIsLoading(true);
 
     try {
-      const response = await api.post("/api/v1/system-owner-auth/login", {
-        email,
-        password,
-        device_info: deviceInfo
-      });
-
-      localStorage.setItem("system_owner_token", response.data.tokens.access_token);
-      localStorage.setItem("system_owner_refresh_token", response.data.tokens.refresh_token);
-      
+      await systemOwnerLogin(email, password, deviceInfo);
       router.push("/system-owner/dashboard");
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Invalid credentials");
+      const detail = err.response?.data?.detail;
+      setError(
+        typeof detail === "string"
+          ? detail
+          : Array.isArray(detail)
+            ? detail.map((d: { msg?: string }) => d.msg).filter(Boolean).join(", ")
+            : "Invalid credentials"
+      );
     } finally {
       setIsLoading(false);
     }

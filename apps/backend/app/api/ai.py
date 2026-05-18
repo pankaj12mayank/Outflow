@@ -1,13 +1,14 @@
 """
-AI API Endpoints (MongoDB) - Full Implementation
+AI API Endpoints — OpenAI / Anthropic / Ollama via provider manager.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional
+
 from app.middleware import get_current_user
-from app.db.mongodb import MongoDB
-import asyncio
+from app.services.ai.bootstrap import ai_runtime_status, generate_text
+from app.core.config import settings
 
 router = APIRouter(prefix="/ai", tags=["AI"])
 
@@ -36,69 +37,32 @@ class EnrichRequest(BaseModel):
     lead_email: str
 
 
-# Global client - will be initialized on first request
-_ollama_client = None
-
-
-async def get_ollama_client():
-    """Get or create Ollama client"""
-    global _ollama_client
-    if _ollama_client is None:
-        try:
-            import ollama
-            _ollama_client = ollama
-        except ImportError:
-            return None
-    return _ollama_client
-
-
 @router.get("/status")
 async def get_ai_status(current_user: dict = Depends(get_current_user)):
-    """Get AI service status."""
-    client = await get_ollama_client()
-    
-    if client is None:
-        return {
-            "status": "unavailable",
-            "provider": "ollama",
-            "message": "Ollama not installed"
-        }
-    
-    # Try to check if Ollama is running
-    try:
-        import httpx
-        async with httpx.AsyncClient() as http:
-            response = await http.get("http://localhost:11434/api/version", timeout=2)
-            if response.status_code == 200:
-                return {
-                    "status": "available",
-                    "provider": "ollama",
-                    "model": "llama3.2",
-                    "version": "running"
-                }
-    except:
-        pass
-    
+    """AI provider status (OpenAI, Anthropic, or Ollama)."""
+    status = await ai_runtime_status()
     return {
-        "status": "offline",
-        "provider": "ollama",
-        "message": "Start Ollama to enable AI features"
+        "status": "available" if status["healthy"] else "offline",
+        "provider": status["provider"],
+        "model": status["model"],
+        "healthy": status["healthy"],
+        "providers": status["providers"],
+        "message": (
+            f"Connected via {status['provider']}"
+            if status["healthy"]
+            else "Configure OPENAI_API_KEY + AI_PROVIDER=openai for cloud deploy"
+        ),
     }
 
 
 @router.get("/models")
 async def list_models(current_user: dict = Depends(get_current_user)):
-    """List available AI models."""
-    client = await get_ollama_client()
-    
-    if client is None:
-        return {"models": [], "message": "Ollama not available"}
-    
-    try:
-        models = client.list()
-        return {"models": models.get("models", [])}
-    except Exception as e:
-        return {"models": [], "error": str(e)}
+    """List configured default model."""
+    status = await ai_runtime_status()
+    return {
+        "models": [{"name": status["model"], "provider": status["provider"]}],
+        "provider": status["provider"],
+    }
 
 
 @router.post("/personalize")
@@ -106,45 +70,25 @@ async def personalize_content(
     request: PersonalizeRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Personalize email content using AI."""
-    client = await get_ollama_client()
-    
-    if client is None:
-        # Fallback to template-based personalization
-        personalized = request.template.replace("{{name}}", request.lead_name)
-        personalized = personalized.replace("{{company}}", request.company_name)
-        return {
-            "personalized": True,
-            "content": personalized,
-            "method": "template"
-        }
-    
     prompt = f"""Generate a personalized email opening line for:
 - Recipient: {request.lead_name}
 - Company: {request.company_name}
-- Template: {request.template}
+- Template context: {request.template}
 
-Generate 1-2 lines of personalized content that feels natural and relevant."""
+Generate 1-2 natural sentences only."""
 
-    try:
-        response = client.chat(
-            model='llama3.2',
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return {
-            "personalized": True,
-            "content": response['message']['content'],
-            "method": "ai"
-        }
-    except Exception as e:
-        # Fallback
-        personalized = request.template.replace("{{name}}", request.lead_name)
-        return {
-            "personalized": True,
-            "content": personalized,
-            "method": "template_fallback",
-            "error": str(e)
-        }
+    content, err = await generate_text(prompt, max_tokens=200)
+    if content:
+        return {"personalized": True, "content": content, "method": "ai"}
+
+    personalized = request.template.replace("{{name}}", request.lead_name)
+    personalized = personalized.replace("{{company}}", request.company_name)
+    return {
+        "personalized": True,
+        "content": personalized,
+        "method": "template_fallback",
+        "error": err,
+    }
 
 
 @router.post("/classify-reply")
@@ -152,65 +96,42 @@ async def classify_reply(
     request: ClassifyRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Classify email reply using AI."""
-    client = await get_ollama_client()
-    
-    if client is None:
-        return {
-            "classification": "unknown",
-            "confidence": 0,
-            "suggested_action": "manual_review"
-        }
-    
-    prompt = f"""Classify this email reply into one of these categories:
-- interested: Person wants to know more
-- not_interested: Person explicitly not interested  
-- maybe: Person needs more info or is uncertain
-- pricing_inquiry: Person asking about pricing
-- meeting_request: Person wants to schedule a meeting
-- out_of_office: Auto-reply
+    prompt = f"""Classify this email reply into ONE category only:
+interested, not_interested, maybe, pricing_inquiry, meeting_request, out_of_office
 
-Email content:
 Subject: {request.subject or 'N/A'}
 Body: {request.email_text[:500]}
 
-Respond with just the category name."""
+Reply with the category name only."""
 
-    try:
-        response = client.chat(
-            model='llama3.2',
-            messages=[{"role": "user", "content": prompt}]
-        )
-        
-        classification = response['message']['content'].strip().lower()
-        
-        # Map to standard categories
-        category_map = {
-            "interested": {"category": "interested", "action": "notify_sales"},
-            "not interested": {"category": "not_interested", "action": "archive"},
-            "maybe": {"category": "maybe", "action": "follow_up"},
-            "pricing inquiry": {"category": "pricing", "action": "send_pricing"},
-            "meeting request": {"category": "meeting", "action": "schedule_call"},
-            "out of office": {"category": "out_of_office", "action": "wait_and_follow"}
-        }
-        
-        result = category_map.get(classification, {
-            "category": classification,
-            "action": "manual_review"
-        })
-        
+    content, err = await generate_text(prompt, max_tokens=50, temperature=0.2)
+    if not content:
         return {
-            "classification": result["category"],
-            "confidence": 0.85,
-            "suggested_action": result["action"],
-            "raw_response": classification
-        }
-    except Exception as e:
-        return {
-            "classification": "error",
+            "classification": "unknown",
             "confidence": 0,
-            "error": str(e)
+            "suggested_action": "manual_review",
+            "error": err,
         }
+
+    classification = content.strip().lower()
+    category_map = {
+        "interested": {"category": "interested", "action": "notify_sales"},
+        "not_interested": {"category": "not_interested", "action": "archive"},
+        "maybe": {"category": "maybe", "action": "follow_up"},
+        "pricing_inquiry": {"category": "pricing", "action": "send_pricing"},
+        "meeting_request": {"category": "meeting", "action": "schedule_call"},
+        "out_of_office": {"category": "out_of_office", "action": "wait_and_follow"},
+    }
+    result = category_map.get(classification.replace(" ", "_"), {
+        "category": classification,
+        "action": "manual_review",
+    })
+    return {
+        "classification": result["category"],
+        "confidence": 0.85,
+        "suggested_action": result["action"],
+        "raw_response": classification,
+    }
 
 
 @router.post("/enrich-lead")
@@ -218,25 +139,14 @@ async def enrich_lead(
     request: EnrichRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Enrich lead data using AI."""
-    client = await get_ollama_client()
-    
-    if client is None:
-        return {
-            "enriched": False,
-            "message": "AI not available"
-        }
-    
-    # This would normally scrape the website
-    # For now return mock data
     return {
         "enriched": True,
         "data": {
+            "website": request.website_url,
+            "email": request.lead_email,
             "niche": "B2B",
-            "company_size": "medium",
-            "tech_stack": "WordPress",
-            "automation_opportunity": "medium"
-        }
+            "note": "Full scrape enrichment runs via /api/v1/scraping endpoints",
+        },
     }
 
 
@@ -245,36 +155,22 @@ async def generate_email(
     request: AIRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Generate email content using AI."""
-    client = await get_ollama_client()
-    
-    if client is None:
-        return {
-            "generated": False,
-            "content": "AI not available"
-        }
-    
-    prompt = f"""Write a professional cold outreach email with:
-- Subject line
-- 3-4 sentence opening
-- Value proposition
-- Call to action
+    prompt = f"""Write a professional cold outreach email with subject line, body, and CTA.
+Context: {request.prompt or request.content or 'General B2B outreach'}"""
 
-Context: {request.prompt or 'General outreach'}"""
-
-    try:
-        response = client.chat(
-            model='llama3.2',
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return {
-            "generated": True,
-            "content": response['message']['content']
-        }
-    except Exception as e:
-        return {
-            "generated": False,
-            "error": str(e)
-        }
+    content, err = await generate_text(prompt, max_tokens=600)
+    if content:
+        return {"generated": True, "content": content}
+    raise HTTPException(status_code=503, detail=err or "AI unavailable")
 
 
+@router.get("/config")
+async def get_ai_config(current_user: dict = Depends(get_current_user)):
+    """Non-secret AI config for admin UI."""
+    return {
+        "ai_provider": settings.ai_provider,
+        "ai_default_model": settings.ai_default_model,
+        "openai_configured": bool(settings.openai_api_key),
+        "anthropic_configured": bool(settings.anthropic_api_key),
+        "openai_base_url": settings.openai_base_url if settings.openai_api_key else None,
+    }

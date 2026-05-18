@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000"]
     cors_credentials: bool = True
 
+    # AI — set AI_PROVIDER=openai|anthropic|ollama (paid API recommended for cloud deploy)
+    ai_provider: str = "ollama"
+    ai_default_model: str = "llama3.2"
+    openai_api_key: str = ""
+    openai_base_url: str = "https://api.openai.com/v1"
+    anthropic_api_key: str = ""
     ollama_base_url: str = "http://localhost:11434"
     ollama_default_model: str = "llama3.2"
     ollama_timeout: int = 120
@@ -88,6 +94,7 @@ class Settings(BaseSettings):
     system_owner_email: str = "admin@outflo.com"
     system_owner_password: str = ""
     system_owner_jwt_secret: str = ""
+    app_url: str = "http://localhost:3000"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

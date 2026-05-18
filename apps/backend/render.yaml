@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: outflo-api
+    runtime: python
+    plan: free
+    rootDir: apps/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/ready
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: MONGO_URL
+        sync: false
+      - key: MONGO_DATABASE
+        value: outflo
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SYSTEM_OWNER_EMAIL
+        value: admin@outflo.com
+      - key: SYSTEM_OWNER_PASSWORD
+        sync: false
+      - key: SYSTEM_OWNER_JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: APP_URL
+        sync: false

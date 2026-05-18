@@ -74,7 +74,7 @@ export interface AuthContextType extends AuthState {
   refreshToken: () => Promise<boolean>;
   requestMagicLink: (email: string) => Promise<void>;
   verifyMagicLink: (token: string) => Promise<void>;
-  forgotPassword: (email: string) => Promise<void>;
+  forgotPassword: (email: string) => Promise<{ message: string; reset_url?: string }>;
   resetPassword: (token: string, newPassword: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   verifyEmail: (token: string) => Promise<void>;
@@ -244,7 +244,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const forgotPassword = async (email: string) => {
-    await api.post("/api/v1/auth/forgot-password", { email });
+    const response = await api.post("/api/v1/auth/forgot-password", { email });
+    return response.data;
   };
 
   const resetPassword = async (token: string, newPassword: string) => {

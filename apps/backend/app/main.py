@@ -36,6 +36,20 @@ async def lifespan(app: FastAPI):
         await MongoDB.connect()
         mongo_elapsed = (time.perf_counter() - mongo_start) * 1000
         app_logger.info(f"MongoDB connected in {mongo_elapsed:.1f}ms")
+        try:
+            from .services.system_owner_auth_service import SystemOwnerAuthService
+            owner = await SystemOwnerAuthService.ensure_system_owner()
+            if owner:
+                app_logger.info("System owner account ready", email=owner.get("email"))
+        except Exception as e:
+            app_logger.warning(f"System owner bootstrap skipped: {e}")
+
+        try:
+            from .services.ai.bootstrap import bootstrap_ai_providers
+            active_ai = bootstrap_ai_providers()
+            app_logger.info(f"AI provider ready: {active_ai}")
+        except Exception as e:
+            app_logger.warning(f"AI bootstrap skipped: {e}")
     except Exception as e:
         app_logger.warning(f"MongoDB connection skipped: {e}")
 

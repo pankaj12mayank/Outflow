@@ -135,11 +135,17 @@ cd apps/frontend
 npm run test
 ```
 
-## 🚢 Docker Deployment
+## 🚢 Deploy (no Docker required)
 
-```bash
-docker-compose up --build
-```
+Free hosting: **Vercel** (frontend) + **Render** (backend) + **MongoDB Atlas** (database).
+
+Step-by-step guide: [docs/DEPLOY_VERCEL_RENDER.md](docs/DEPLOY_VERCEL_RENDER.md)
+
+System Owner setup & test checklist: http://localhost:3000/system-owner/setup
+
+## 🐳 Docker (optional)
+
+Docker is optional for local/dev only. Production deploy does not require Docker.
 
 ## 📄 License
 

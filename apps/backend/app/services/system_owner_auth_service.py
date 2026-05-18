@@ -85,6 +85,31 @@ class SystemOwnerAuthService:
         return serialize_doc(doc) if doc else None
 
     @staticmethod
+    async def ensure_system_owner() -> Optional[Dict]:
+        """Create or repair system owner account from environment credentials."""
+        if not SYSTEM_OWNER_PASSWORD:
+            return None
+
+        existing = await SystemOwnerAuthService.get_system_owner()
+        password_hash = await hash_password(SYSTEM_OWNER_PASSWORD)
+
+        if not existing:
+            return await SystemOwnerAuthService.initialize_system_owner()
+
+        if not await verify_password(SYSTEM_OWNER_PASSWORD, existing.get("password_hash", "")):
+            await MongoDB.get_collection("system_owner_users").update_one(
+                {"_id": ObjectId(existing["id"])},
+                {"$set": {
+                    "password_hash": password_hash,
+                    "is_active": True,
+                    "failed_login_attempts": 0,
+                    "locked_until": None,
+                    "updated_at": datetime.utcnow(),
+                }},
+            )
+        return await SystemOwnerAuthService.get_system_owner()
+
+    @staticmethod
     async def initialize_system_owner() -> Dict:
         if not SYSTEM_OWNER_PASSWORD:
             raise ValueError("SYSTEM_OWNER_PASSWORD not set in environment")

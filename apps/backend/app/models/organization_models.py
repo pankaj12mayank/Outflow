@@ -34,7 +34,7 @@ class OrganizationMember(BaseModel):
     id: str = Field(default=None, alias="_id")
     organization_id: str
     user_id: str
-    role: MembershipRole = MembershipRole.MEMBER
+    role: MembershipRole = MembershipRole.TEAM_MEMBER
     is_active: bool = True
     joined_at: datetime = Field(default_factory=datetime.utcnow)
 
