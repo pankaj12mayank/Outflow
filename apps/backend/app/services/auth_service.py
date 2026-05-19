@@ -120,53 +120,69 @@ def extract_browser_os(user_agent: str) -> tuple[str, str]:
 class RateLimiter:
     _requests: Dict[str, List[datetime]] = {}
     _lockout: Dict[str, datetime] = {}
+    _lock = __import__('threading').Lock()
+    _last_cleanup = datetime.utcnow()
+
+    @classmethod
+    def _cleanup_if_needed(cls):
+        now = datetime.utcnow()
+        if (now - cls._last_cleanup).total_seconds() > 300:
+            cls._last_cleanup = now
+            cutoff = now - timedelta(seconds=3600)
+            cls._requests = {k: [ts for ts in v if ts > cutoff] for k, v in cls._requests.items() if v}
+            cls._lockout = {k: v for k, v in cls._lockout.items() if v > now}
 
     @classmethod
     def check_rate_limit(cls, identifier: str, max_requests: int, window_seconds: int) -> tuple[bool, int]:
-        now = datetime.utcnow()
-        window_start = now - timedelta(seconds=window_seconds)
-        if identifier in cls._lockout:
-            lockout_until = cls._lockout[identifier]
-            if now < lockout_until:
-                remaining = int((lockout_until - now).total_seconds())
-                return False, remaining
-            else:
-                del cls._lockout[identifier]
-        if identifier not in cls._requests:
-            cls._requests[identifier] = []
-        cls._requests[identifier] = [ts for ts in cls._requests[identifier] if ts > window_start]
-        if len(cls._requests[identifier]) >= max_requests:
-            cls._lockout[identifier] = now + timedelta(seconds=window_seconds)
-            return False, window_seconds
-        cls._requests[identifier].append(now)
-        return True, max_requests - len(cls._requests[identifier])
+        with cls._lock:
+            cls._cleanup_if_needed()
+            now = datetime.utcnow()
+            window_start = now - timedelta(seconds=window_seconds)
+            if identifier in cls._lockout:
+                lockout_until = cls._lockout[identifier]
+                if now < lockout_until:
+                    remaining = int((lockout_until - now).total_seconds())
+                    return False, remaining
+                else:
+                    del cls._lockout[identifier]
+            if identifier not in cls._requests:
+                cls._requests[identifier] = []
+            cls._requests[identifier] = [ts for ts in cls._requests[identifier] if ts > window_start]
+            if len(cls._requests[identifier]) >= max_requests:
+                cls._lockout[identifier] = now + timedelta(seconds=window_seconds)
+                return False, window_seconds
+            cls._requests[identifier].append(now)
+            return True, max_requests - len(cls._requests[identifier])
 
     @classmethod
     def record_failed_attempt(cls, identifier: str, max_attempts: int, lockout_minutes: int):
-        key = f"failed:{identifier}"
-        if key not in cls._requests:
-            cls._requests[key] = []
-        cls._requests[key].append(datetime.utcnow())
-        if len(cls._requests[key]) >= max_attempts:
-            cls._lockout[f"lockout:{identifier}"] = datetime.utcnow() + timedelta(minutes=lockout_minutes)
+        with cls._lock:
+            key = f"failed:{identifier}"
+            if key not in cls._requests:
+                cls._requests[key] = []
+            cls._requests[key].append(datetime.utcnow())
+            if len(cls._requests[key]) >= max_attempts:
+                cls._lockout[f"lockout:{identifier}"] = datetime.utcnow() + timedelta(minutes=lockout_minutes)
 
     @classmethod
     def clear_failed_attempts(cls, identifier: str):
-        key = f"failed:{identifier}"
-        if key in cls._requests:
-            del cls._requests[key]
+        with cls._lock:
+            key = f"failed:{identifier}"
+            if key in cls._requests:
+                del cls._requests[key]
 
     @classmethod
     def is_locked_out(cls, identifier: str) -> tuple[bool, int]:
-        key = f"lockout:{identifier}"
-        if key in cls._lockout:
-            lockout_until = cls._lockout[key]
-            if datetime.utcnow() < lockout_until:
-                remaining = int((lockout_until - datetime.utcnow()).total_seconds())
-                return True, remaining
-            else:
-                del cls._lockout[key]
-        return False, 0
+        with cls._lock:
+            key = f"lockout:{identifier}"
+            if key in cls._lockout:
+                lockout_until = cls._lockout[key]
+                if datetime.utcnow() < lockout_until:
+                    remaining = int((lockout_until - datetime.utcnow()).total_seconds())
+                    return True, remaining
+                else:
+                    del cls._lockout[key]
+            return False, 0
 
 
 class EmailService:
@@ -233,59 +249,76 @@ class AuthService:
         client_info = get_client_info(request)
         browser, os = extract_browser_os(client_info.get("user_agent", ""))
 
-        existing_user = await self._get_user_by_email_any_org(data["email"])
-        if existing_user:
-            raise ValueError("Email already registered")
-
         is_valid, error = validate_password_strength(data["password"])
         if not is_valid:
             raise ValueError(error)
 
+        email_normalized = data["email"].lower().strip()
         org_slug = self._generate_slug(data["organization_name"])
         existing_org = await self._get_org_by_slug(org_slug)
         if existing_org:
             org_slug = f"{org_slug}-{secrets.token_hex(4)}"
 
-        org_coll = MongoDB.get_collection("organizations")
+        password_hash = await get_password_hash(data["password"])
+        now = datetime.utcnow()
+
         organization = {
             "name": data["organization_name"],
             "slug": org_slug,
             "is_active": True,
             "plan": "free",
             "source": "app_register",
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow(),
+            "created_at": now,
+            "updated_at": now,
         }
-        org_result = await org_coll.insert_one(organization)
-        organization["id"] = str(org_result.inserted_id)
 
-        user_coll = MongoDB.get_collection("users")
         user = {
-            "email": data["email"],
-            "password_hash": await get_password_hash(data["password"]),
+            "email": email_normalized,
+            "password_hash": password_hash,
             "full_name": data["full_name"],
-            "organization_id": organization["id"],
             "role": "admin",
             "is_active": True,
             "is_email_verified": False,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow(),
+            "created_at": now,
+            "updated_at": now,
         }
-        user_result = await user_coll.insert_one(user)
-        user["id"] = str(user_result.inserted_id)
 
-        mem_coll = MongoDB.get_collection("memberships")
         membership = {
-            "user_id": user["id"],
-            "organization_id": organization["id"],
             "role": "admin",
             "status": "active",
-            "accepted_at": datetime.utcnow(),
-            "created_at": datetime.utcnow(),
+            "accepted_at": now,
+            "created_at": now,
         }
-        await mem_coll.insert_one(membership)
 
-        await self._create_session(user, organization["id"], browser, os, client_info)
+        try:
+            async with await MongoDB.get_client().start_session() as session:
+                async with session.start_transaction():
+                    org_coll = MongoDB.get_collection("organizations")
+                    org_result = await org_coll.insert_one(organization, session=session)
+                    organization["id"] = str(org_result.inserted_id)
+
+                    user["organization_id"] = organization["id"]
+                    user_coll = MongoDB.get_collection("users")
+                    try:
+                        user_result = await user_coll.insert_one(user, session=session)
+                    except Exception as e:
+                        if "duplicate key" in str(e).lower() or "E11000" in str(e):
+                            raise ValueError("Email already registered")
+                        raise
+                    user["id"] = str(user_result.inserted_id)
+
+                    membership["user_id"] = user["id"]
+                    membership["organization_id"] = organization["id"]
+                    mem_coll = MongoDB.get_collection("memberships")
+                    await mem_coll.insert_one(membership, session=session)
+
+                    session_id = await self._create_session_txn(user, organization["id"], browser, os, client_info, session)
+        except ValueError:
+            raise
+        except Exception as e:
+            print(f"Registration transaction failed: {e}")
+            raise ValueError("Registration failed. Please try again.")
+
         await self._log_login(user["id"], organization["id"], "success", client_info)
         try:
             from app.services.billing_lifecycle_service import BillingLifecycleService
@@ -308,21 +341,43 @@ class AuthService:
             "tokens": tokens
         }
 
+    async def _create_session_txn(self, user: Dict, organization_id: str, browser: str, os: str, client_info: dict, session) -> str:
+        access_token = generate_token()
+        session_coll = MongoDB.get_collection("sessions")
+        session_doc = {
+            "user_id": user["id"],
+            "organization_id": organization_id,
+            "access_token": access_token,
+            "refresh_token": generate_token(),
+            "token_hash": hash_token(access_token),
+            "ip_address": client_info.get("ip_address"),
+            "user_agent": client_info.get("user_agent"),
+            "device_type": get_device_type(client_info.get("user_agent", "")),
+            "browser": browser,
+            "os": os,
+            "expires_at": (datetime.utcnow() + timedelta(days=AUTH_CONFIG["SESSION_EXPIRE_DAYS"])).isoformat(),
+            "is_active": True,
+            "created_at": datetime.utcnow(),
+        }
+        await session_coll.insert_one(session_doc, session=session)
+        return access_token
+
     async def login(self, data: dict, request=None) -> Dict:
         client_info = get_client_info(request)
-        identifier = f"login:{data['email']}"
+        email_normalized = data["email"].lower().strip()
+        identifier = f"login:{email_normalized}"
         browser, os = extract_browser_os(client_info.get("user_agent", ""))
 
         is_allowed, remaining = RateLimiter.check_rate_limit(identifier, AUTH_CONFIG["RATE_LIMIT_MAX_REQUESTS"], AUTH_CONFIG["RATE_LIMIT_WINDOW_SECONDS"])
         if not is_allowed:
             raise ValueError(f"Rate limit exceeded. Try again in {remaining} seconds.")
 
-        is_locked, lockout_remaining = RateLimiter.is_locked_out(data["email"])
+        is_locked, lockout_remaining = RateLimiter.is_locked_out(email_normalized)
         if is_locked:
             raise ValueError(f"Account locked. Try again in {lockout_remaining} seconds.")
 
-        user = await self._get_user_by_email_any_org(data["email"])
-        
+        user = await self._get_user_by_email_any_org(email_normalized)
+
         if not user:
             await self._log_login(None, None, "failed", client_info, "user_not_found")
             raise ValueError("Invalid email or password")
@@ -331,7 +386,7 @@ class AuthService:
             raise ValueError("Account is inactive")
 
         if not await verify_password(data["password"], user["password_hash"]):
-            RateLimiter.record_failed_attempt(data["email"], AUTH_CONFIG["MAX_LOGIN_ATTEMPTS"], AUTH_CONFIG["LOCKOUT_DURATION_MINUTES"])
+            RateLimiter.record_failed_attempt(email_normalized, AUTH_CONFIG["MAX_LOGIN_ATTEMPTS"], AUTH_CONFIG["LOCKOUT_DURATION_MINUTES"])
             await self._log_login(user["id"], user.get("organization_id"), "failed", client_info, "invalid_password")
             raise ValueError("Invalid email or password")
 

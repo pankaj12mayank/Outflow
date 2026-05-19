@@ -37,6 +37,11 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    if (!error.response) {
+      toast.error("Network error", "Please check your connection and try again.");
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       const requestUrl = `${originalRequest.url || ""}`;
@@ -46,13 +51,20 @@ api.interceptors.response.use(
         requestUrl.includes("/system-owner-dashboard") ||
         requestUrl.includes("/system-owner/platform");
 
+      const isAuthRoute = requestUrl.includes("/auth/login") || requestUrl.includes("/auth/register");
+
+      if (isAuthRoute) {
+        return Promise.reject(error);
+      }
+
       try {
         if (isSystemOwnerRoute) {
           const refreshToken = localStorage.getItem("system_owner_refresh_token");
           if (refreshToken) {
             const response = await axios.post(
               `${API_BASE_URL}/api/v1/system-owner-auth/refresh`,
-              { refresh_token: refreshToken }
+              { refresh_token: refreshToken },
+              { skipAuthRefresh: true }
             );
             const { access_token, refresh_token } = response.data;
             localStorage.setItem("system_owner_token", access_token);
@@ -63,9 +75,11 @@ api.interceptors.response.use(
         } else {
           const refreshToken = localStorage.getItem("refresh_token");
           if (refreshToken) {
-            const response = await axios.post(`${API_BASE_URL}/api/v1/auth/refresh`, {
-              refresh_token: refreshToken,
-            });
+            const response = await axios.post(
+              `${API_BASE_URL}/api/v1/auth/refresh`,
+              { refresh_token: refreshToken },
+              { skipAuthRefresh: true }
+            );
 
             const { access_token, refresh_token } = response.data;
             localStorage.setItem("access_token", access_token);

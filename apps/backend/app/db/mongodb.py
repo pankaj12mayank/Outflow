@@ -66,6 +66,12 @@ class MongoDB:
         return cls.get_database()[name]
 
     @classmethod
+    def get_client(cls) -> AsyncIOMotorClient:
+        if cls._client is None:
+            raise RuntimeError("MongoDB not connected. Call MongoDB.connect() first.")
+        return cls._client
+
+    @classmethod
     async def _create_indexes(cls) -> None:
         if cls._database is None:
             return

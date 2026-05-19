@@ -105,32 +105,43 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
-@router.post("/register", status_code=status.HTTP_201_CREATED, 
+@router.post("/register", status_code=status.HTTP_201_CREATED,
               summary="Register new user")
 async def register(data: RegisterRequest, request: Request):
     """Register new user with organization."""
+    import logging
+    logger = logging.getLogger(__name__)
+
     if data.email.lower().strip() == "admin@outflo.com":
+        logger.warning(f"Registration attempt with reserved email: {data.email}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This email is reserved for system admin"
         )
     try:
+        logger.info(f"Registration attempt for: {data.email}")
         auth_service = AuthService()
         result = await auth_service.register(data.model_dump(), request)
+        logger.info(f"Registration successful for: {data.email}")
         return result
     except ValueError as e:
+        logger.warning(f"Registration failed for {data.email}: {str(e)}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        logger.error(f"Registration error for {data.email}: {traceback.format_exc()}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Registration failed. Please try again.")
 
 
 @router.post("/login", response_model=AuthResponse, summary="Login with email and password")
 async def login(data: LoginRequest, request: Request):
     """Login with email and password - handles both regular users and system owner."""
+    import logging
+    logger = logging.getLogger(__name__)
     from app.core.config import settings
-    
+
+    logger.info(f"Login attempt for: {data.email}")
+
     if data.email.lower().strip() == "admin@outflo.com":
         from app.services.system_owner_auth_service import SystemOwnerAuthService
         user_agent = request.headers.get("user-agent", "unknown") if request else "unknown"
@@ -148,24 +159,28 @@ async def login(data: LoginRequest, request: Request):
             result["user"]["organization"] = None
             result["user"]["permissions"] = []
             result["user"]["created_at"] = None
+            logger.info(f"System owner login successful: {data.email}")
             return result
         except ValueError as e:
+            logger.warning(f"System owner login failed for {data.email}: {str(e)}")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
         except Exception as e:
             import traceback
-            traceback.print_exc()
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-    
+            logger.error(f"System owner login error for {data.email}: {traceback.format_exc()}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Login failed. Please try again.")
+
     auth_service = AuthService()
     try:
         result = await auth_service.login({"email": data.email, "password": data.password}, request)
+        logger.info(f"User login successful: {data.email}")
         return result
     except ValueError as e:
+        logger.warning(f"User login failed for {data.email}: {str(e)}")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
     except Exception as e:
         import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        logger.error(f"User login error for {data.email}: {traceback.format_exc()}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Login failed. Please try again.")
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, summary="Logout and invalidate session")

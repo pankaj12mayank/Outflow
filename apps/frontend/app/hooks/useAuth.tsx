@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import api from "@/app/lib/api";
 
@@ -99,6 +99,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated: false,
     isLoading: true,
   });
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const refreshPromiseRef = useRef<Promise<boolean> | null>(null);
+
+  const setTokens = useCallback((accessToken: string, refreshToken: string) => {
+    localStorage.setItem("access_token", accessToken);
+    localStorage.setItem("refresh_token", refreshToken);
+    api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+  }, []);
 
   const clearAuth = useCallback(() => {
     localStorage.removeItem("access_token");
@@ -107,13 +115,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ user: null, isAuthenticated: false, isLoading: false });
   }, []);
 
-  const checkAuth = useCallback(async () => {
+  const checkAuth = useCallback(async (): Promise<boolean> => {
     const accessToken = localStorage.getItem("access_token");
     const refreshToken = localStorage.getItem("refresh_token");
 
     if (!accessToken || !refreshToken) {
       setState(prev => ({ ...prev, isLoading: false }));
-      return;
+      return false;
     }
 
     try {
@@ -127,34 +135,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading: false,
       });
       api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+      return true;
     } catch (error: any) {
       if (error.response?.status === 401) {
+        if (isRefreshing && refreshPromiseRef.current) {
+          const refreshed = await refreshPromiseRef.current;
+          if (refreshed) {
+            const newAccessToken = localStorage.getItem("access_token");
+            if (newAccessToken) {
+              return await checkAuth();
+            }
+          }
+          clearAuth();
+          return false;
+        }
         const refreshed = await refreshTokenFn(refreshToken);
         if (refreshed) {
-          await checkAuth();
-        } else {
-          clearAuth();
+          const newAccessToken = localStorage.getItem("access_token");
+          if (newAccessToken) {
+            return await checkAuth();
+          }
         }
+        clearAuth();
+        return false;
       } else {
         clearAuth();
+        return false;
       }
     }
-  }, [clearAuth]);
+    return false;
+  }, [clearAuth, isRefreshing]);
 
-  const refreshTokenFn = async (refresh: string): Promise<boolean> => {
-    try {
-      const response = await api.post("/api/v1/auth/refresh", { refresh_token: refresh });
-      const { access_token, refresh_token } = response.data;
-
-      localStorage.setItem("access_token", access_token);
-      localStorage.setItem("refresh_token", refresh_token);
-
-      api.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
-      return true;
-    } catch {
-      return false;
+  const refreshTokenFn = useCallback(async (refresh: string): Promise<boolean> => {
+    if (isRefreshing && refreshPromiseRef.current) {
+      return await refreshPromiseRef.current;
     }
-  };
+
+    setIsRefreshing(true);
+    refreshPromiseRef.current = (async () => {
+      try {
+        const response = await api.post("/api/v1/auth/refresh", { refresh_token: refresh });
+        const { access_token, refresh_token } = response.data;
+        setTokens(access_token, refresh_token);
+        return true;
+      } catch {
+        clearAuth();
+        return false;
+      } finally {
+        setIsRefreshing(false);
+        refreshPromiseRef.current = null;
+      }
+    })();
+    return await refreshPromiseRef.current;
+  }, [isRefreshing, setTokens, clearAuth]);
 
   useEffect(() => {
     checkAuth();
@@ -176,13 +209,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { user: rawUser, tokens } = response.data;
       const user = addPermissionsToUser(rawUser);
 
-      localStorage.setItem("access_token", tokens.access_token);
-      localStorage.setItem("refresh_token", tokens.refresh_token);
-
-      api.defaults.headers.common["Authorization"] = `Bearer ${tokens.access_token}`;
+      setTokens(tokens.access_token, tokens.refresh_token);
 
       setState({ user, isAuthenticated: true, isLoading: false });
-      
+
       if (user.role === "system_owner" || user.is_super_admin) {
         router.push("/system-owner/dashboard");
       } else {
@@ -205,10 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { user: rawUser, tokens } = response.data;
       const user = addPermissionsToUser(rawUser);
 
-      localStorage.setItem("access_token", tokens.access_token);
-      localStorage.setItem("refresh_token", tokens.refresh_token);
-
-      api.defaults.headers.common["Authorization"] = `Bearer ${tokens.access_token}`;
+      setTokens(tokens.access_token, tokens.refresh_token);
 
       setState({ user, isAuthenticated: true, isLoading: false });
       router.push("/app/dashboard");
