@@ -35,6 +35,12 @@ try:
 except:
     webhooks_router = None
 
+# Email Engine
+try:
+    from app.api.email_engine import router as email_engine_router
+except:
+    email_engine_router = None
+
 api_router = APIRouter()
 
 api_router.include_router(auth_router)
@@ -75,3 +81,5 @@ if email_router:
     api_router.include_router(email_router)
 if webhooks_router:
     api_router.include_router(webhooks_router)
+if email_engine_router:
+    api_router.include_router(email_engine_router)

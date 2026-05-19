@@ -27,6 +27,7 @@ const NAV = [
   { href: "/system-owner/smtp", label: "SMTP", icon: Mail },
   { href: "/system-owner/settings", label: "AI & API", icon: Cpu },
   { href: "/system-owner/organizations", label: "Organizations", icon: Building2 },
+  { href: "/system-owner/email", label: "Email Automation", icon: Zap },
 ];
 
 function NavLinks({

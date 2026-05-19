@@ -5,12 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAuth } from "@/app/hooks/useAuth";
-import { isSystemOwnerEmail } from "@/app/lib/auth-constants";
+import { isSystemOwnerEmail, SYSTEM_OWNER_EMAIL } from "@/app/lib/auth-constants";
 import api from "@/app/lib/api";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Loader2, Mail, Lock, AlertCircle, Zap, Eye, EyeOff } from "lucide-react";
+import { Loader2, Mail, Lock, AlertCircle, Zap, Eye, EyeOff, Shield, Users } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 
 export default function LoginPage() {
@@ -68,7 +68,7 @@ export default function LoginPage() {
             <span className="text-2xl font-bold">Outflo</span>
           </Link>
           <h1 className="text-2xl font-bold mb-2">Welcome back</h1>
-          <p className="text-gray-400">Sign in to your Outflo account</p>
+          <p className="text-gray-400">Sign in to your account</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -134,6 +134,20 @@ export default function LoginPage() {
             )}
           </Button>
         </form>
+
+        <div className="mt-8 p-4 rounded-xl bg-white/5 border border-white/10">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+              <Shield className="w-4 h-4 text-purple-400" />
+            </div>
+            <div className="text-sm">
+              <span className="text-gray-300 font-medium">System Administrator?</span>
+              <p className="text-gray-500 text-xs mt-1">
+                Use <span className="text-purple-400">{SYSTEM_OWNER_EMAIL}</span> to access the admin dashboard.
+              </p>
+            </div>
+          </div>
+        </div>
 
         <p className="text-center text-sm text-gray-400 mt-6">
           Don&apos;t have an account?{" "}

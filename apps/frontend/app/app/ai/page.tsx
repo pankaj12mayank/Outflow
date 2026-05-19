@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import api from "@/app/lib/api";
 import { motion } from "framer-motion";
 import {
   Brain,
@@ -208,6 +209,7 @@ function UsageChart({ data }: { data: any }) {
 
 export default function AISettingsPage() {
   const [tab, setTab] = useState<string>("models");
+  const [loading, setLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>("llama3.2");
   const [ollamaConnected, setOllamaConnected] = useState<boolean>(false);
   const [isTesting, setIsTesting] = useState<boolean>(false);
@@ -220,20 +222,34 @@ export default function AISettingsPage() {
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveMessage, setSaveMessage] = useState<string>("");
 
-  const usageStats = {
-    totalGenerations: 1247,
-    totalTokens: 892450,
-    avgLatency: 1247,
-    successRate: 98.5,
-  };
+  const [usageStats, setUsageStats] = useState({
+    totalGenerations: 0,
+    totalTokens: 0,
+    avgLatency: 0,
+    successRate: 0,
+  });
 
-  const usageByFeature = {
-    personalization: { count: 342, tokens: 45670 },
-    subject_generation: { count: 256, tokens: 12800 },
-    opener_generation: { count: 198, tokens: 9900 },
-    reply_classification: { count: 178, tokens: 8900 },
-    cta_generation: { count: 145, tokens: 7250 },
-    outreach_optimization: { count: 128, tokens: 6400 },
+  const [usageByFeature, setUsageByFeature] = useState<Record<string, { count: number; tokens: number }>>({});
+
+  useEffect(() => {
+    fetchAIStats();
+  }, []);
+
+  const fetchAIStats = async () => {
+    try {
+      const res = await api.get("/api/v1/ai/usage").catch(() => ({ data: null }));
+      if (res.data) {
+        setUsageStats({
+          totalGenerations: res.data.total_generations || 0,
+          totalTokens: res.data.total_tokens || 0,
+          avgLatency: res.data.avg_latency || 0,
+          successRate: res.data.success_rate || 0,
+        });
+        setUsageByFeature(res.data.by_feature || {});
+      }
+    } catch (error) {
+      console.log("Using default AI stats");
+    }
   };
 
   const handleTestConnection = async () => {
@@ -291,7 +307,7 @@ export default function AISettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-[1440px] mx-auto">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold mb-2">AI Settings</h1>
@@ -308,11 +324,33 @@ export default function AISettingsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard label="Total Generations" value={usageStats.totalGenerations.toLocaleString()} icon={Sparkles} color="purple" trend={12} />
-        <StatCard label="Tokens Used" value={(usageStats.totalTokens / 1000).toFixed(1) + "K"} icon={Hash} color="blue" />
-        <StatCard label="Avg Latency" value={usageStats.avgLatency + "ms"} icon={Clock3} color="green" trend={-8} />
-        <StatCard label="Success Rate" value={usageStats.successRate + "%"} icon={CheckCircle} color="yellow" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard 
+          label="Total Generations" 
+          value={usageStats.totalGenerations > 0 ? usageStats.totalGenerations.toLocaleString() : "0"} 
+          icon={Sparkles} 
+          color="purple" 
+          trend={usageStats.totalGenerations > 0 ? 12 : 0} 
+        />
+        <StatCard 
+          label="Tokens Used" 
+          value={usageStats.totalTokens > 0 ? (usageStats.totalTokens / 1000).toFixed(1) + "K" : "0"} 
+          icon={Hash} 
+          color="blue" 
+        />
+        <StatCard 
+          label="Avg Latency" 
+          value={usageStats.avgLatency > 0 ? usageStats.avgLatency + "ms" : "0ms"} 
+          icon={Clock3} 
+          color="green" 
+          trend={usageStats.avgLatency > 0 ? -8 : 0} 
+        />
+        <StatCard 
+          label="Success Rate" 
+          value={usageStats.successRate > 0 ? usageStats.successRate + "%" : "0%"} 
+          icon={CheckCircle} 
+          color="yellow" 
+        />
       </div>
 
       <div className="rounded-2xl border border-white/5 bg-gradient-to-b from-white/5 to-transparent overflow-hidden">

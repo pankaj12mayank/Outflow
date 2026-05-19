@@ -123,27 +123,27 @@ export default function LandingPage() {
       <ScrollProgress />
 
       {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0a0a0f]/80 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0a0a0f]/90 backdrop-blur-xl border-b border-white/5">
+        <div className="max-w-[1440px] mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
                 <Zap className="w-5 h-5 text-white" />
               </div>
               <span className="text-xl font-bold">Outflo</span>
             </Link>
 
             <div className="hidden md:flex items-center gap-8">
-              <button onClick={() => scrollToSection("features")} className="text-sm text-gray-400 hover:text-white transition-colors">Features</button>
-              <button onClick={() => scrollToSection("pricing")} className="text-sm text-gray-400 hover:text-white transition-colors">Pricing</button>
-              <button onClick={() => scrollToSection("faq")} className="text-sm text-gray-400 hover:text-white transition-colors">FAQ</button>
-              <Link href="/login" className="text-sm text-gray-400 hover:text-white transition-colors">Sign in</Link>
-              <Link href="/register" className="px-4 py-2 bg-purple-500 hover:bg-purple-600 rounded-lg text-sm font-medium transition-colors">
+              <button onClick={() => scrollToSection("features")} className="text-sm text-gray-300 hover:text-white transition-colors font-medium">Features</button>
+              <button onClick={() => scrollToSection("pricing")} className="text-sm text-gray-300 hover:text-white transition-colors font-medium">Pricing</button>
+              <button onClick={() => scrollToSection("faq")} className="text-sm text-gray-300 hover:text-white transition-colors font-medium">FAQ</button>
+              <Link href="/login" className="text-sm text-gray-300 hover:text-white transition-colors font-medium">Sign in</Link>
+              <Link href="/register" className="px-5 py-2.5 bg-purple-500 hover:bg-purple-600 rounded-lg text-sm font-medium transition-all hover:shadow-lg hover:shadow-purple-500/25">
                 Start Free
               </Link>
             </div>
 
-            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden p-2">
+            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden p-2 hover:bg-white/5 rounded-lg transition-colors">
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
@@ -151,53 +151,55 @@ export default function LandingPage() {
 
         {mobileMenuOpen ? (
             <div className="md:hidden border-t border-white/5 bg-[#0a0a0f] animate-fade-in">
-              <div className="px-6 py-4 space-y-4">
-                <button onClick={() => { scrollToSection("features"); setMobileMenuOpen(false); }} className="block w-full text-left text-gray-400 hover:text-white">Features</button>
-                <button onClick={() => { scrollToSection("pricing"); setMobileMenuOpen(false); }} className="block w-full text-left text-gray-400 hover:text-white">Pricing</button>
-                <button onClick={() => { scrollToSection("faq"); setMobileMenuOpen(false); }} className="block w-full text-left text-gray-400 hover:text-white">FAQ</button>
-                <Link href="/login" className="block text-gray-400 hover:text-white">Sign in</Link>
-                <Link href="/register" className="block px-4 py-2 bg-purple-500 rounded-lg text-center font-medium">Start Free</Link>
+              <div className="px-6 py-4 space-y-2">
+                <button onClick={() => { scrollToSection("features"); setMobileMenuOpen(false); }} className="block w-full text-left py-2 text-gray-300 hover:text-white transition-colors">Features</button>
+                <button onClick={() => { scrollToSection("pricing"); setMobileMenuOpen(false); }} className="block w-full text-left py-2 text-gray-300 hover:text-white transition-colors">Pricing</button>
+                <button onClick={() => { scrollToSection("faq"); setMobileMenuOpen(false); }} className="block w-full text-left py-2 text-gray-300 hover:text-white transition-colors">FAQ</button>
+                <div className="pt-2 border-t border-white/5">
+                  <Link href="/login" className="block py-2 text-gray-300 hover:text-white">Sign in</Link>
+                  <Link href="/register" className="block mt-2 px-4 py-2.5 bg-purple-500 rounded-lg text-center font-medium">Start Free</Link>
+                </div>
               </div>
             </div>
         ) : null}
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 px-6 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-purple-500/10 via-transparent to-transparent" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-purple-500/20 rounded-full blur-[120px]" />
+      <section className="pt-32 pb-24 px-6 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-purple-500/5 via-transparent to-transparent" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-purple-500/15 rounded-full blur-[120px]" />
         
         <div className="max-w-4xl mx-auto text-center relative z-10">
           <div className="animate-fade-up">
-            <span className="inline-block px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full text-sm text-purple-400 mb-6">
+            <span className="inline-block px-5 py-2.5 bg-purple-500/10 border border-purple-500/20 rounded-full text-sm text-purple-400 font-medium mb-8">
               {content.hero.badge}
             </span>
             
-            <h1 className="text-5xl md:text-6xl font-bold mb-6 leading-tight">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-8 leading-tight bg-gradient-to-r from-white via-white to-gray-400 bg-clip-text text-transparent">
               {content.hero.title}
             </h1>
             
-            <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
+            <p className="text-lg sm:text-xl text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed">
               {content.hero.subtitle}
             </p>
             
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/register" className="w-full sm:w-auto px-8 py-4 bg-purple-500 hover:bg-purple-600 rounded-xl font-semibold text-center transition-all hover:scale-105 flex items-center justify-center gap-2">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
+              <Link href="/register" className="w-full sm:w-auto px-8 py-4 bg-purple-500 hover:bg-purple-600 rounded-xl font-semibold text-center transition-all hover:scale-105 hover:shadow-xl hover:shadow-purple-500/25 flex items-center justify-center gap-2">
                 {content.hero.cta}
                 <ArrowRight className="w-5 h-5" />
               </Link>
-              <button className="w-full sm:w-auto px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-medium transition-all flex items-center justify-center gap-2">
+              <button className="w-full sm:w-auto px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-medium transition-all hover:border-white/20 flex items-center justify-center gap-2">
                 <Play className="w-5 h-5" />
                 {content.hero.ctaSecondary}
               </button>
             </div>
             
-            <p className="mt-6 text-sm text-gray-500">{content.hero.trustText}</p>
+            <p className="text-sm text-gray-500">{content.hero.trustText}</p>
           </div>
         </div>
 
         {/* Stats */}
-        <div className="max-w-5xl mx-auto mt-20 grid grid-cols-2 md:grid-cols-4 gap-8">
+        <div className="max-w-5xl mx-auto mt-24 grid grid-cols-2 md:grid-cols-4 gap-8 lg:gap-12">
           {content.stats.map((stat, i) => (
             <ScrollReveal
               key={stat.label}
@@ -205,24 +207,24 @@ export default function LandingPage() {
               delay={i * 100}
               className="text-center"
             >
-              <div className="text-4xl font-bold text-purple-400 mb-2">
+              <div className="text-4xl md:text-5xl font-bold text-purple-400 mb-3">
                 <Counter end={parseInt(stat.value.replace(/[^0-9]/g, "")) || 0} suffix={stat.value.replace(/[0-9]/g, "")} />
               </div>
-              <div className="text-gray-400 text-sm">{stat.label}</div>
+              <div className="text-gray-400 text-sm md:text-base">{stat.label}</div>
             </ScrollReveal>
           ))}
         </div>
       </section>
 
       {/* Features Section */}
-      <section id="features" className="py-20 px-6">
-        <div className="max-w-6xl mx-auto">
+      <section id="features" className="py-24 px-6 bg-gradient-to-b from-transparent via-purple-500/5 to-transparent">
+        <div className="max-w-[1440px] mx-auto">
           <ScrollReveal animation="slide-up" className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4">Everything you need to scale outreach</h2>
-            <p className="text-gray-400 text-lg">Powerful features wrapped in a simple, intuitive interface</p>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-6">Everything you need to scale outreach</h2>
+            <p className="text-gray-400 text-lg max-w-2xl mx-auto">Powerful features wrapped in a simple, intuitive interface</p>
           </ScrollReveal>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
             {content.features.filter(f => f.active).map((feature, i) => {
               const IconComponent =
                 ICONS[feature.icon as keyof typeof ICONS] ?? Bot;
@@ -231,13 +233,13 @@ export default function LandingPage() {
                   key={feature.title}
                   animation="slide-up"
                   delay={i * 50}
-                  className="group p-6 bg-white/5 border border-white/10 rounded-2xl hover:border-purple-500/30 transition-all cursor-pointer card-hover-lift"
+                  className="group p-6 lg:p-8 bg-white/5 border border-white/10 rounded-2xl hover:border-purple-500/30 transition-all cursor-pointer card-hover-lift hover:bg-white/10"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center mb-4 group-hover:bg-purple-500/20 transition-colors">
-                    <IconComponent className="w-6 h-6 text-purple-400" />
+                  <div className="w-14 h-14 rounded-xl bg-purple-500/10 flex items-center justify-center mb-5 group-hover:bg-purple-500/20 transition-colors shadow-lg shadow-purple-500/10">
+                    <IconComponent className="w-7 h-7 text-purple-400" />
                   </div>
-                  <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
-                  <p className="text-gray-400 text-sm">{feature.description}</p>
+                  <h3 className="text-xl font-semibold mb-3">{feature.title}</h3>
+                  <p className="text-gray-400 leading-relaxed">{feature.description}</p>
                 </ScrollReveal>
               );
             })}
@@ -246,24 +248,24 @@ export default function LandingPage() {
       </section>
 
       {/* Pricing Section */}
-      <section id="pricing" className="py-20 px-6 bg-gradient-to-b from-transparent via-purple-500/5 to-transparent">
-        <div className="max-w-6xl mx-auto">
+      <section id="pricing" className="py-24 px-6">
+        <div className="max-w-[1440px] mx-auto">
           <ScrollReveal animation="slide-up" className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4">Simple, transparent pricing</h2>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-6">Simple, transparent pricing</h2>
             <p className="text-gray-400 text-lg">Choose the plan that fits your team</p>
           </ScrollReveal>
 
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
             {content.pricing.filter(p => p.active).map((plan, i) => (
               <ScrollReveal
                 key={plan.name}
                 animation="slide-up"
                 delay={i * 100}
                 className={cn(
-                  "p-8 rounded-2xl border transition-all cursor-pointer",
+                  "p-6 lg:p-8 rounded-2xl border transition-all cursor-pointer hover:scale-[1.02]",
                   plan.popular 
-                    ? "bg-purple-500/10 border-purple-500/30 relative" 
-                    : "bg-white/5 border-white/10"
+                    ? "bg-purple-500/10 border-purple-500/30 relative shadow-xl shadow-purple-500/10" 
+                    : "bg-white/5 border-white/10 hover:border-white/20"
                 )}
               >
                 {plan.popular && (
@@ -274,7 +276,7 @@ export default function LandingPage() {
                 <div className="mb-6">
                   <h3 className="text-xl font-semibold mb-2">{plan.name}</h3>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-4xl font-bold">${plan.price}</span>
+                    <span className="text-4xl lg:text-5xl font-bold">${plan.price}</span>
                     <span className="text-gray-400">/month</span>
                   </div>
                 </div>
@@ -289,9 +291,9 @@ export default function LandingPage() {
                 <Link 
                   href="/register" 
                   className={cn(
-                    "block w-full py-3 rounded-xl font-medium text-center transition-all",
+                    "block w-full py-3.5 rounded-xl font-medium text-center transition-all",
                     plan.popular 
-                      ? "bg-purple-500 hover:bg-purple-600" 
+                      ? "bg-purple-500 hover:bg-purple-600 hover:shadow-lg hover:shadow-purple-500/25" 
                       : "bg-white/10 hover:bg-white/20"
                   )}
                 >
@@ -304,10 +306,10 @@ export default function LandingPage() {
       </section>
 
       {/* FAQ Section */}
-      <section id="faq" className="py-20 px-6">
+      <section id="faq" className="py-24 px-6">
         <div className="max-w-3xl mx-auto">
           <ScrollReveal animation="slide-up" className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4">Frequently Asked Questions</h2>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-6">Frequently Asked Questions</h2>
             <p className="text-gray-400 text-lg">Everything you need to know about Outflo</p>
           </ScrollReveal>
 
@@ -317,20 +319,20 @@ export default function LandingPage() {
                 key={i}
                 animation="slide-up"
                 delay={i * 50}
-                className="border border-white/10 rounded-xl overflow-hidden"
+                className="border border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition-colors"
               >
                 <button
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
+                  className="w-full px-6 py-5 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
                 >
-                  <span className="font-medium">{faq.question}</span>
+                  <span className="font-medium text-lg">{faq.question}</span>
                   <div className={cn("transition-transform duration-200", openFaq === i && "rotate-180")}>
                     <ChevronDown className="w-5 h-5 text-gray-400" />
                   </div>
                 </button>
                 {openFaq === i ? (
-                    <div className="px-6 pb-4 animate-fade-in">
-                      <p className="text-gray-400">{faq.answer}</p>
+                    <div className="px-6 pb-5 animate-fade-in">
+                      <p className="text-gray-400 leading-relaxed">{faq.answer}</p>
                     </div>
                   ) : null}
               </ScrollReveal>
@@ -340,12 +342,12 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-6">
+      <section className="py-24 px-6">
         <div className="max-w-4xl mx-auto text-center">
-          <ScrollReveal animation="scale" className="p-12 rounded-3xl bg-gradient-to-br from-purple-500/20 to-purple-600/10 border border-purple-500/20">
-            <h2 className="text-4xl font-bold mb-4">Ready to supercharge your outreach?</h2>
-            <p className="text-xl text-gray-400 mb-8">Join thousands of teams already using Outflo to scale their outbound.</p>
-            <Link href="/register" className="inline-flex items-center gap-2 px-8 py-4 bg-purple-500 hover:bg-purple-600 rounded-xl font-semibold transition-all hover:scale-105">
+          <ScrollReveal animation="scale" className="p-8 lg:p-16 rounded-3xl bg-gradient-to-br from-purple-500/20 to-purple-600/10 border border-purple-500/20">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-6">Ready to supercharge your outreach?</h2>
+            <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">Join thousands of teams already using Outflo to scale their outbound.</p>
+            <Link href="/register" className="inline-flex items-center gap-2 px-8 py-4 bg-purple-500 hover:bg-purple-600 rounded-xl font-semibold transition-all hover:scale-105 hover:shadow-xl hover:shadow-purple-500/25">
               Start Your Free Trial
               <ArrowRight className="w-5 h-5" />
             </Link>
@@ -354,14 +356,14 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-12 px-6 border-t border-white/5">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
-                <Zap className="w-4 h-4 text-white" />
+      <footer className="py-16 px-6 border-t border-white/5">
+        <div className="max-w-[1440px] mx-auto">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
+                <Zap className="w-5 h-5 text-white" />
               </div>
-              <span className="font-semibold">{content.footer.company}</span>
+              <span className="text-lg font-semibold">{content.footer.company}</span>
             </div>
             <div className="text-gray-400 text-sm">
               {content.footer.copyright}
