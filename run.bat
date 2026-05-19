@@ -1,132 +1,75 @@
 @echo off
 setlocal
 
-set "PROJECT_ROOT=%~dp0"
+cd /d "%~dp0"
 
-echo ============================================================
-echo   OUTFLO - AI OUTREACH AUTOMATION PLATFORM
-echo   Starting Services...
-echo ============================================================
+echo ================================================================================
+echo                    OUTFLO - AI OUTREACH AUTOMATION
+echo ================================================================================
 echo.
 
-echo [1/5] Checking Python...
+echo [1/4] Checking Python...
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo   ERROR: Python not found! Please install Python 3.9+
+    echo ERROR: Install Python from python.org
     pause
-    exit /b 1
+    exit
 )
-echo   [OK] Python detected
+echo [OK] Python ready
 
-echo [2/5] Checking Node.js...
+echo [2/4] Checking Node.js...
 node --version >nul 2>&1
 if errorlevel 1 (
-    echo   ERROR: Node.js not found! Please install Node.js
+    echo ERROR: Install Node.js from nodejs.org
     pause
-    exit /b 1
+    exit
 )
-echo   [OK] Node.js detected
+echo [OK] Node.js ready
 
-echo [3/5] Setting Up Backend...
-cd /d "%PROJECT_ROOT%apps\backend"
+echo [3/4] Backend Setup...
+cd apps\backend
 
 if not exist "venv" (
-    echo   Creating virtual environment...
     python -m venv venv
-    echo   [OK] Virtual environment created
 )
 
-echo   Installing Python dependencies...
-call venv\Scripts\pip.exe install -r requirements.txt --upgrade -q
-echo   [OK] Python dependencies ready
+call venv\Scripts\pip.exe install -r requirements.txt -q 2>nul
+echo [OK] Backend ready
 
-if not exist ".env" (
-    if exist ".env.example" (
-        copy .env.example .env >nul 2>&1
-    )
-)
-
-findstr /C:"SYSTEM_OWNER_EMAIL" .env >nul 2>&1
-if errorlevel 1 (
-    echo SYSTEM_OWNER_EMAIL=admin@outflo.com >> .env
-    echo SYSTEM_OWNER_PASSWORD=Outflo@2024! >> .env
-    echo SYSTEM_OWNER_JWT_SECRET=so-jwt-secret-dev-change-in-prod-xyz123 >> .env
-    echo   [OK] System Owner credentials created
-)
-
-if not exist "storage" mkdir storage
-
-echo.
-echo [4/5] Setting Up Frontend...
-cd /d "%PROJECT_ROOT%apps\frontend"
+cd ..\frontend
 
 if not exist "node_modules" (
-    echo   Installing npm packages...
-    call npm install -q
-    echo   [OK] npm packages installed
-) else (
-    call npm install -q
-    echo   [OK] npm packages ready
+    call npm install --legacy-peer-deps -q 2>nul
 )
+echo [OK] Frontend ready
 
-if not exist ".env.local" (
-    echo NEXT_PUBLIC_API_URL=http://localhost:8000 > .env.local
-    echo NEXT_PUBLIC_APP_URL=http://localhost:3000 >> .env.local
-)
-
-call npm list recharts -q >nul 2>&1
-if errorlevel 1 (
-    call npm install recharts --legacy-peer-deps -q
-)
-
-echo   [OK] Frontend ready
-
-echo.
-echo [5/5] Starting Services...
+echo [4/4] Starting servers...
 echo.
 
-echo   Stopping any existing services...
-taskkill /F /IM python.exe >nul 2>&1
-taskkill /F /IM node.exe >nul 2>&1
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":3000" ^| findstr LISTENING') do taskkill /F /PID %%a >nul 2>&1
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":3001" ^| findstr LISTENING') do taskkill /F /PID %%a >nul 2>&1
-timeout /t 2 /nobreak >nul
+cd ..\backend
+echo Starting backend on http://localhost:8000 ...
+start "OUTFLO-BACKEND" cmd /k "cd /d "%~dp0apps\backend" && venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
 
-echo   Starting backend server...
-start "OUTFLO_BACKEND" cmd /k "cd /d "%PROJECT_ROOT%apps\backend" && venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
-
-timeout /t 5 /nobreak >nul
-
-echo   Starting frontend server (clean .next cache)...
-start "OUTFLO_FRONTEND" cmd /k "cd /d "%PROJECT_ROOT%apps\frontend" && set PORT=3000&& npm run dev:clean"
-
-timeout /t 3 /nobreak >nul
+cd ..\frontend
+echo Starting frontend on http://localhost:3000 ...
+start "OUTFLO-FRONTEND" cmd /k "cd /d "%~dp0apps\frontend" && npm run dev"
 
 echo.
-echo ============================================================
+echo ================================================================================
 echo   OUTFLO IS RUNNING!
-echo ============================================================
+echo ================================================================================
 echo.
-echo   ACCESS POINTS:
-echo   - Frontend:     http://localhost:3000
-echo   - Backend API:  http://localhost:8000
-echo   - API Docs:     http://localhost:8000/docs
+echo   Frontend:    http://localhost:3000
+echo   Backend:     http://localhost:8000
+echo   API Docs:    http://localhost:8000/docs
 echo.
-echo   ============================================================
-echo   LOGIN CREDENTIALS
-echo   ============================================================
+echo   Login:       http://localhost:3000/login
+echo   Register:   http://localhost:3000/register
 echo.
-echo   SYSTEM OWNER LOGIN:
-echo   - URL:      http://localhost:3000/system-owner/login
-echo   - Email:    admin@outflo.com
-echo   - Password: Outflo@2024!
+echo   System Owner: admin@outflo.com / Outflo@2024!
+echo ================================================================================
 echo.
-echo   ORGANIZATION LOGIN:
-echo   - URL:      http://localhost:3000/login
-echo   - Register new organization at /register
-echo.
-echo   Opening browser...
-start http://localhost:3000/landing
-echo.
-echo   Press any key to exit...
+echo Press Enter to open browser...
 pause >nul
+
+start http://localhost:3000/login

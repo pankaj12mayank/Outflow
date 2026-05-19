@@ -114,10 +114,11 @@ export default function SystemOwnerOrganizationsPage() {
             value={filter}
             onChange={(e) => setFilter(e.target.value as any)}
             className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white"
+            style={{backgroundColor: 'rgba(255,255,255,0.05)'}}
           >
-            <option value="all">All</option>
-            <option value="active">Active</option>
-            <option value="suspended">Suspended</option>
+            <option value="all" style={{backgroundColor: '#0a0a0f'}}>All</option>
+            <option value="active" style={{backgroundColor: '#0a0a0f'}}>Active</option>
+            <option value="suspended" style={{backgroundColor: '#0a0a0f'}}>Suspended</option>
           </select>
           <button
             type="button"

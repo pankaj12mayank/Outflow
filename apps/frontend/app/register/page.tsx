@@ -173,7 +173,13 @@ export default function RegisterPage() {
       // After registration, redirect to dashboard
       router.push("/app/dashboard?onboarding=complete");
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Registration failed. Please try again.");
+      console.error("Registration error:", err);
+      const detail = err.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setError(detail.map((d: any) => d.msg || d).join(", "));
+      } else {
+        setError(detail || "Registration failed. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -382,10 +388,11 @@ export default function RegisterPage() {
                     value={data.industry}
                     onChange={(e) => updateData("industry", e.target.value)}
                     className="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20"
+                    style={{backgroundColor: 'rgba(255,255,255,0.05)'}}
                   >
-                    <option value="">Select your industry</option>
+                    <option value="" style={{backgroundColor: '#0a0a0f', color: '#9ca3af'}}">Select your industry</option>
                     {INDUSTRIES.map(ind => (
-                      <option key={ind} value={ind}>{ind}</option>
+                      <option key={ind} value={ind} style={{backgroundColor: '#0a0a0f', color: 'white'}}>{ind}</option>
                     ))}
                   </select>
                 </div>
@@ -396,10 +403,11 @@ export default function RegisterPage() {
                     value={data.companySize}
                     onChange={(e) => updateData("companySize", e.target.value)}
                     className="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20"
+                    style={{backgroundColor: 'rgba(255,255,255,0.05)'}}
                   >
-                    <option value="">Select company size</option>
+                    <option value="" style={{backgroundColor: '#0a0a0f', color: '#9ca3af'}}">Select company size</option>
                     {COMPANY_SIZES.map(size => (
-                      <option key={size} value={size}>{size}</option>
+                      <option key={size} value={size} style={{backgroundColor: '#0a0a0f', color: 'white'}}>{size}</option>
                     ))}
                   </select>
                 </div>
@@ -455,13 +463,14 @@ export default function RegisterPage() {
                     value={data.monthlyLeads}
                     onChange={(e) => updateData("monthlyLeads", e.target.value)}
                     className="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20"
+                    style={{backgroundColor: 'rgba(255,255,255,0.05)'}}
                   >
-                    <option value="">Select range</option>
-                    <option value="0-100">0-100</option>
-                    <option value="100-500">100-500</option>
-                    <option value="500-1000">500-1000</option>
-                    <option value="1000-5000">1000-5000</option>
-                    <option value="5000+">5000+</option>
+                    <option value="" style={{backgroundColor: '#0a0a0f', color: '#9ca3af'}}">Select range</option>
+                    <option value="0-100" style={{backgroundColor: '#0a0a0f', color: 'white'}}>0-100</option>
+                    <option value="100-500" style={{backgroundColor: '#0a0a0f', color: 'white'}}>100-500</option>
+                    <option value="500-1000" style={{backgroundColor: '#0a0a0f', color: 'white'}}>500-1000</option>
+                    <option value="1000-5000" style={{backgroundColor: '#0a0a0f', color: 'white'}}>1000-5000</option>
+                    <option value="5000+" style={{backgroundColor: '#0a0a0f', color: 'white'}}>5000+</option>
                   </select>
                 </div>
               </motion.div>

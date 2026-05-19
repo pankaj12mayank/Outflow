@@ -171,36 +171,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [state.isAuthenticated, state.isLoading, pathname, router]);
 
   const login = async (email: string, password: string) => {
-    const response = await api.post("/api/v1/auth/login", { email, password });
-    const { user: rawUser, tokens } = response.data;
-    const user = addPermissionsToUser(rawUser);
+    try {
+      const response = await api.post("/api/v1/auth/login", { email, password });
+      const { user: rawUser, tokens } = response.data;
+      const user = addPermissionsToUser(rawUser);
 
-    localStorage.setItem("access_token", tokens.access_token);
-    localStorage.setItem("refresh_token", tokens.refresh_token);
+      localStorage.setItem("access_token", tokens.access_token);
+      localStorage.setItem("refresh_token", tokens.refresh_token);
 
-    api.defaults.headers.common["Authorization"] = `Bearer ${tokens.access_token}`;
+      api.defaults.headers.common["Authorization"] = `Bearer ${tokens.access_token}`;
 
-    setState({ user, isAuthenticated: true, isLoading: false });
-    router.push("/app/dashboard");
+      setState({ user, isAuthenticated: true, isLoading: false });
+      
+      if (user.role === "system_owner" || user.is_super_admin) {
+        router.push("/system-owner/dashboard");
+      } else {
+        router.push("/app/dashboard");
+      }
+    } catch (error: any) {
+      console.error("Login failed:", error.response?.data || error.message);
+      throw error;
+    }
   };
 
   const register = async (email: string, password: string, fullName: string, orgName: string) => {
-    const response = await api.post("/api/v1/auth/register", {
-      email,
-      password,
-      full_name: fullName,
-      organization_name: orgName,
-    });
-    const { user: rawUser, tokens } = response.data;
-    const user = addPermissionsToUser(rawUser);
+    try {
+      const response = await api.post("/api/v1/auth/register", {
+        email,
+        password,
+        full_name: fullName,
+        organization_name: orgName,
+      });
+      const { user: rawUser, tokens } = response.data;
+      const user = addPermissionsToUser(rawUser);
 
-    localStorage.setItem("access_token", tokens.access_token);
-    localStorage.setItem("refresh_token", tokens.refresh_token);
+      localStorage.setItem("access_token", tokens.access_token);
+      localStorage.setItem("refresh_token", tokens.refresh_token);
 
-    api.defaults.headers.common["Authorization"] = `Bearer ${tokens.access_token}`;
+      api.defaults.headers.common["Authorization"] = `Bearer ${tokens.access_token}`;
 
-    setState({ user, isAuthenticated: true, isLoading: false });
-    router.push("/app/dashboard");
+      setState({ user, isAuthenticated: true, isLoading: false });
+      router.push("/app/dashboard");
+    } catch (error: any) {
+      console.error("Registration failed:", error.response?.data || error.message);
+      throw error;
+    }
   };
 
   const logout = async () => {

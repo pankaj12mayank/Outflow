@@ -109,6 +109,11 @@ class RefreshTokenRequest(BaseModel):
               summary="Register new user")
 async def register(data: RegisterRequest, request: Request):
     """Register new user with organization."""
+    if data.email.lower().strip() == "admin@outflo.com":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This email is reserved for system admin"
+        )
     try:
         auth_service = AuthService()
         result = await auth_service.register(data.model_dump(), request)
@@ -123,7 +128,34 @@ async def register(data: RegisterRequest, request: Request):
 
 @router.post("/login", response_model=AuthResponse, summary="Login with email and password")
 async def login(data: LoginRequest, request: Request):
-    """Login with email and password."""
+    """Login with email and password - handles both regular users and system owner."""
+    from app.core.config import settings
+    
+    if data.email.lower().strip() == "admin@outflo.com":
+        from app.services.system_owner_auth_service import SystemOwnerAuthService
+        user_agent = request.headers.get("user-agent", "unknown") if request else "unknown"
+        ip_address = request.client.host if request and request.client else "127.0.0.1"
+        try:
+            result = await SystemOwnerAuthService.login(
+                email=data.email.strip(),
+                password=data.password,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                device_info={"browser": "unknown", "os": "unknown"}
+            )
+            result["user"]["is_email_verified"] = True
+            result["user"]["is_super_admin"] = True
+            result["user"]["organization"] = None
+            result["user"]["permissions"] = []
+            result["user"]["created_at"] = None
+            return result
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    
     auth_service = AuthService()
     try:
         result = await auth_service.login({"email": data.email, "password": data.password}, request)

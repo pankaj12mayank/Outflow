@@ -53,12 +53,12 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             app_logger.warning(f"System owner bootstrap skipped: {e}")
 
-try:
-                from .services.ai.bootstrap import bootstrap_ai_providers
-                active_ai = bootstrap_ai_providers()
-                app_logger.info(f"AI provider ready: {active_ai}")
-            except Exception as e:
-                app_logger.warning(f"AI bootstrap skipped: {e}")
+        try:
+            from .services.ai.bootstrap import bootstrap_ai_providers
+            active_ai = bootstrap_ai_providers()
+            app_logger.info(f"AI provider ready: {active_ai}")
+        except Exception as e:
+            app_logger.warning(f"AI bootstrap skipped: {e}")
 
         try:
             from app.email_engine.services.template import TemplateService
