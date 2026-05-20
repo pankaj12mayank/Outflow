@@ -38,7 +38,20 @@ api.interceptors.response.use(
     const originalRequest = error.config;
 
     if (!error.response) {
-      toast.error("Network error", "Please check your connection and try again.");
+      const requestUrl = `${error.config?.url || ""}`;
+      const isSystemOwnerRoute =
+        requestUrl.includes("/system-owner-auth") ||
+        requestUrl.includes("/system-owner/") ||
+        requestUrl.includes("/system-owner-dashboard") ||
+        requestUrl.includes("/system-owner/platform");
+      
+      if (isSystemOwnerRoute) {
+        localStorage.removeItem("system_owner_token");
+        localStorage.removeItem("system_owner_refresh_token");
+        if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
+          toast.error("Connection error", "Cannot connect to server. Please check your network.");
+        }
+      }
       return Promise.reject(error);
     }
 
@@ -64,7 +77,7 @@ api.interceptors.response.use(
             const response = await axios.post(
               `${API_BASE_URL}/api/v1/system-owner-auth/refresh`,
               { refresh_token: refreshToken },
-              { skipAuthRefresh: true }
+              { skipAuthRefresh: true } as any
             );
             const { access_token, refresh_token } = response.data;
             localStorage.setItem("system_owner_token", access_token);
@@ -78,7 +91,7 @@ api.interceptors.response.use(
             const response = await axios.post(
               `${API_BASE_URL}/api/v1/auth/refresh`,
               { refresh_token: refreshToken },
-              { skipAuthRefresh: true }
+              { skipAuthRefresh: true } as any
             );
 
             const { access_token, refresh_token } = response.data;
@@ -95,9 +108,7 @@ api.interceptors.response.use(
         if (isSystemOwnerRoute) {
           localStorage.removeItem("system_owner_token");
           localStorage.removeItem("system_owner_refresh_token");
-          if (!window.location.pathname.startsWith("/system-owner/login")) {
-            window.location.href = "/system-owner/login";
-          }
+          toast.error("Session expired", "Please log in again");
         } else {
           localStorage.removeItem("access_token");
           localStorage.removeItem("refresh_token");
@@ -111,9 +122,6 @@ api.interceptors.response.use(
             path.startsWith("/reset-password");
           if (!isPublic) {
             toast.error("Session expired", "Please log in again");
-            if (!path.startsWith("/login")) {
-              window.location.href = "/login";
-            }
           }
         }
         return Promise.reject(refreshError);

@@ -127,18 +127,22 @@ export function SystemOwnerAuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async (allDevices: boolean = false) => {
+    const token = localStorage.getItem("system_owner_token");
+    clearAuth();
     try {
-      const token = localStorage.getItem("system_owner_token");
       if (token) {
         await api.post(
           "/api/v1/system-owner-auth/logout",
           { all_devices: allDevices },
-          { headers: getAuthHeaders() }
+          { headers: { Authorization: `Bearer ${token}` } }
         );
       }
+    } catch {
+      // ignore logout API errors - we already cleared local auth
     } finally {
-      clearAuth();
-      router.push("/system-owner/login");
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
     }
   };
 

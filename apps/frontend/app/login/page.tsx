@@ -5,20 +5,34 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAuth } from "@/app/hooks/useAuth";
+import { useSystemOwnerAuth } from "@/app/hooks/useSystemOwnerAuth";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Loader2, Mail, Lock, AlertCircle, Zap, Eye, EyeOff } from "lucide-react";
+import { SYSTEM_OWNER_EMAIL } from "@/app/lib/auth-constants";
+import { Loader2, Mail, Lock, AlertCircle, Zap, Eye, EyeOff, Shield } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
+  const { login: systemOwnerLogin } = useSystemOwnerAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  const isSystemOwner = email.toLowerCase() === SYSTEM_OWNER_EMAIL.toLowerCase();
+
+  const getDeviceInfo = () => {
+    return {
+      device_id: localStorage.getItem("device_id") || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      device_type: /Mobi|Android/i.test(navigator.userAgent) ? "mobile" : "desktop",
+      browser: "Chrome",
+      os: "Windows"
+    };
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +40,13 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      if (email.toLowerCase() === SYSTEM_OWNER_EMAIL.toLowerCase()) {
+        await systemOwnerLogin(email, password, getDeviceInfo());
+        router.push("/system-owner/dashboard");
+      } else {
+        await login(email, password);
+        router.push("/app/dashboard");
+      }
     } catch (err: unknown) {
       const ax = err as { response?: { data?: { detail?: string } } };
       const detail = ax.response?.data?.detail;
@@ -79,10 +99,22 @@ export default function LoginPage() {
                 placeholder="you@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="pl-10 bg-white/5 border-white/10"
+                className={cn(
+                  "pl-10 bg-white/5 border-white/10",
+                  email.toLowerCase() === SYSTEM_OWNER_EMAIL.toLowerCase() && "border-purple-500/50"
+                )}
                 required
               />
+              {email.toLowerCase() === SYSTEM_OWNER_EMAIL.toLowerCase() && (
+                <Shield className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-purple-400" />
+              )}
             </div>
+            {email.toLowerCase() === SYSTEM_OWNER_EMAIL.toLowerCase() && (
+              <p className="text-xs text-purple-400 flex items-center gap-1">
+                <Shield className="w-3 h-3" />
+                System Owner login detected
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -124,8 +156,6 @@ export default function LoginPage() {
             )}
           </Button>
         </form>
-
-        
 
         <p className="text-center text-sm text-gray-400 mt-6">
           Don&apos;t have an account?{" "}

@@ -119,7 +119,7 @@ export default function EmailTemplatesPage() {
           <p>No templates found</p>
         </div>
       ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredTemplates.map((template) => (
             <div
               key={template._id}
@@ -157,12 +157,6 @@ export default function EmailTemplatesPage() {
                 >
                   <Edit className="w-4 h-4" />
                   Edit
-                </button>
-                <button 
-                  onClick={() => handleDuplicate(template._id, `${template.name} (Copy)`)}
-                  className="p-2 rounded-lg bg-white/5 hover:bg-white/10"
-                >
-                  <Copy className="w-4 h-4" />
                 </button>
                 <button 
                   onClick={() => handleDelete(template._id)}
@@ -206,25 +200,47 @@ function CreateTemplateModal({ onClose, onSuccess }: { onClose: () => void; onSu
     subject: "",
     html_content: "",
     text_content: "",
-    category: "general"
+    category: "general",
+    trigger_id: ""
   });
+  const [triggers, setTriggers] = useState<any[]>([]);
+  const [triggerError, setTriggerError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    api.get("/api/v1/email-engine/triggers", {
+      headers: authHeaders(),
+      params: { status: "active", page_size: 50 }
+    }).then(res => {
+      setTriggers(res.data?.triggers || []);
+    }).catch(() => {});
+  }, []);
+
   const handleSubmit = async () => {
+    if (!form.trigger_id) {
+      setTriggerError("Please select a trigger first before creating a template");
+      toast.error("Trigger required", "Please select a trigger that will use this template");
+      return;
+    }
+    
+    setTriggerError("");
     if (!form.name || !form.subject || !form.html_content) {
-      toast.error("Please fill in required fields");
+      toast.error("Missing fields", "Please fill in all required fields");
       return;
     }
     
     setSaving(true);
     try {
-      await api.post("/api/v1/email-engine/templates", form, {
+      await api.post("/api/v1/email-engine/templates", {
+        ...form,
+        status: "draft"
+      }, {
         headers: authHeaders()
       });
-      toast.success("Template created");
+      toast.success("Template ready", `Template created - now link it to your selected trigger`);
       onSuccess();
     } catch (error) {
-      toast.error("Failed to create template");
+      toast.error("Something went wrong", "Could not create the template. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -236,6 +252,25 @@ function CreateTemplateModal({ onClose, onSuccess }: { onClose: () => void; onSu
         <h2 className="text-xl font-bold mb-6">Create Email Template</h2>
         
         <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Select Trigger *</label>
+            <select
+              value={form.trigger_id}
+              onChange={(e) => {
+                setForm({ ...form, trigger_id: e.target.value });
+                setTriggerError("");
+              }}
+              className="w-full px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white"
+            >
+              <option value="">Choose a trigger for this template...</option>
+              {triggers.map(t => (
+                <option key={t._id} value={t._id}>{t.name} ({t.event_type})</option>
+              ))}
+            </select>
+            {triggerError && <p className="text-xs text-yellow-400 mt-1">{triggerError}</p>}
+            <p className="text-xs text-gray-500 mt-1">Template can only be created when a trigger is selected</p>
+          </div>
+          
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Template Name *</label>
             <input

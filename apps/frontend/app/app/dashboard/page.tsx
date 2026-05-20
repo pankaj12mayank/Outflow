@@ -27,11 +27,11 @@ import api from "@/app/lib/api";
 interface DashboardStats {
   totalLeads: number;
   activeCampaigns: number;
-  emailsSent: number;
+  emailAnalyticsSent: number;
   replyRate: number;
   leadsGrowth: number;
   campaignsGrowth: number;
-  emailsGrowth: number;
+  emailAnalyticsGrowth: number;
   replyRateGrowth: number;
 }
 
@@ -53,16 +53,15 @@ interface ActivityItem {
   status: string;
 }
 
-const calculateGrowth = (current: number, previous: number): { value: number; trend: "up" | "down" | "neutral" } => {
-  if (previous === 0) {
-    return current > 0 ? { value: 0, trend: "up" } : { value: 0, trend: "neutral" };
-  }
-  const growth = ((current - previous) / previous) * 100;
-  return {
-    value: Math.abs(growth),
-    trend: growth > 0 ? "up" : growth < 0 ? "down" : "neutral"
+const calculateTrend = (value: number | undefined | null): "up" | "down" | "neutral" => {
+    if (value === undefined || value === null || value === 0) return "neutral";
+    return value > 0 ? "up" : value < 0 ? "down" : "neutral";
   };
-};
+
+  const formatGrowth = (value: number | undefined | null): number => {
+    if (value === undefined || value === null || value === 0) return 0;
+    return Math.abs(value);
+  };
 
 function StatCard({
   name,
@@ -81,6 +80,8 @@ function StatCard({
   color: "purple" | "green";
   loading?: boolean;
 }) {
+  const isNeutral = trend === "neutral";
+  
   if (loading) {
     return (
       <div className="p-6 rounded-2xl border border-white/5 bg-gradient-to-b from-white/5 to-transparent">
@@ -97,13 +98,20 @@ function StatCard({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="p-6 rounded-2xl border border-white/5 bg-gradient-to-b from-white/5 to-transparent hover:border-white/10 transition-all"
+      className={cn(
+        "p-6 rounded-2xl border transition-all hover:border-white/10",
+        isNeutral 
+          ? "bg-gradient-to-b from-gray-500/5 to-transparent border-gray-500/10" 
+          : "bg-gradient-to-b from-white/5 to-transparent border-white/5"
+      )}
     >
       <div className="flex items-start justify-between mb-4">
         <div
           className={cn(
             "w-12 h-12 rounded-xl flex items-center justify-center",
-            color === "purple"
+            isNeutral
+              ? "bg-gray-500/10 border border-gray-500/20"
+              : color === "purple"
               ? "bg-purple-500/10 border border-purple-500/20"
               : "bg-green-500/10 border border-green-500/20"
           )}
@@ -111,7 +119,7 @@ function StatCard({
           <Icon
             className={cn(
               "w-6 h-6",
-              color === "purple" ? "text-purple-400" : "text-green-400"
+              isNeutral ? "text-gray-400" : color === "purple" ? "text-purple-400" : "text-green-400"
             )}
           />
         </div>
@@ -126,7 +134,7 @@ function StatCard({
           ) : trend === "down" ? (
             <ArrowDownRight className="w-4 h-4" />
           ) : null}
-          {growth > 0 ? `${growth.toFixed(1)}%` : trend === "neutral" ? "0%" : ""}
+          {isNeutral ? "0%" : growth > 0 ? `${growth.toFixed(1)}%` : ""}
         </div>
       </div>
       <div className="text-3xl font-bold mb-1">{value}</div>
@@ -144,15 +152,16 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats>({
     totalLeads: 0,
     activeCampaigns: 0,
-    emailsSent: 0,
+    emailAnalyticsSent: 0,
     replyRate: 0,
     leadsGrowth: 0,
     campaignsGrowth: 0,
-    emailsGrowth: 0,
+    emailAnalyticsGrowth: 0,
     replyRateGrowth: 0,
   });
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [emailAnalytics, setEmailAnalytics] = useState<any>({});
 
   const dateOptions = [
     "Last 7 days",
@@ -180,23 +189,29 @@ export default function DashboardPage() {
 
       const leads = analytics.leads || {};
       const campaignData = analytics.campaigns || {};
-      const emails = analytics.emails || {};
+      const emailAnalytics = analytics.emailAnalytics || {};
       const sales = analytics.sales || {};
 
       const totalLeads = leads.total || 0;
       const activeCampaigns = campaignData.active || 0;
-      const emailsSent = emails.sent || 0;
-      const replyRate = emails.replied && emails.sent ? ((emails.replied / emails.sent) * 100).toFixed(1) : "0";
+      const emailAnalyticsSent = emailAnalytics.sent || 0;
+      const replyRate = emailAnalytics.replied && emailAnalytics.sent ? ((emailAnalytics.replied / emailAnalytics.sent) * 100).toFixed(1) : "0";
+
+      // Calculate real growth from API data (comparing current vs previous period)
+      const leadsGrowth = leads.growth !== undefined ? leads.growth : 0;
+      const campaignsGrowth = campaignData.growth !== undefined ? campaignData.growth : 0;
+      const emailAnalyticsGrowth = emailAnalytics.growth !== undefined ? emailAnalytics.growth : 0;
+      const replyRateGrowth = parseFloat(replyRate as string) > 0 ? (emailAnalytics.growth || 0) : 0;
 
       setStats({
         totalLeads,
         activeCampaigns,
-        emailsSent,
+        emailAnalyticsSent,
         replyRate: parseFloat(replyRate as string),
-        leadsGrowth: totalLeads > 0 ? Math.random() * 20 : 0,
-        campaignsGrowth: activeCampaigns > 0 ? Math.random() * 15 : 0,
-        emailsGrowth: emailsSent > 0 ? Math.random() * 25 : 0,
-        replyRateGrowth: parseFloat(replyRate as string) > 0 ? Math.random() * 10 : 0,
+        leadsGrowth,
+        campaignsGrowth,
+        emailAnalyticsGrowth,
+        replyRateGrowth,
       });
 
       const formattedCampaigns = Array.isArray(campaignsData) 
@@ -204,13 +219,14 @@ export default function DashboardPage() {
             id: c.id || c._id || String(i + 1),
             name: c.name || `Campaign ${i + 1}`,
             leads: c.leads_count || c.leads || 0,
-            sent: c.emails_sent || c.sent || 0,
+            sent: c.emailAnalytics_sent || c.sent || 0,
             replies: c.replies || 0,
             replyRate: c.reply_rate || 0,
             status: c.status || "active",
           }))
         : [];
       setCampaigns(formattedCampaigns);
+      setEmailAnalytics(emailAnalytics);
 
       setActivities([
         { id: "1", type: "lead_enriched", message: "Dashboard data loaded successfully", time: "Just now", status: "success" },
@@ -221,13 +237,15 @@ export default function DashboardPage() {
       setStats({
         totalLeads: 0,
         activeCampaigns: 0,
-        emailsSent: 0,
+        emailAnalyticsSent: 0,
         replyRate: 0,
         leadsGrowth: 0,
         campaignsGrowth: 0,
-        emailsGrowth: 0,
+        emailAnalyticsGrowth: 0,
         replyRateGrowth: 0,
       });
+      setCampaigns([]);
+      setActivities([]);
     } finally {
       setLoading(false);
     }
@@ -243,38 +261,38 @@ export default function DashboardPage() {
     {
       name: "Total Leads",
       value: formatNumber(stats.totalLeads),
-      growth: stats.leadsGrowth,
-      trend: stats.leadsGrowth > 0 ? "up" : stats.leadsGrowth < 0 ? "down" : "neutral" as "up" | "down" | "neutral",
+      growth: formatGrowth(stats.leadsGrowth),
+      trend: calculateTrend(stats.leadsGrowth),
       icon: Users,
       color: "purple" as const,
     },
     {
       name: "Active Campaigns",
       value: stats.activeCampaigns,
-      growth: stats.campaignsGrowth,
-      trend: stats.campaignsGrowth > 0 ? "up" : stats.campaignsGrowth < 0 ? "down" : "neutral" as "up" | "down" | "neutral",
+      growth: formatGrowth(stats.campaignsGrowth),
+      trend: calculateTrend(stats.campaignsGrowth),
       icon: Target,
       color: "green" as const,
     },
     {
       name: "Emails Sent",
-      value: formatNumber(stats.emailsSent),
-      growth: stats.emailsGrowth,
-      trend: stats.emailsGrowth > 0 ? "up" : stats.emailsGrowth < 0 ? "down" : "neutral" as "up" | "down" | "neutral",
+      value: formatNumber(stats.emailAnalyticsSent),
+      growth: formatGrowth(stats.emailAnalyticsGrowth),
+      trend: calculateTrend(stats.emailAnalyticsGrowth),
       icon: Mail,
       color: "purple" as const,
     },
     {
       name: "Avg. Reply Rate",
       value: `${stats.replyRate}%`,
-      growth: stats.replyRateGrowth,
-      trend: stats.replyRateGrowth > 0 ? "up" : stats.replyRateGrowth < 0 ? "down" : "neutral" as "up" | "down" | "neutral",
+      growth: formatGrowth(stats.replyRateGrowth),
+      trend: calculateTrend(stats.replyRateGrowth),
       icon: TrendingUp,
       color: "green" as const,
     },
   ];
 
-  const hasData = stats.totalLeads > 0 || stats.activeCampaigns > 0 || stats.emailsSent > 0;
+  const hasData = stats.totalLeads > 0 || stats.activeCampaigns > 0 || stats.emailAnalyticsSent > 0;
 
   return (
     <div className="space-y-8">
@@ -437,61 +455,63 @@ export default function DashboardPage() {
         <div className="grid md:grid-cols-2 gap-6">
           <div className="p-6 rounded-2xl border border-white/5 bg-gradient-to-b from-white/5 to-transparent">
             <h2 className="text-xl font-bold mb-6">Reply Rate Trend</h2>
-            <div className="h-48 flex items-end justify-between gap-2">
-              {[65, 72, 68, 78, 82, 75, 88, 92, 85, 95, 88, 98].map((value, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ height: 0 }}
-                  animate={{ height: `${value}%` }}
-                  transition={{ delay: i * 0.05, duration: 0.5 }}
-                  className="flex-1 rounded-t-lg bg-gradient-to-t from-purple-600 to-purple-400"
-                />
-              ))}
-            </div>
-            <div className="flex justify-between mt-4 text-xs text-gray-400">
-              <span>Jan</span>
-              <span>Feb</span>
-              <span>Mar</span>
-              <span>Apr</span>
-              <span>May</span>
-              <span>Jun</span>
-              <span>Jul</span>
-              <span>Aug</span>
-              <span>Sep</span>
-              <span>Oct</span>
-              <span>Nov</span>
-              <span>Dec</span>
-            </div>
+            {emailAnalytics.replies_trend && emailAnalytics.replies_trend.length > 0 ? (
+              <>
+                <div className="h-48 flex items-end justify-between gap-2">
+                  {emailAnalytics.replies_trend.map((value: number, i: number) => (
+                    <motion.div
+                      key={i}
+                      initial={{ height: 0 }}
+                      animate={{ height: `${Math.max(value, 5)}%` }}
+                      transition={{ delay: i * 0.05, duration: 0.5 }}
+                      className="flex-1 rounded-t-lg bg-gradient-to-t from-purple-600 to-purple-400"
+                    />
+                  ))}
+                </div>
+                <div className="flex justify-between mt-4 text-xs text-gray-400">
+                  <span>Period 1</span>
+                  <span>Period 2</span>
+                  <span>Period 3</span>
+                  <span>Period 4</span>
+                  <span>Period 5</span>
+                  <span>Period 6</span>
+                </div>
+              </>
+            ) : (
+              <div className="h-48 flex items-center justify-center text-gray-400">
+                <p>No trend data available</p>
+              </div>
+            )}
           </div>
 
           <div className="p-6 rounded-2xl border border-white/5 bg-gradient-to-b from-white/5 to-transparent">
             <h2 className="text-xl font-bold mb-6">Lead Sources</h2>
-            <div className="space-y-4">
-              {[
-                { source: "LinkedIn", count: 0, percentage: 0 },
-                { source: "Cold Outreach", count: 0, percentage: 0 },
-                { source: "Referrals", count: 0, percentage: 0 },
-                { source: "Webinars", count: 0, percentage: 0 },
-                { source: "Other", count: 0, percentage: 0 },
-              ].map((item, i) => (
-                <div key={item.source}>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span>{item.source}</span>
-                    <span className="text-gray-400">
-                      {item.count.toLocaleString()} ({item.percentage}%)
-                    </span>
+            {emailAnalytics.lead_sources && emailAnalytics.lead_sources.length > 0 ? (
+              <div className="space-y-4">
+                {emailAnalytics.lead_sources.map((item: { source: string; count: number; percentage: number }, i: number) => (
+                  <div key={item.source}>
+                    <div className="flex justify-between text-sm mb-2">
+                      <span>{item.source}</span>
+                      <span className="text-gray-400">
+                        {item.count.toLocaleString()} ({item.percentage}%)
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${item.percentage}%` }}
+                        transition={{ delay: i * 0.1, duration: 0.5 }}
+                        className="h-full rounded-full bg-gradient-to-r from-purple-500 to-purple-400"
+                      />
+                    </div>
                   </div>
-                  <div className="h-2 rounded-full bg-white/5 overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${item.percentage}%` }}
-                      transition={{ delay: i * 0.1, duration: 0.5 }}
-                      className="h-full rounded-full bg-gradient-to-r from-purple-500 to-purple-400"
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-400">
+                <p>No source data available</p>
+              </div>
+            )}
           </div>
         </div>
       )}

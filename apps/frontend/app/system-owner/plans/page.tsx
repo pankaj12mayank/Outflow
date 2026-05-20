@@ -112,29 +112,31 @@ export default function SystemOwnerPlansPage() {
         },
         { headers: authHeaders() }
       );
-      toast.success("Plan updated", "Landing and team limits synced");
+      toast.success("Plan updated", `${form.name} settings saved successfully`);
       setEditing(null);
       load();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
-      toast.error("Save failed", err.response?.data?.detail || "Try again");
+      toast.error("Something went wrong", err.response?.data?.detail || "Could not update plan. Please try again.");
     }
   };
 
   const toggleLanding = async (plan: Plan) => {
     if (plan.status !== "active") {
-      toast.error("Activate plan first", "Only active plans can appear on landing");
+      toast.error("Hold on", "Only active plans can be shown on the landing page");
       return;
     }
+    const newState = plan.show_on_landing !== true;
     try {
       await api.put(
         `/api/v1/plans/${plan.id}`,
-        { show_on_landing: plan.show_on_landing !== true },
+        { show_on_landing: newState },
         { headers: authHeaders() }
       );
+      toast.success(newState ? "Plan is now visible" : "Plan hidden from landing", `${plan.name} ${newState ? "will appear" : "won't appear"} on the landing page`);
       load();
     } catch {
-      toast.error("Update failed");
+      toast.error("Update failed", "Something went wrong while updating the plan");
     }
   };
 
@@ -149,9 +151,10 @@ export default function SystemOwnerPlansPage() {
         },
         { headers: authHeaders() }
       );
+      toast.success(activating ? "Plan is now active" : "Plan has been deactivated", `${plan.name} is ${activating ? "live and ready to use" : "no longer available"}`);
       load();
     } catch {
-      toast.error("Update failed");
+      toast.error("Update failed", "Something went wrong while updating the plan");
     }
   };
 

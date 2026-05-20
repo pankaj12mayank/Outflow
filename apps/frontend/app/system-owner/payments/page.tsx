@@ -73,7 +73,7 @@ function authHeaders() {
 }
 
 export default function PaymentsPage() {
-  const [tab, setTab] = useState<Tab>("gateways");
+  const [loading, setLoading] = useState(true);
   const [gateways, setGateways] = useState<Gateways | null>(null);
   const [txs, setTxs] = useState<Tx[]>([]);
   const [history, setHistory] = useState<HistoryRow[]>([]);
@@ -91,8 +91,9 @@ export default function PaymentsPage() {
   const [testEmail, setTestEmail] = useState({ template_type: "billing_plan_purchased", recipient_email: "" });
 
   const load = async () => {
+    setLoading(true);
     try {
-      const [g, t, o, p, h, tpl] = await Promise.all([
+      const [g, t, o, p, h, tpl] = await Promise.allSettled([
         api.get("/api/v1/system-owner/payments/settings", { headers: authHeaders() }),
         api.get("/api/v1/system-owner/payments/transactions", { headers: authHeaders() }),
         api.get("/api/v1/organizations", { headers: authHeaders(), params: { page_size: 50 } }),
@@ -100,14 +101,17 @@ export default function PaymentsPage() {
         api.get("/api/v1/system-owner/billing/history", { headers: authHeaders(), params: { limit: 100 } }),
         api.get("/api/v1/system-owner/billing/email-templates", { headers: authHeaders() }),
       ]);
-      setGateways(g.data.gateways);
-      setTxs(t.data.transactions || []);
-      setOrgs((o.data.organizations || []).map((x: Org) => ({ id: x.id, name: x.name })));
-      setPlans((p.data.plans || []).map((x: Plan) => ({ id: x.id, name: x.name })));
-      setHistory(h.data.history || []);
-      setTemplates(tpl.data.templates || []);
-    } catch {
-      toast.error("Failed to load billing data");
+      
+      if (g.status === "fulfilled") setGateways(g.value.data.gateways);
+      if (t.status === "fulfilled") setTxs(t.value.data.transactions || []);
+      if (o.status === "fulfilled") setOrgs((o.value.data.organizations || []).map((x: Org) => ({ id: x.id, name: x.name })));
+      if (p.status === "fulfilled") setPlans((p.value.data.plans || []).map((x: Plan) => ({ id: x.id, name: x.name })));
+      if (h.status === "fulfilled") setHistory(h.value.data.history || []);
+      if (tpl.status === "fulfilled") setTemplates(tpl.value.data.templates || []);
+    } catch (err) {
+      console.error("Billing load error:", err);
+    } finally {
+      setLoading(false);
     }
   };
 

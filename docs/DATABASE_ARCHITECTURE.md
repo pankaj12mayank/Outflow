@@ -1,32 +1,27 @@
-# Outflo - Complete PostgreSQL Database Architecture
+# Outflo - MongoDB Database Architecture
 
 ## Overview
 
-Production-grade multi-tenant database design for AI Outreach Automation SaaS platform.
+Production-grade multi-tenant database design for AI Outreach Automation SaaS platform using MongoDB with motor async driver.
 
 ---
 
 ## Multi-Tenant Strategy
 
 ### Isolation Approach
-- **Organization-level isolation**: All user data is scoped to `organization_id`
-- **Row-level security**: Every table has `organization_id` foreign key
+- **Organization-level isolation**: All user data is scoped to `organization_id` (string, MongoDB ObjectId)
+- **Document-based design**: Collections store related data together
 - **Soft deletes**: `deleted_at` timestamp for data recovery
 - **Audit trail**: All operations logged with user and timestamp
 
-### Tenant Filtering Pattern
+### Query Pattern (MongoDB)
 
-```sql
--- Every query MUST include organization_id filter
-SELECT * FROM leads WHERE organization_id = ? AND deleted_at IS NULL;
+```javascript
+// Every query MUST include organization_id filter
+db.leads.find({ organization_id: orgId, deleted_at: null })
 
--- Use base repository pattern
-class BaseRepository:
-    async def get_all(self, org_id: int):
-        query = select(self.model).where(
-            self.model.organization_id == org_id,
-            self.model.deleted_at.is_(None)
-        )
+// Async with motor
+collection.find({ "organization_id": org_id, "deleted_at": None }).to_list(length=100)
 ```
 
 ---
@@ -35,160 +30,159 @@ class BaseRepository:
 
 | Type | Convention | Example |
 |------|------------|---------|
-| Tables | snake_case (plural) | `user_accounts` |
-| Columns | snake_case | `created_at` |
-| Primary Keys | `id` | `id INTEGER PRIMARY KEY` |
-| Foreign Keys | `{table}_id` | `organization_id` |
-| Indexes | `ix_{table}_{columns}` | `ix_users_email_org` |
-| Unique Constraints | `uq_{table}_{columns}` | `uq_users_email_org` |
+| Collections | snake_case (plural) | `users`, `organizations` |
+| Fields | snake_case | `created_at`, `organization_id` |
+| Document IDs | `_id` | MongoDB ObjectId |
 | Timestamps | `{entity}_at` | `created_at`, `updated_at` |
-| Soft Delete | `deleted_at` | `deleted_at TIMESTAMP` |
+| Soft Delete | `deleted_at` | `deleted_at` (datetime or null) |
 
 ---
 
-## Common Columns (All Tables)
+## Common Fields (All Documents)
 
-```sql
--- Organization-scoped tables
-organization_id  INTEGER NOT NULL REFERENCES organizations(id)
-created_at      TIMESTAMP NOT NULL DEFAULT NOW()
-updated_at      TIMESTAMP
-deleted_at      TIMESTAMP  -- Soft delete
+```javascript
+// Organization-scoped documents
+{
+  "_id": ObjectId,
+  "organization_id": "string",  // MongoDB ObjectId as string
+  "created_at": ISODate,
+  "updated_at": ISODate,
+  "deleted_at": ISODate  // null for active, timestamp for deleted
+}
 
--- User-scoped tables
-user_id          INTEGER NOT NULL REFERENCES users(id)
-created_at       TIMESTAMP NOT NULL DEFAULT NOW()
+// User-scoped documents
+{
+  "_id": ObjectId,
+  "user_id": "string",
+  "created_at": ISODate
+}
 ```
 
 ---
 
-# AUTH MODULE
+# MONGODB COLLECTIONS
 
 ## 1. organizations
 
-Primary tenant entity.
+Primary tenant entity (multi-tenant root).
 
-```sql
-CREATE TABLE organizations (
-    id              SERIAL PRIMARY KEY,
-    name            VARCHAR(255) NOT NULL,
-    slug            VARCHAR(100) UNIQUE NOT NULL,
-    domain          VARCHAR(255),
-    logo_url        VARCHAR(500),
-    timezone        VARCHAR(50) DEFAULT 'UTC',
-    locale          VARCHAR(10) DEFAULT 'en-US',
+```javascript
+{
+  "_id": ObjectId,
+  "name": "string",
+  "slug": "string",  // unique
+  "domain": "string",
+  "logo_url": "string",
+  "timezone": "string",
+  "locale": "string",
 
-    -- Billing
-    billing_email   VARCHAR(255),
-    billing_address JSONB,
+  // Billing
+  "billing_email": "string",
+  "billing_address": {},  // embedded JSON
 
-    -- Settings
-    settings        JSONB DEFAULT '{}',
+  // Settings
+  "settings": {},  // embedded JSON
 
-    -- Status
-    is_active       BOOLEAN DEFAULT TRUE,
-    is_verified     BOOLEAN DEFAULT FALSE,
+  // Status
+  "is_active": true,
+  "is_verified": false,
 
-    -- Timestamps
-    created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMP,
-    deleted_at      TIMESTAMP,
-
-    -- Constraints
-    CONSTRAINT chk_org_name_length CHECK (LENGTH(name) >= 2)
-);
-
-CREATE INDEX ix_organizations_slug ON organizations(slug);
-CREATE INDEX ix_organizations_domain ON organizations(domain);
-CREATE INDEX ix_organizations_active ON organizations(is_active) WHERE deleted_at IS NULL;
+  // Timestamps
+  "created_at": ISODate,
+  "updated_at": ISODate,
+  "deleted_at": null
+}
 ```
+
+Indexes:
+- `{ slug: 1 }` - unique
+- `{ domain: 1 }`
+- `{ is_active: 1, deleted_at: 1 }`
 
 ## 2. users
 
-```sql
-CREATE TABLE users (
-    id                  SERIAL PRIMARY KEY,
-    organization_id     INTEGER NOT NULL REFERENCES organizations(id),
+User accounts with organization reference.
 
-    -- Credentials
-    email               VARCHAR(255) NOT NULL,
-    password_hash       VARCHAR(255) NOT NULL,
+```javascript
+{
+  "_id": ObjectId,
+  "organization_id": ObjectId,  // reference to organizations collection
 
-    -- Profile
-    full_name           VARCHAR(255) NOT NULL,
-    avatar_url           VARCHAR(500),
-    phone               VARCHAR(50),
+  // Credentials
+  "email": "string",  // unique within organization
+  "password_hash": "string",
 
-    -- Role
-    role                VARCHAR(50) NOT NULL DEFAULT 'team_member',
-    is_super_admin      BOOLEAN DEFAULT FALSE,
+  // Profile
+  "full_name": "string",
+  "avatar_url": "string",
+  "phone": "string",
 
-    -- Status
-    is_active           BOOLEAN DEFAULT TRUE,
-    is_email_verified   BOOLEAN DEFAULT FALSE,
-    email_verified_at   TIMESTAMP,
+  // Role
+  "role": "team_member",  // owner, admin, team_member
+  "is_super_admin": false,
 
-    -- Auth
-    failed_login_attempts   INTEGER DEFAULT 0,
-    locked_until           TIMESTAMP,
-    last_login_at          TIMESTAMP,
-    last_login_ip          VARCHAR(45),
+  // Status
+  "is_active": true,
+  "is_email_verified": false,
+  "email_verified_at": ISODate,
 
-    -- Preferences
-    preferences          JSONB DEFAULT '{}',
+  // Auth
+  "failed_login_attempts": 0,
+  "locked_until": ISODate,
+  "last_login_at": ISODate,
+  "last_login_ip": "string",
 
-    -- Timestamps
-    created_at          TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMP,
-    deleted_at          TIMESTAMP,
+  // Preferences
+  "preferences": {},  // embedded JSON
 
-    -- Constraints
-    CONSTRAINT chk_user_email_unique UNIQUE (organization_id, email),
-    CONSTRAINT chk_user_role CHECK (role IN ('owner', 'admin', 'team_member'))
-);
-
-CREATE INDEX ix_users_org ON users(organization_id);
-CREATE INDEX ix_users_email ON users(email);
-CREATE INDEX ix_users_org_email ON users(organization_id, email);
+  // Timestamps
+  "created_at": ISODate,
+  "updated_at": ISODate,
+  "deleted_at": null
+}
 ```
 
-## 3. memberships
+Indexes:
+- `{ email: 1, organization_id: 1 }` - unique
+- `{ organization_id: 1 }`
+- `{ is_active: 1, deleted_at: 1 }`
 
-User-Organization relationship with roles.
+## 3. sessions
 
-```sql
-CREATE TABLE memberships (
-    id                  SERIAL PRIMARY KEY,
-    user_id             INTEGER NOT NULL REFERENCES users(id),
-    organization_id     INTEGER NOT NULL REFERENCES organizations(id),
+Active user sessions for authentication tokens.
 
-    -- Role in organization
-    role                VARCHAR(50) NOT NULL DEFAULT 'team_member',
-    title               VARCHAR(100),
+```javascript
+{
+  "_id": ObjectId,
+  "user_id": ObjectId,
+  "organization_id": ObjectId,
 
-    -- Status
-    status              VARCHAR(50) NOT NULL DEFAULT 'active',
-    invited_by          INTEGER REFERENCES users(id),
-    invited_at          TIMESTAMP,
-    accepted_at         TIMESTAMP,
+  // Token info
+  "access_token": "string",
+  "refresh_token": "string",
+  "token_hash": "string",
 
-    -- Permissions (JSON for flexibility)
-    permissions         JSONB DEFAULT '[]',
+  // Client info
+  "ip_address": "string",
+  "user_agent": "string",
+  "device_type": "string",
+  "browser": "string",
+  "os": "string",
 
-    -- Timestamps
-    created_at          TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMP,
-    deleted_at          TIMESTAMP,
+  // Status
+  "is_active": true,
+  "expires_at": ISODate,
+  "revoked_at": null,
 
-    -- Constraints
-    CONSTRAINT chk_membership_unique UNIQUE (user_id, organization_id),
-    CONSTRAINT chk_membership_status CHECK (status IN ('pending', 'active', 'suspended', 'invite_expired'))
-);
-
-CREATE INDEX ix_memberships_user ON memberships(user_id);
-CREATE INDEX ix_memberships_org ON memberships(organization_id);
-CREATE INDEX ix_memberships_status ON memberships(status) WHERE deleted_at IS NULL;
+  // Timestamps
+  "created_at": ISODate
+}
 ```
+
+Indexes:
+- `{ user_id: 1 }`
+- `{ token_hash: 1 }` - unique
+- `{ is_active: 1, expires_at: 1 }`
 
 ## 4. roles
 

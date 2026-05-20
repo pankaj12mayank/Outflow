@@ -147,7 +147,7 @@ async def get_me(current_user: dict = Depends(get_current_system_owner)):
         )
     
     return {
-        "id": user["_id"],
+        "id": user["id"],
         "email": user["email"],
         "full_name": user["full_name"],
         "role": user["role"],
@@ -166,7 +166,7 @@ async def get_sessions(current_user: dict = Depends(get_current_system_owner)):
     
     session_responses = [
         SessionResponse(
-            id=session["_id"],
+            id=session["id"],
             device_info=session.get("device_info", {}),
             ip_address=session.get("ip_address", ""),
             issued_at=session.get("issued_at"),
@@ -225,7 +225,7 @@ async def get_devices(current_user: dict = Depends(get_current_system_owner)):
     
     return [
         DeviceResponse(
-            id=device["_id"],
+            id=device["id"],
             device_id=device.get("device_id", ""),
             device_type=device.get("device_type", "desktop"),
             browser=device.get("browser", "unknown"),
@@ -296,7 +296,7 @@ async def get_auth_logs(
     
     log_responses = [
         AuthLogResponse(
-            id=log["_id"],
+            id=log["id"],
             user_id=log.get("user_id"),
             email=log.get("email", ""),
             action=log.get("action", ""),
@@ -323,7 +323,7 @@ async def get_activity_logs(
     
     log_responses = [
         ActivityLogResponse(
-            id=log["_id"],
+            id=log["id"],
             user_id=log.get("user_id", ""),
             action=log.get("action", ""),
             resource_type=log.get("resource_type"),

@@ -88,18 +88,21 @@ export default function BillingPage() {
     setError(null);
     try {
       const [subscriptionRes, invoicesRes] = await Promise.all([
-        api.get("/api/v1/billing/subscriptions").catch(() => ({ data: null })),
-        api.get("/api/v1/billing/invoices").catch(() => ({ data: [] })),
+        api.get("/api/v1/billing/subscriptions"),
+        api.get("/api/v1/billing/invoices"),
       ]);
 
       if (subscriptionRes.data) {
-        const sub = Array.isArray(subscriptionRes.data) 
-          ? subscriptionRes.data.find((s: any) => s.status === "active") 
-          : subscriptionRes.data;
-        if (sub) {
-          setSubscription(sub);
-          setSelectedPlan(sub.plan_name || "Professional");
+        const data = subscriptionRes.data;
+        const sub = Array.isArray(data) 
+          ? data.find((s: any) => s.status === "active") 
+          : data;
+        setSubscription(sub || null);
+        if (sub?.plan_name) {
+          setSelectedPlan(sub.plan_name);
         }
+      } else {
+        setSubscription(null);
       }
 
       const invoiceData = invoicesRes.data;
@@ -111,6 +114,8 @@ export default function BillingPage() {
           status: inv.status || "pending",
           created_at: inv.created_at || inv.date,
         })));
+      } else {
+        setInvoices([]);
       }
 
       setUsage([
@@ -119,9 +124,10 @@ export default function BillingPage() {
         { name: "Team Members", used: 1, limit: 10, percentage: 10 },
       ]);
 
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to fetch billing data:", err);
-      setError("Failed to load billing data");
+      const errorMessage = err?.response?.data?.detail || err?.message || "Failed to load billing data. Please try again.";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -189,7 +195,7 @@ export default function BillingPage() {
     return (
       <div className="p-6 rounded-2xl border border-red-500/20 bg-red-500/10 text-center">
         <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-        <h3 className="text-xl font-semibold mb-2">Failed to load billing</h3>
+        <h3 className="text-xl font-semibold mb-2">Oops! Something went wrong</h3>
         <p className="text-gray-400 mb-4">{error}</p>
         <Button onClick={fetchBillingData} variant="outline">
           Try Again
@@ -197,6 +203,11 @@ export default function BillingPage() {
       </div>
     );
   }
+
+  const hasSubscription = subscription !== null;
+  const planName = subscription?.plan_name || null;
+  const planPrice = subscription?.amount || null;
+  const nextBilling = subscription?.current_period_end || null;
 
   return (
     <div className="space-y-6">
@@ -215,20 +226,32 @@ export default function BillingPage() {
         <div className="flex items-start justify-between mb-6">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20">
-                <Zap className="w-3 h-3 mr-1" />
-                {subscription?.plan_name || "Professional"} Plan
-              </Badge>
+              {hasSubscription ? (
+                <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20">
+                  <Zap className="w-3 h-3 mr-1" />
+                  {planName} Plan
+                </Badge>
+              ) : (
+                <Badge className="bg-gray-500/10 text-gray-400 border-gray-500/20">
+                  No Active Plan
+                </Badge>
+              )}
             </div>
-            <div className="text-4xl font-bold">
-              ${subscription?.amount || 149}
-              <span className="text-lg text-gray-400">/month</span>
-            </div>
+            {hasSubscription ? (
+              <div className="text-4xl font-bold">
+                ${planPrice}
+                <span className="text-lg text-gray-400">/month</span>
+              </div>
+            ) : (
+              <div className="text-4xl font-bold text-gray-400">
+                No active subscription
+              </div>
+            )}
           </div>
           <div className="text-right">
             <div className="text-sm text-gray-400">Next billing date</div>
             <div className="text-lg font-medium">
-              {subscription?.current_period_end ? formatDate(subscription.current_period_end) : "June 1, 2026"}
+              {nextBilling ? formatDate(nextBilling) : "N/A"}
             </div>
           </div>
         </div>
@@ -321,7 +344,7 @@ export default function BillingPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="font-medium">${invoice.amount?.toFixed(2) || "0.00"}</span>
+                  <span className="font-medium">${invoice.amount ? invoice.amount.toFixed(2) : "0.00"}</span>
                   <Badge className={cn(
                     "bg-green-500/10 text-green-400 border-green-500/20",
                     invoice.status === "pending" && "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",

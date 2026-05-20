@@ -7,8 +7,8 @@ import { toast } from "@/app/components/toast";
 import { SoPageLayout } from "@/app/system-owner/components/SoPageLayout";
 import { 
   Mail, Send, Clock, AlertCircle, CheckCircle, XCircle, 
-  BarChart3, Settings, FileText, Zap, RefreshCw, Eye,
-  Plus, MoreVertical, Copy, Edit, Trash2
+  FileText, Zap, RefreshCw, Eye,
+  Plus
 } from "lucide-react";
 
 function authHeaders() {
@@ -143,13 +143,13 @@ export default function EmailEnginePage() {
               href="/system-owner/email/templates" 
               className="text-sm text-purple-400 hover:text-purple-300"
             >
-              View all →
+              Manage →
             </Link>
           </div>
           <div className="space-y-3">
             {templates.slice(0, 5).map((template: any) => (
               <div 
-                key={template._id} 
+                key={template._id || template.id} 
                 className="flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
               >
                 <div className="flex items-center gap-3">
@@ -171,44 +171,44 @@ export default function EmailEnginePage() {
               </div>
             ))}
             {templates.length === 0 && (
-              <p className="text-gray-400 text-center py-4">No templates yet</p>
+              <div className="text-center py-6">
+                <FileText className="w-8 h-8 mx-auto mb-2 text-gray-500" />
+                <p className="text-gray-400 text-sm">No templates yet</p>
+                <Link href="/system-owner/email/templates" className="text-purple-400 text-sm hover:underline">Create one →</Link>
+              </div>
             )}
           </div>
         </div>
 
         <div className="p-6 rounded-2xl border border-white/5 bg-gradient-to-b from-white/5 to-transparent">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold">Quick Actions</h2>
+            <h2 className="text-xl font-bold">Triggers</h2>
+            <Link 
+              href="/system-owner/email/triggers" 
+              className="text-sm text-purple-400 hover:text-purple-300"
+            >
+              Manage →
+            </Link>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Link 
-              href="/system-owner/email/templates"
-              className="p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors text-center"
-            >
-              <FileText className="w-6 h-6 mx-auto mb-2 text-purple-400" />
-              <span className="text-sm font-medium">Templates</span>
-            </Link>
-            <Link 
-              href="/system-owner/email/triggers"
-              className="p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors text-center"
-            >
-              <Zap className="w-6 h-6 mx-auto mb-2 text-purple-400" />
-              <span className="text-sm font-medium">Triggers</span>
-            </Link>
-            <Link 
-              href="/system-owner/email/queue"
-              className="p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors text-center"
-            >
-              <Clock className="w-6 h-6 mx-auto mb-2 text-purple-400" />
-              <span className="text-sm font-medium">Queue</span>
-            </Link>
-            <Link 
-              href="/system-owner/email/analytics"
-              className="p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors text-center"
-            >
-              <BarChart3 className="w-6 h-6 mx-auto mb-2 text-purple-400" />
-              <span className="text-sm font-medium">Analytics</span>
-            </Link>
+          <div className="space-y-3">
+            {[
+              { label: "Welcome", desc: "On user signup", count: 0 },
+              { label: "Payment Success", desc: "On successful payment", count: 0 },
+              { label: "Trial Ending", desc: "3 days before trial ends", count: 0 },
+            ].map((item, i) => (
+              <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-white/5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                    <Zap className="w-5 h-5 text-green-400" />
+                  </div>
+                  <div>
+                    <div className="font-medium">{item.label}</div>
+                    <div className="text-xs text-gray-400">{item.desc}</div>
+                  </div>
+                </div>
+                <Link href="/system-owner/email/triggers" className="text-xs text-purple-400 hover:underline">Setup</Link>
+              </div>
+            ))}
           </div>
         </div>
       </div>

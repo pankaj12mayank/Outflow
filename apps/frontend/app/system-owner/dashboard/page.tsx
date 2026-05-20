@@ -96,7 +96,7 @@ function MetricCard({ title, value, change, icon: Icon, color, delay = 0, sparkl
           >
             <Icon className="w-5 h-5" style={{ color: iconColor }} />
           </motion.div>
-          {change !== undefined && (
+          {change !== undefined && change !== 0 && (
             <motion.div 
               initial={{ scale: 0.8 }}
               animate={{ scale: 1 }}
@@ -188,7 +188,7 @@ export default function SystemOwnerDashboard() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.push("/system-owner/login");
+      router.push("/login");
     }
   }, [authLoading, isAuthenticated, router]);
 
@@ -212,10 +212,6 @@ export default function SystemOwnerDashboard() {
     { id: "health", label: "Health", icon: Activity },
   ];
 
-  const generateSparkline = (base: number, variance: number = 20) => {
-    return Array.from({ length: 7 }, (_, i) => base + (Math.random() - 0.5) * variance);
-  };
-
   const tabContent = {
     overview: (
       <motion.div
@@ -225,37 +221,39 @@ export default function SystemOwnerDashboard() {
         className="space-y-6"
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard title="Monthly Recurring Revenue" value={formatCurrency(data.subscriptions.mrr)} icon={DollarSign} color="green" change={12} sparkline={generateSparkline(45)} />
-          <MetricCard title="Annual Recurring Revenue" value={formatCurrency(data.subscriptions.arr)} icon={TrendingUp} color="blue" change={8} sparkline={generateSparkline(50)} />
-          <MetricCard title="Active Subscriptions" value={data.subscriptions.total_subscriptions} icon={Users} color="purple" change={5} sparkline={generateSparkline(35)} />
-          <MetricCard title="Total Organizations" value={data.overview.total_organizations} icon={Building2} color="cyan" change={3} sparkline={generateSparkline(40)} />
+          <MetricCard title="Monthly Recurring Revenue" value={formatCurrency(data.subscriptions.mrr || 0)} icon={DollarSign} color="green" sparkline={data.revenue.daily_breakdown?.slice(-7).map((d: any) => d.revenue) || []} />
+          <MetricCard title="Annual Recurring Revenue" value={formatCurrency(data.subscriptions.arr || 0)} icon={TrendingUp} color="blue" />
+          <MetricCard title="Active Subscriptions" value={data.subscriptions.total_subscriptions || 0} icon={Users} color="purple" />
+          <MetricCard title="Total Organizations" value={data.overview.total_organizations || 0} icon={Building2} color="cyan" />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard title="Total Campaigns" value={data.overview.total_campaigns} icon={Target} color="orange" sparkline={generateSparkline(25)} />
-          <MetricCard title="Active Campaigns" value={data.overview.active_campaigns} icon={Play} color="green" change={15} sparkline={generateSparkline(30)} />
-          <MetricCard title="Total Leads" value={data.overview.total_leads} icon={Users} color="yellow" sparkline={generateSparkline(55)} />
-          <MetricCard title="Leads (30d)" value={data.leads.leads_30d} icon={TrendingUp} color="emerald" change={22} sparkline={generateSparkline(60)} />
+          <MetricCard title="Total Campaigns" value={data.overview.total_campaigns || 0} icon={Target} color="orange" />
+          <MetricCard title="Active Campaigns" value={data.overview.active_campaigns || 0} icon={Play} color="green" />
+          <MetricCard title="Total Leads" value={data.overview.total_leads || 0} icon={Users} color="yellow" />
+          <MetricCard title="Leads (30d)" value={data.leads.leads_30d || 0} icon={TrendingUp} color="emerald" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <ChartContainer title="Revenue Trend (30d)" subtitle="Daily revenue breakdown" variant="glass">
-            {data.revenue.daily_breakdown && (
+            {data.revenue.daily_breakdown && data.revenue.daily_breakdown.length > 0 ? (
               <AreaChart
                 data={data.revenue.daily_breakdown}
                 dataKey="revenue"
                 colors={["#a78bfa"]}
                 height={200}
               />
+            ) : (
+              <div className="h-[200px] flex items-center justify-center text-gray-500">No revenue data</div>
             )}
           </ChartContainer>
 
           <ChartContainer title="Campaign Performance" subtitle="Key metrics" variant="glass">
             <div className="space-y-4">
               {[
-                { label: "Open Rate", value: data.campaigns.open_rate, color: "#4ade80" },
-                { label: "Click Rate", value: data.campaigns.click_rate, color: "#60a5fa" },
-                { label: "Reply Rate", value: data.campaigns.reply_rate, color: "#a78bfa" },
+                { label: "Open Rate", value: data.campaigns.open_rate || 0, color: "#4ade80" },
+                { label: "Click Rate", value: data.campaigns.click_rate || 0, color: "#60a5fa" },
+                { label: "Reply Rate", value: data.campaigns.reply_rate || 0, color: "#a78bfa" },
               ].map((metric, i) => (
                 <motion.div 
                   key={metric.label}
@@ -288,9 +286,9 @@ export default function SystemOwnerDashboard() {
           <ChartContainer title="Task Queue" subtitle="Worker status" variant="glass">
             <div className="space-y-4">
               {[
-                { label: "Active Workers", value: data.workers.active_workers, color: "#4ade80" },
-                { label: "Pending Tasks", value: data.workers.pending_tasks, color: "#fbbf24" },
-                { label: "Success Rate (1h)", value: `${data.workers.success_rate}%`, color: "#a78bfa" },
+                { label: "Active Workers", value: data.workers.active_workers || 0, color: "#4ade80" },
+                { label: "Pending Tasks", value: data.workers.pending_tasks || 0, color: "#fbbf24" },
+                { label: "Success Rate (1h)", value: `${data.workers.success_rate || 0}%`, color: "#a78bfa" },
               ].map((metric, i) => (
                 <motion.div 
                   key={metric.label}

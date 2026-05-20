@@ -124,21 +124,21 @@ export default function LandingPage() {
 
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0a0a0f]/90 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-[1440px] mx-auto px-6 py-4">
+        <div className="max-w-[1600px] mx-auto px-8 py-5">
           <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
+            <Link href="/" className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
                 <Zap className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-bold">Outflo</span>
+              <span className="text-2xl font-bold">Outflo</span>
             </Link>
 
-            <div className="hidden md:flex items-center gap-8">
-              <button onClick={() => scrollToSection("features")} className="text-sm text-gray-300 hover:text-white transition-colors font-medium">Features</button>
-              <button onClick={() => scrollToSection("pricing")} className="text-sm text-gray-300 hover:text-white transition-colors font-medium">Pricing</button>
-              <button onClick={() => scrollToSection("faq")} className="text-sm text-gray-300 hover:text-white transition-colors font-medium">FAQ</button>
-              <Link href="/login" className="text-sm text-gray-300 hover:text-white transition-colors font-medium">Sign in</Link>
-              <Link href="/register" className="px-5 py-2.5 bg-purple-500 hover:bg-purple-600 rounded-lg text-sm font-medium transition-all hover:shadow-lg hover:shadow-purple-500/25">
+            <div className="hidden md:flex items-center gap-10">
+              <button onClick={() => scrollToSection("features")} className="text-base text-gray-300 hover:text-white transition-colors font-medium">Features</button>
+              <button onClick={() => scrollToSection("pricing")} className="text-base text-gray-300 hover:text-white transition-colors font-medium">Pricing</button>
+              <button onClick={() => scrollToSection("faq")} className="text-base text-gray-300 hover:text-white transition-colors font-medium">FAQ</button>
+              <Link href="/login" className="text-base text-gray-300 hover:text-white transition-colors font-medium">Sign in</Link>
+              <Link href="/register" className="px-6 py-3 bg-purple-500 hover:bg-purple-600 rounded-xl text-sm font-semibold transition-all hover:shadow-lg hover:shadow-purple-500/25">
                 Start Free
               </Link>
             </div>
@@ -151,13 +151,13 @@ export default function LandingPage() {
 
         {mobileMenuOpen ? (
             <div className="md:hidden border-t border-white/5 bg-[#0a0a0f] animate-fade-in">
-              <div className="px-6 py-4 space-y-2">
-                <button onClick={() => { scrollToSection("features"); setMobileMenuOpen(false); }} className="block w-full text-left py-2 text-gray-300 hover:text-white transition-colors">Features</button>
-                <button onClick={() => { scrollToSection("pricing"); setMobileMenuOpen(false); }} className="block w-full text-left py-2 text-gray-300 hover:text-white transition-colors">Pricing</button>
-                <button onClick={() => { scrollToSection("faq"); setMobileMenuOpen(false); }} className="block w-full text-left py-2 text-gray-300 hover:text-white transition-colors">FAQ</button>
-                <div className="pt-2 border-t border-white/5">
-                  <Link href="/login" className="block py-2 text-gray-300 hover:text-white">Sign in</Link>
-                  <Link href="/register" className="block mt-2 px-4 py-2.5 bg-purple-500 rounded-lg text-center font-medium">Start Free</Link>
+              <div className="px-8 py-5 space-y-3">
+                <button onClick={() => { scrollToSection("features"); setMobileMenuOpen(false); }} className="block w-full text-left py-3 text-gray-300 hover:text-white transition-colors text-lg">Features</button>
+                <button onClick={() => { scrollToSection("pricing"); setMobileMenuOpen(false); }} className="block w-full text-left py-3 text-gray-300 hover:text-white transition-colors text-lg">Pricing</button>
+                <button onClick={() => { scrollToSection("faq"); setMobileMenuOpen(false); }} className="block w-full text-left py-3 text-gray-300 hover:text-white transition-colors text-lg">FAQ</button>
+                <div className="pt-4 border-t border-white/5">
+                  <Link href="/login" className="block py-3 text-gray-300 hover:text-white text-lg">Sign in</Link>
+                  <Link href="/register" className="block mt-3 px-5 py-3 bg-purple-500 rounded-xl text-center font-semibold">Start Free</Link>
                 </div>
               </div>
             </div>
@@ -165,41 +165,41 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-24 px-6 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-purple-500/5 via-transparent to-transparent" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-purple-500/15 rounded-full blur-[120px]" />
+      <section className="pt-40 pb-32 px-8 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-purple-500/10 via-transparent to-transparent" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[900px] bg-purple-500/20 rounded-full blur-[140px]" />
         
-        <div className="max-w-4xl mx-auto text-center relative z-10">
+        <div className="max-w-6xl mx-auto text-center relative z-10">
           <div className="animate-fade-up">
-            <span className="inline-block px-5 py-2.5 bg-purple-500/10 border border-purple-500/20 rounded-full text-sm text-purple-400 font-medium mb-8">
-              {content.hero.badge}
+            <span className="inline-block px-6 py-3 bg-purple-500/15 border border-purple-500/30 rounded-full text-sm text-purple-400 font-semibold mb-10">
+              AI-Powered Outreach Platform
             </span>
             
-            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-8 leading-tight bg-gradient-to-r from-white via-white to-gray-400 bg-clip-text text-transparent">
-              {content.hero.title}
+            <h1 className="text-4xl sm:text-5xl md:text-4xl md:text-5xl font-bold mb-8 leading-tight bg-gradient-to-r from-white via-white to-gray-400 bg-clip-text text-transparent">
+              Scale Your Outreach with AI That Actually Works
             </h1>
             
             <p className="text-lg sm:text-xl text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed">
-              {content.hero.subtitle}
+              Stop wasting time on manual outreach. Outflo's AI discovers, personalizes, and automates your entire outbound process so you can focus on closing deals.
             </p>
             
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
-              <Link href="/register" className="w-full sm:w-auto px-8 py-4 bg-purple-500 hover:bg-purple-600 rounded-xl font-semibold text-center transition-all hover:scale-105 hover:shadow-xl hover:shadow-purple-500/25 flex items-center justify-center gap-2">
-                {content.hero.cta}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-10">
+              <Link href="/register" className="w-full sm:w-auto px-8 py-4 bg-purple-500 hover:bg-purple-600 rounded-xl font-bold text-base text-center transition-all hover:scale-105 hover:shadow-2xl hover:shadow-purple-500/30 flex items-center justify-center gap-3">
+                Start Free Trial
                 <ArrowRight className="w-5 h-5" />
               </Link>
-              <button className="w-full sm:w-auto px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-medium transition-all hover:border-white/20 flex items-center justify-center gap-2">
+              <button className="w-full sm:w-auto px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/15 rounded-xl font-semibold text-base transition-all hover:border-white/25 flex items-center justify-center gap-3">
                 <Play className="w-5 h-5" />
-                {content.hero.ctaSecondary}
+                Watch Demo
               </button>
             </div>
             
-            <p className="text-sm text-gray-500">{content.hero.trustText}</p>
+            <p className="text-base text-gray-500">No credit card required • 14-day free trial • Cancel anytime</p>
           </div>
         </div>
 
         {/* Stats */}
-        <div className="max-w-5xl mx-auto mt-24 grid grid-cols-2 md:grid-cols-4 gap-8 lg:gap-12">
+        <div className="max-w-6xl mx-auto mt-28 grid grid-cols-2 md:grid-cols-4 gap-8 lg:gap-16">
           {content.stats.map((stat, i) => (
             <ScrollReveal
               key={stat.label}
@@ -210,21 +210,21 @@ export default function LandingPage() {
               <div className="text-4xl md:text-5xl font-bold text-purple-400 mb-3">
                 <Counter end={parseInt(stat.value.replace(/[^0-9]/g, "")) || 0} suffix={stat.value.replace(/[0-9]/g, "")} />
               </div>
-              <div className="text-gray-400 text-sm md:text-base">{stat.label}</div>
+              <div className="text-gray-400 text-lg">{stat.label}</div>
             </ScrollReveal>
           ))}
         </div>
       </section>
 
       {/* Features Section */}
-      <section id="features" className="py-24 px-6 bg-gradient-to-b from-transparent via-purple-500/5 to-transparent">
-        <div className="max-w-[1440px] mx-auto">
-          <ScrollReveal animation="slide-up" className="text-center mb-16">
+      <section id="features" className="py-32 px-8 bg-gradient-to-b from-transparent via-purple-500/8 to-transparent">
+        <div className="max-w-[1600px] mx-auto">
+          <ScrollReveal animation="slide-up" className="text-center mb-20">
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-6">Everything you need to scale outreach</h2>
             <p className="text-gray-400 text-lg max-w-2xl mx-auto">Powerful features wrapped in a simple, intuitive interface</p>
           </ScrollReveal>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {content.features.filter(f => f.active).map((feature, i) => {
               const IconComponent =
                 ICONS[feature.icon as keyof typeof ICONS] ?? Bot;
@@ -233,13 +233,13 @@ export default function LandingPage() {
                   key={feature.title}
                   animation="slide-up"
                   delay={i * 50}
-                  className="group p-6 lg:p-8 bg-white/5 border border-white/10 rounded-2xl hover:border-purple-500/30 transition-all cursor-pointer card-hover-lift hover:bg-white/10"
+                  className="group p-8 bg-white/5 border border-white/10 rounded-3xl hover:border-purple-500/40 transition-all cursor-pointer card-hover-lift hover:bg-white/10 hover:scale-[1.02] hover:shadow-2xl hover:shadow-purple-500/10"
                 >
-                  <div className="w-14 h-14 rounded-xl bg-purple-500/10 flex items-center justify-center mb-5 group-hover:bg-purple-500/20 transition-colors shadow-lg shadow-purple-500/10">
-                    <IconComponent className="w-7 h-7 text-purple-400" />
+                  <div className="w-16 h-16 rounded-2xl bg-purple-500/15 flex items-center justify-center mb-6 group-hover:bg-purple-500/25 transition-colors shadow-lg shadow-purple-500/15">
+                    <IconComponent className="w-8 h-8 text-purple-400" />
                   </div>
-                  <h3 className="text-xl font-semibold mb-3">{feature.title}</h3>
-                  <p className="text-gray-400 leading-relaxed">{feature.description}</p>
+                  <h3 className="text-xl font-bold mb-3">{feature.title}</h3>
+                  <p className="text-gray-400 text-base leading-relaxed">{feature.description}</p>
                 </ScrollReveal>
               );
             })}
@@ -248,42 +248,42 @@ export default function LandingPage() {
       </section>
 
       {/* Pricing Section */}
-      <section id="pricing" className="py-24 px-6">
-        <div className="max-w-[1440px] mx-auto">
-          <ScrollReveal animation="slide-up" className="text-center mb-16">
+      <section id="pricing" className="py-32 px-8">
+        <div className="max-w-[1600px] mx-auto">
+          <ScrollReveal animation="slide-up" className="text-center mb-20">
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-6">Simple, transparent pricing</h2>
             <p className="text-gray-400 text-lg">Choose the plan that fits your team</p>
           </ScrollReveal>
 
-          <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
+          <div className="grid md:grid-cols-3 gap-10">
             {content.pricing.filter(p => p.active).map((plan, i) => (
               <ScrollReveal
                 key={plan.name}
                 animation="slide-up"
                 delay={i * 100}
                 className={cn(
-                  "p-6 lg:p-8 rounded-2xl border transition-all cursor-pointer hover:scale-[1.02]",
+                  "p-10 rounded-3xl border transition-all cursor-pointer hover:scale-[1.02]",
                   plan.popular 
-                    ? "bg-purple-500/10 border-purple-500/30 relative shadow-xl shadow-purple-500/10" 
-                    : "bg-white/5 border-white/10 hover:border-white/20"
+                    ? "bg-purple-500/15 border-purple-500/40 relative shadow-2xl shadow-purple-500/15" 
+                    : "bg-white/5 border-white/10 hover:border-white/25"
                 )}
               >
                 {plan.popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-purple-500 rounded-full text-xs font-medium">
+                  <div className="absolute -top-5 left-1/2 -translate-x-1/2 px-5 py-2 bg-purple-500 rounded-full text-sm font-bold">
                     Most Popular
                   </div>
                 )}
-                <div className="mb-6">
-                  <h3 className="text-xl font-semibold mb-2">{plan.name}</h3>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-4xl lg:text-5xl font-bold">${plan.price}</span>
-                    <span className="text-gray-400">/month</span>
+                <div className="mb-10">
+                  <h3 className="text-xl font-bold mb-3">{plan.name}</h3>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-4xl md:text-5xl font-bold">${plan.price}</span>
+                    <span className="text-gray-400 text-base">/month</span>
                   </div>
                 </div>
-                <ul className="space-y-3 mb-8">
+                <ul className="space-y-5 mb-12">
                   {plan.features.map((feature, j) => (
-                    <li key={j} className="flex items-center gap-3 text-sm text-gray-300">
-                      <Check className="w-5 h-5 text-green-400 flex-shrink-0" />
+                    <li key={j} className="flex items-center gap-3 text-base text-gray-300">
+                      <Check className="w-6 h-6 text-green-400 flex-shrink-0" />
                       {feature}
                     </li>
                   ))}
@@ -291,9 +291,9 @@ export default function LandingPage() {
                 <Link 
                   href="/register" 
                   className={cn(
-                    "block w-full py-3.5 rounded-xl font-medium text-center transition-all",
+                    "block w-full py-4 rounded-xl font-bold text-center transition-all text-lg",
                     plan.popular 
-                      ? "bg-purple-500 hover:bg-purple-600 hover:shadow-lg hover:shadow-purple-500/25" 
+                      ? "bg-purple-500 hover:bg-purple-600 hover:shadow-xl hover:shadow-purple-500/30" 
                       : "bg-white/10 hover:bg-white/20"
                   )}
                 >
@@ -306,33 +306,33 @@ export default function LandingPage() {
       </section>
 
       {/* FAQ Section */}
-      <section id="faq" className="py-24 px-6">
-        <div className="max-w-3xl mx-auto">
-          <ScrollReveal animation="slide-up" className="text-center mb-16">
+      <section id="faq" className="py-32 px-8">
+        <div className="max-w-4xl mx-auto">
+          <ScrollReveal animation="slide-up" className="text-center mb-20">
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-6">Frequently Asked Questions</h2>
             <p className="text-gray-400 text-lg">Everything you need to know about Outflo</p>
           </ScrollReveal>
 
-          <div className="space-y-4">
+          <div className="space-y-5">
             {content.faqs.filter(f => f.active).map((faq, i) => (
               <ScrollReveal
                 key={i}
                 animation="slide-up"
                 delay={i * 50}
-                className="border border-white/10 rounded-xl overflow-hidden hover:border-white/20 transition-colors"
+                className="border border-white/10 rounded-2xl overflow-hidden hover:border-white/25 transition-colors"
               >
                 <button
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full px-6 py-5 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
+                  className="w-full px-8 py-6 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
                 >
-                  <span className="font-medium text-lg">{faq.question}</span>
-                  <div className={cn("transition-transform duration-200", openFaq === i && "rotate-180")}>
-                    <ChevronDown className="w-5 h-5 text-gray-400" />
+                  <span className="font-semibold text-lg">{faq.question}</span>
+                  <div className={cn("transition-transform duration-300", openFaq === i && "rotate-180")}>
+                    <ChevronDown className="w-6 h-6 text-gray-400" />
                   </div>
                 </button>
                 {openFaq === i ? (
-                    <div className="px-6 pb-5 animate-fade-in">
-                      <p className="text-gray-400 leading-relaxed">{faq.answer}</p>
+                    <div className="px-8 pb-7 animate-fade-in">
+                      <p className="text-gray-400 text-base leading-relaxed">{faq.answer}</p>
                     </div>
                   ) : null}
               </ScrollReveal>
@@ -342,12 +342,12 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-24 px-6">
-        <div className="max-w-4xl mx-auto text-center">
-          <ScrollReveal animation="scale" className="p-8 lg:p-16 rounded-3xl bg-gradient-to-br from-purple-500/20 to-purple-600/10 border border-purple-500/20">
+      <section className="py-32 px-8">
+        <div className="max-w-5xl mx-auto text-center">
+          <ScrollReveal animation="scale" className="p-12 lg:p-20 rounded-3xl bg-gradient-to-br from-purple-500/25 to-purple-600/15 border border-purple-500/25">
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-6">Ready to supercharge your outreach?</h2>
-            <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">Join thousands of teams already using Outflo to scale their outbound.</p>
-            <Link href="/register" className="inline-flex items-center gap-2 px-8 py-4 bg-purple-500 hover:bg-purple-600 rounded-xl font-semibold transition-all hover:scale-105 hover:shadow-xl hover:shadow-purple-500/25">
+            <p className="text-xl text-gray-400 mb-12 max-w-2xl mx-auto">Join thousands of teams already using Outflo to scale their outbound.</p>
+            <Link href="/register" className="inline-flex items-center gap-3 px-8 py-4 bg-purple-500 hover:bg-purple-600 rounded-xl font-bold text-base transition-all hover:scale-105 hover:shadow-2xl hover:shadow-purple-500/30">
               Start Your Free Trial
               <ArrowRight className="w-5 h-5" />
             </Link>
@@ -356,19 +356,19 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-16 px-6 border-t border-white/5">
-        <div className="max-w-[1440px] mx-auto">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
+      <footer className="py-20 px-8 border-t border-white/5">
+        <div className="max-w-[1600px] mx-auto">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-10">
+            <div className="flex items-center gap-4">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
                 <Zap className="w-5 h-5 text-white" />
               </div>
-              <span className="text-lg font-semibold">{content.footer.company}</span>
+              <span className="text-xl font-semibold">{content.footer.company}</span>
             </div>
-            <div className="text-gray-400 text-sm">
+            <div className="text-gray-400 text-base">
               {content.footer.copyright}
             </div>
-            <div className="text-gray-400 text-sm">
+            <div className="text-gray-400 text-base">
               <a href={`mailto:${content.footer.email}`} className="hover:text-white transition-colors">
                 {content.footer.email}
               </a>

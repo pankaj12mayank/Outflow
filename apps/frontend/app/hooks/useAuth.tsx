@@ -124,22 +124,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return false;
     }
 
-    try {
-      const response = await api.get("/api/v1/auth/me", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      const userWithPermissions = addPermissionsToUser(response.data);
-      setState({
-        user: userWithPermissions,
-        isAuthenticated: true,
-        isLoading: false,
-      });
-      api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
-      return true;
-    } catch (error: any) {
-      if (error.response?.status === 401) {
-        if (isRefreshing && refreshPromiseRef.current) {
-          const refreshed = await refreshPromiseRef.current;
+    if (!accessToken.startsWith("so_")) {
+      try {
+        const response = await api.get("/api/v1/auth/me", {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const userWithPermissions = addPermissionsToUser(response.data);
+        setState({
+          user: userWithPermissions,
+          isAuthenticated: true,
+          isLoading: false,
+        });
+        api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+        return true;
+      } catch (error: any) {
+        if (error.response?.status === 401) {
+          if (isRefreshing && refreshPromiseRef.current) {
+            const refreshed = await refreshPromiseRef.current;
+            if (refreshed) {
+              const newAccessToken = localStorage.getItem("access_token");
+              if (newAccessToken) {
+                return await checkAuth();
+              }
+            }
+            clearAuth();
+            return false;
+          }
+          const refreshed = await refreshTokenFn(refreshToken);
           if (refreshed) {
             const newAccessToken = localStorage.getItem("access_token");
             if (newAccessToken) {
@@ -148,25 +159,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           clearAuth();
           return false;
+        } else {
+          clearAuth();
+          return false;
         }
-        const refreshed = await refreshTokenFn(refreshToken);
-        if (refreshed) {
-          const newAccessToken = localStorage.getItem("access_token");
-          if (newAccessToken) {
-            return await checkAuth();
-          }
-        }
-        clearAuth();
-        return false;
-      } else {
-        clearAuth();
-        return false;
       }
+    } else {
+      clearAuth();
+      return false;
     }
     return false;
   }, [clearAuth, isRefreshing]);
 
   const refreshTokenFn = useCallback(async (refresh: string): Promise<boolean> => {
+    if (refresh.startsWith("so_")) {
+      return false;
+    }
+
     if (isRefreshing && refreshPromiseRef.current) {
       return await refreshPromiseRef.current;
     }

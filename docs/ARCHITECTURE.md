@@ -11,8 +11,8 @@ Outflo is a production-grade AI Outreach Automation SaaS platform built with a s
 │                         CLIENTS                                   │
 │              (Web Browser / Mobile App)                          │
 └─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
+                                 │
+                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                         FRONTEND                                  │
 │                    Next.js 14 (Port 3000)                        │
@@ -21,10 +21,10 @@ Outflo is a production-grade AI Outreach Automation SaaS platform built with a s
 │  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘    │
 │           │           │           │           │                  │
 │           └───────────┴───────────┴───────────┘                  │
-│                      React Query (Polling)                        │
+│                      Axios + React Query                           │
 └─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
+                                 │
+                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                         BACKEND                                   │
 │                    FastAPI (Port 8000)                           │
@@ -42,19 +42,19 @@ Outflo is a production-grade AI Outreach Automation SaaS platform built with a s
 │           ▼                                                      │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │                    DATABASE                               │   │
-│  │              PostgreSQL 15                               │   │
+│  │              MongoDB 6+ (motor async)                     │   │
 │  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐  │   │
 │  │  │Orgs    │ │Users   │ │Leads   │ │Campaigns│ │Emails  │  │   │
 │  │  └────────┘ └────────┘ └────────┘ └────────┘ └────────┘  │   │
 │  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
-                                │
-            ┌───────────────────┼───────────────────┐
-            ▼                   ▼                   ▼
+                                 │
+             ┌───────────────────┼───────────────────┐
+             ▼                   ▼                   ▼
 ┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐
 │   AI Provider     │ │   Web Scraper     │ │   Email Service   │
-│   Ollama (Local)  │ │   httpx/BS4       │ │   SMTP            │
-│   llama3.2        │ │   Rotating UA     │ │   Gmail/SMTP      │
+│   Ollama (Local)   │ │   httpx/BS4       │ │   SMTP            │
+│   GPT-4/Claude     │ │   Rotating UA     │ │   Gmail/SMTP      │
 └───────────────────┘ └───────────────────┘ └───────────────────┘
 ```
 
@@ -74,17 +74,16 @@ Outflo is a production-grade AI Outreach Automation SaaS platform built with a s
 ### Backend Stack
 - **Framework**: FastAPI
 - **Language**: Python 3.11+
-- **Database**: PostgreSQL 15
-- **ORM**: SQLAlchemy 2.0 (async)
-- **Migrations**: Alembic
+- **Database**: MongoDB 6+ with motor async driver (NoSQL)
+- **ODM**: Custom models with PyMongo
 - **Auth**: JWT (python-jose) + bcrypt
 - **Scheduler**: APScheduler
 - **HTTP Client**: httpx (async)
 
 ### AI Stack
-- **Provider**: Ollama (local)
-- **Model**: llama3.2 (default)
-- **Abstraction**: Future-ready for GPT/Claude
+- **Provider**: Ollama (local) or OpenAI/Claude (cloud)
+- **Model**: llama3.2 (default), GPT-4, Claude 3.5
+- **Abstraction**: Provider-based for easy switching
 
 ### Scraping Stack
 - **HTTP**: httpx (async)

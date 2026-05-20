@@ -72,7 +72,7 @@ export default function SystemOwnerSetupPage() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.replace("/system-owner/login");
+      router.replace("/login");
       return;
     }
     if (isAuthenticated) load();

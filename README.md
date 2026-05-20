@@ -26,6 +26,7 @@ A production-ready, enterprise-grade SaaS platform for AI-powered outreach autom
 - **TailwindCSS** - Utility-first CSS framework
 - **Framer Motion** - Animation library
 - **Recharts** - Chart components
+- **Lucide React** - Icon library
 - **ShadCN** - UI component design system
 
 ## 📋 Requirements

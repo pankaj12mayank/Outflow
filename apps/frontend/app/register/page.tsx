@@ -390,7 +390,7 @@ export default function RegisterPage() {
                     className="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20"
                     style={{backgroundColor: 'rgba(255,255,255,0.05)'}}
                   >
-                    <option value="" style={{backgroundColor: '#0a0a0f', color: '#9ca3af'}}">Select your industry</option>
+                    <option value="" style={{backgroundColor: '#0a0a0f', color: '#9ca3af'}}>Select your industry</option>
                     {INDUSTRIES.map(ind => (
                       <option key={ind} value={ind} style={{backgroundColor: '#0a0a0f', color: 'white'}}>{ind}</option>
                     ))}
@@ -405,7 +405,7 @@ export default function RegisterPage() {
                     className="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20"
                     style={{backgroundColor: 'rgba(255,255,255,0.05)'}}
                   >
-                    <option value="" style={{backgroundColor: '#0a0a0f', color: '#9ca3af'}}">Select company size</option>
+                    <option value="" style={{backgroundColor: '#0a0a0f', color: '#9ca3af'}}>Select company size</option>
                     {COMPANY_SIZES.map(size => (
                       <option key={size} value={size} style={{backgroundColor: '#0a0a0f', color: 'white'}}>{size}</option>
                     ))}
@@ -465,7 +465,7 @@ export default function RegisterPage() {
                     className="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20"
                     style={{backgroundColor: 'rgba(255,255,255,0.05)'}}
                   >
-                    <option value="" style={{backgroundColor: '#0a0a0f', color: '#9ca3af'}}">Select range</option>
+                    <option value="" style={{backgroundColor: '#0a0a0f', color: '#9ca3af'}}>Select range</option>
                     <option value="0-100" style={{backgroundColor: '#0a0a0f', color: 'white'}}>0-100</option>
                     <option value="100-500" style={{backgroundColor: '#0a0a0f', color: 'white'}}>100-500</option>
                     <option value="500-1000" style={{backgroundColor: '#0a0a0f', color: 'white'}}>500-1000</option>

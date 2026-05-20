@@ -129,8 +129,8 @@ export default function SystemOwnerSmtpPage() {
     );
   }
 
-  return (
-    <div className="max-w-4xl mx-auto p-6 lg:p-8">
+return (
+    <div className="w-full p-6 lg:p-8">
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
           <h1 className="text-2xl lg:text-3xl font-bold text-white flex items-center gap-2">
@@ -152,137 +152,135 @@ export default function SystemOwnerSmtpPage() {
         </p>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <div className="space-y-6 rounded-2xl border border-white/10 bg-white/5 p-6">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Save className="w-5 h-5 text-purple-400" />
-            Server Settings
-          </h2>
-          
-          <div className="space-y-4">
+      <div className="space-y-6 rounded-2xl border border-white/10 bg-white/5 p-6">
+        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+          <Save className="w-5 h-5 text-purple-400" />
+          Server Settings
+        </h2>
+        
+        <div className="space-y-4">
+          <label className="block">
+            <span className="text-sm font-medium text-gray-300">Configuration Name</span>
+            <input
+              type="text"
+              className="mt-1.5 w-full rounded-xl bg-[#0a0a0f] border border-white/10 px-4 py-2.5 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none transition-colors"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="My SMTP Server"
+            />
+          </label>
+
+          <div className="grid grid-cols-2 gap-4">
             <label className="block">
-              <span className="text-sm font-medium text-gray-300">Configuration Name</span>
+              <span className="text-sm font-medium text-gray-300">SMTP Host</span>
               <input
                 type="text"
                 className="mt-1.5 w-full rounded-xl bg-[#0a0a0f] border border-white/10 px-4 py-2.5 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none transition-colors"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="My SMTP Server"
+                value={form.host}
+                onChange={(e) => setForm({ ...form, host: e.target.value })}
+                placeholder="smtp.example.com"
               />
             </label>
+            <label className="block">
+              <span className="text-sm font-medium text-gray-300">Port</span>
+              <input
+                type="number"
+                className="mt-1.5 w-full rounded-xl bg-[#0a0a0f] border border-white/10 px-4 py-2.5 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none transition-colors"
+                value={form.port}
+                onChange={(e) => setForm({ ...form, port: Number(e.target.value) })}
+                placeholder="587"
+              />
+            </label>
+          </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <label className="block">
-                <span className="text-sm font-medium text-gray-300">SMTP Host</span>
+          <div className="grid grid-cols-2 gap-4">
+            <label className="block">
+              <span className="text-sm font-medium text-gray-300">Username</span>
+              <input
+                type="text"
+                className="mt-1.5 w-full rounded-xl bg-[#0a0a0f] border border-white/10 px-4 py-2.5 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none transition-colors"
+                value={form.username}
+                onChange={(e) => setForm({ ...form, username: e.target.value })}
+                placeholder="user@example.com"
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium text-gray-300">Password</span>
+              <div className="relative mt-1.5">
                 <input
-                  type="text"
-                  className="mt-1.5 w-full rounded-xl bg-[#0a0a0f] border border-white/10 px-4 py-2.5 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none transition-colors"
-                  value={form.host}
-                  onChange={(e) => setForm({ ...form, host: e.target.value })}
-                  placeholder="smtp.example.com"
+                  type={showPassword ? "text" : "password"}
+                  className="w-full rounded-xl bg-[#0a0a0f] border border-white/10 px-4 py-2.5 pr-10 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none transition-colors"
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  placeholder={editingId ? "Leave blank to keep current" : "Enter password"}
                 />
-              </label>
-              <label className="block">
-                <span className="text-sm font-medium text-gray-300">Port</span>
-                <input
-                  type="number"
-                  className="mt-1.5 w-full rounded-xl bg-[#0a0a0f] border border-white/10 px-4 py-2.5 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none transition-colors"
-                  value={form.port}
-                  onChange={(e) => setForm({ ...form, port: Number(e.target.value) })}
-                  placeholder="587"
-                />
-              </label>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <label className="block">
-                <span className="text-sm font-medium text-gray-300">Username</span>
-                <input
-                  type="text"
-                  className="mt-1.5 w-full rounded-xl bg-[#0a0a0f] border border-white/10 px-4 py-2.5 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none transition-colors"
-                  value={form.username}
-                  onChange={(e) => setForm({ ...form, username: e.target.value })}
-                  placeholder="user@example.com"
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm font-medium text-gray-300">Password</span>
-                <div className="relative mt-1.5">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    className="w-full rounded-xl bg-[#0a0a0f] border border-white/10 px-4 py-2.5 pr-10 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none transition-colors"
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    placeholder={editingId ? "Leave blank to keep current" : "Enter password"}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </label>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </label>
           </div>
         </div>
+      </div>
 
-        <div className="space-y-6 rounded-2xl border border-white/10 bg-white/5 p-6">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Mail className="w-5 h-5 text-purple-400" />
-            Sender Settings
-          </h2>
-          
-          <div className="space-y-4">
-            <label className="block">
-              <span className="text-sm font-medium text-gray-300">From Email</span>
-              <input
-                type="email"
-                className="mt-1.5 w-full rounded-xl bg-[#0a0a0f] border border-white/10 px-4 py-2.5 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none transition-colors"
-                value={form.from_email}
-                onChange={(e) => setForm({ ...form, from_email: e.target.value })}
-                placeholder="noreply@example.com"
-              />
-            </label>
+      <div className="mt-6 space-y-6 rounded-2xl border border-white/10 bg-white/5 p-6">
+        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+          <Mail className="w-5 h-5 text-purple-400" />
+          Sender Settings
+        </h2>
+        
+        <div className="space-y-4">
+          <label className="block">
+            <span className="text-sm font-medium text-gray-300">From Email</span>
+            <input
+              type="email"
+              className="mt-1.5 w-full rounded-xl bg-[#0a0a0f] border border-white/10 px-4 py-2.5 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none transition-colors"
+              value={form.from_email}
+              onChange={(e) => setForm({ ...form, from_email: e.target.value })}
+              placeholder="noreply@example.com"
+            />
+          </label>
 
-            <label className="block">
-              <span className="text-sm font-medium text-gray-300">From Name</span>
-              <input
-                type="text"
-                className="mt-1.5 w-full rounded-xl bg-[#0a0a0f] border border-white/10 px-4 py-2.5 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none transition-colors"
-                value={form.from_name}
-                onChange={(e) => setForm({ ...form, from_name: e.target.value })}
-                placeholder="Outflo"
-              />
-            </label>
+          <label className="block">
+            <span className="text-sm font-medium text-gray-300">From Name</span>
+            <input
+              type="text"
+              className="mt-1.5 w-full rounded-xl bg-[#0a0a0f] border border-white/10 px-4 py-2.5 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none transition-colors"
+              value={form.from_name}
+              onChange={(e) => setForm({ ...form, from_name: e.target.value })}
+              placeholder="Outflo"
+            />
+          </label>
 
-            <label className="flex items-center gap-3 p-4 rounded-xl bg-white/5 border border-white/5 cursor-pointer hover:bg-white/10 transition-colors">
-              <input
-                type="checkbox"
-                checked={form.use_tls}
-                onChange={(e) => setForm({ ...form, use_tls: e.target.checked })}
-                className="w-5 h-5 rounded border-white/20 bg-white/5 text-purple-500 focus:ring-purple-500/50"
-              />
-              <div>
-                <span className="text-sm font-medium text-white">Use TLS/SSL</span>
-                <p className="text-xs text-gray-400">Recommended for secure email delivery</p>
-              </div>
-            </label>
+          <label className="flex items-center gap-3 p-4 rounded-xl bg-white/5 border border-white/5 cursor-pointer hover:bg-white/10 transition-colors">
+            <input
+              type="checkbox"
+              checked={form.use_tls}
+              onChange={(e) => setForm({ ...form, use_tls: e.target.checked })}
+              className="w-5 h-5 rounded border-white/20 bg-white/5 text-purple-500 focus:ring-purple-500/50"
+            />
+            <div>
+              <span className="text-sm font-medium text-white">Use TLS/SSL</span>
+              <p className="text-xs text-gray-400">Recommended for secure email delivery</p>
+            </div>
+          </label>
 
-            <label className="flex items-center gap-3 p-4 rounded-xl bg-white/5 border border-white/5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.is_default}
-                onChange={(e) => setForm({ ...form, is_default: e.target.checked })}
-                className="w-5 h-5 rounded border-white/20 bg-white/5 text-purple-500 focus:ring-purple-500/50"
-              />
-              <div>
-                <span className="text-sm font-medium text-white">Set as default</span>
-                <p className="text-xs text-gray-400">Use this configuration for all outgoing emails</p>
-              </div>
-            </label>
-          </div>
+          <label className="flex items-center gap-3 p-4 rounded-xl bg-white/5 border border-white/5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.is_default}
+              onChange={(e) => setForm({ ...form, is_default: e.target.checked })}
+              className="w-5 h-5 rounded border-white/20 bg-white/5 text-purple-500 focus:ring-purple-500/50"
+            />
+            <div>
+              <span className="text-sm font-medium text-white">Set as default</span>
+              <p className="text-xs text-gray-400">Use this configuration for all outgoing emails</p>
+            </div>
+          </label>
         </div>
       </div>
 
@@ -312,12 +310,11 @@ export default function SystemOwnerSmtpPage() {
             onChange={(e) => setTestTo(e.target.value)}
           />
           <button
-            type="button"
             onClick={sendTest}
-            disabled={testing || !testTo}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-purple-500/40 text-purple-300 hover:bg-purple-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            disabled={testing}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white/10 text-white hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
-            {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {testing && <Loader2 className="w-4 h-4 animate-spin" />}
             {testing ? "Sending..." : "Send Test Email"}
           </button>
         </div>

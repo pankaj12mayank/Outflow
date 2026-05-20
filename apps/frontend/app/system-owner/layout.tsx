@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { SystemOwnerAuthProvider, useSystemOwnerAuth } from "@/app/hooks/useSystemOwnerAuth";
 import { SystemOwnerShell } from "./components/SystemOwnerShell";
@@ -9,21 +9,29 @@ function SystemOwnerRouteGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { isAuthenticated, isLoading } = useSystemOwnerAuth();
-  const isLoginPage = pathname === "/system-owner/login";
+  const isLoginPage = pathname === "/login";
+  const [hasChecked, setHasChecked] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated && !isLoginPage) {
-      router.replace("/system-owner/login");
+    if (!isLoading) {
+      setHasChecked(true);
     }
-    if (!isLoading && isAuthenticated && isLoginPage) {
+  }, [isLoading]);
+
+  useEffect(() => {
+    if (!hasChecked) return;
+    
+    if (!isAuthenticated && !isLoginPage) {
+      router.replace("/login");
+    } else if (isAuthenticated && isLoginPage) {
       router.replace("/system-owner/dashboard");
     }
-  }, [isAuthenticated, isLoading, isLoginPage, router]);
+  }, [isAuthenticated, hasChecked, isLoginPage, router]);
 
-  if (isLoading) {
+  if (isLoading || !hasChecked) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f] text-gray-400">
-        Loading...
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f]">
+        <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }

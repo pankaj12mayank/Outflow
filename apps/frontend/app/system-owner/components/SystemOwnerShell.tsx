@@ -70,17 +70,55 @@ export function SystemOwnerShell({ children }: { children: React.ReactNode }) {
   const { logout, user } = useSystemOwnerAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  if (pathname === "/system-owner/login") {
+  if (pathname === "/login") {
     return <>{children}</>;
   }
 
   const handleLogout = async () => {
     await logout();
-    router.push("/system-owner/login");
+    router.push("/login");
+  };
+
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  const handleLogoutClick = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = async () => {
+    setShowLogoutConfirm(false);
+    await logout();
+    router.push("/login");
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutConfirm(false);
   };
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] flex flex-col lg:flex-row">
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-gray-900 border border-white/10 rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl">
+            <h3 className="text-xl font-bold text-white mb-2">Log out?</h3>
+            <p className="text-gray-400 text-sm mb-6">Are you sure you want to log out from your account?</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={cancelLogout}
+                className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 font-medium transition-colors"
+              >
+                No, stay
+              </button>
+              <button
+                onClick={confirmLogout}
+                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-medium transition-colors"
+              >
+                Yes, log out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Mobile top bar */}
       <header className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#0c0c14] shrink-0">
         <Link href="/system-owner/dashboard" className="flex items-center gap-2">
@@ -130,7 +168,7 @@ export function SystemOwnerShell({ children }: { children: React.ReactNode }) {
           )}
           <button
             type="button"
-            onClick={handleLogout}
+            onClick={handleLogoutClick}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-red-300 hover:bg-red-500/10"
           >
             <LogOut className="w-4 h-4" />

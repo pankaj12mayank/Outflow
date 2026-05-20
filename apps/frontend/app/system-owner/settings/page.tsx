@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import api from "@/app/lib/api";
 import { toast } from "@/app/components/toast";
-import { Save, Cpu, RefreshCw } from "lucide-react";
+import { Save, Cpu, RefreshCw, Loader2 } from "lucide-react";
 
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem("system_owner_token")}` };
@@ -74,101 +74,131 @@ export default function SystemOwnerAiSettingsPage() {
   };
 
   return (
-    <div className="p-8 max-w-xl">
-      <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-        <Cpu className="w-6 h-6 text-purple-400" /> AI & API
-      </h1>
-      <p className="text-gray-400 text-sm mt-1 mb-6">
-        OpenAI, Anthropic, or Ollama — saved in the database, not in files.
-      </p>
+    <div className="w-full p-8 space-y-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-white flex items-center gap-3 mb-3">
+          <Cpu className="w-8 h-8 text-purple-400" /> AI & API Settings
+        </h1>
+        <p className="text-gray-400">
+          Configure AI providers (OpenAI, Anthropic, or Ollama). Settings are stored in database, not in files.
+        </p>
+      </div>
 
       {runtime && (
-        <div className="mb-6 p-4 rounded-lg border border-white/10 text-sm text-gray-300">
-          Provider: <strong className="text-white">{String(runtime.provider)}</strong> —{" "}
-          {runtime.healthy ? (
-            <span className="text-green-400">healthy</span>
-          ) : (
-            <span className="text-amber-400">offline</span>
-          )}
+        <div className="p-5 rounded-2xl border border-white/10 bg-white/5 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className={`w-3 h-3 rounded-full ${runtime.healthy ? "bg-green-400" : "bg-amber-400"}`} />
+            <div>
+              <div className="text-sm text-gray-300">Provider: <strong className="text-white">{String(runtime.provider || form.ai_provider)}</strong></div>
+              <div className={`text-sm ${runtime.healthy ? "text-green-400" : "text-amber-400"}`}>
+                {runtime.healthy ? "Connected" : "Offline - check configuration"}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={healthCheck}
+            className="px-4 py-2 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5 transition-colors flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Recheck
+          </button>
         </div>
       )}
 
-      <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-6">
-        <label className="block text-sm text-gray-400">
-          Provider
-          <select
-            className="mt-1 w-full rounded-lg bg-[#0a0a0f] border border-white/10 px-3 py-2 text-white"
-            value={form.ai_provider}
-            onChange={(e) => setForm({ ...form, ai_provider: e.target.value })}
-          >
-            <option value="ollama">Ollama (local)</option>
-            <option value="openai">OpenAI</option>
-            <option value="anthropic">Anthropic</option>
-          </select>
-        </label>
+      <div className="space-y-6 rounded-2xl border border-white/10 bg-white/5 p-8">
+        <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+          <Cpu className="w-5 h-5 text-purple-400" />
+          AI Provider Configuration
+        </h2>
 
-        {form.ai_provider === "openai" && (
-          <label className="block text-sm text-gray-400">
-            OpenAI API key
-            <input
-              type="password"
-              className="mt-1 w-full rounded-lg bg-[#0a0a0f] border border-white/10 px-3 py-2 text-white"
-              value={form.openai_api_key}
-              onChange={(e) => setForm({ ...form, openai_api_key: e.target.value })}
-            />
-          </label>
-        )}
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-3">AI Provider</label>
+            <div className="grid grid-cols-3 gap-4">
+              {["ollama", "openai", "anthropic"].map((provider) => (
+                <button
+                  key={provider}
+                  onClick={() => setForm({ ...form, ai_provider: provider })}
+                  className={`p-5 rounded-xl border text-center transition-all ${
+                    form.ai_provider === provider
+                      ? "bg-purple-500/15 border-purple-500/40 text-purple-300"
+                      : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
+                  }`}
+                >
+                  <div className="text-sm font-medium capitalize">{provider}</div>
+                  <div className="text-xs mt-1 opacity-70">
+                    {provider === "ollama" ? "Local model" : provider === "openai" ? "GPT-4, GPT-4o" : "Claude 3.5"}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
 
-        {form.ai_provider === "anthropic" && (
-          <label className="block text-sm text-gray-400">
-            Anthropic API key
-            <input
-              type="password"
-              className="mt-1 w-full rounded-lg bg-[#0a0a0f] border border-white/10 px-3 py-2 text-white"
-              value={form.anthropic_api_key}
-              onChange={(e) => setForm({ ...form, anthropic_api_key: e.target.value })}
-            />
-          </label>
-        )}
+          {form.ai_provider === "openai" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-3">OpenAI API Key</label>
+              <div className="relative">
+                <input
+                  type="password"
+                  placeholder="sk-proj-..."
+                  className="w-full rounded-xl bg-[#0a0a0f] border border-white/10 px-4 py-3 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none"
+                  value={form.openai_api_key}
+                  onChange={(e) => setForm({ ...form, openai_api_key: e.target.value })}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-2">Get your key from platform.openai.com</p>
+            </div>
+          )}
 
-        {form.ai_provider === "ollama" && (
-          <>
-            <label className="block text-sm text-gray-400">
-              Ollama URL
-              <input
-                className="mt-1 w-full rounded-lg bg-[#0a0a0f] border border-white/10 px-3 py-2 text-white"
-                value={form.ollama_base_url}
-                onChange={(e) => setForm({ ...form, ollama_base_url: e.target.value })}
-              />
-            </label>
-            <label className="block text-sm text-gray-400">
-              Model
-              <input
-                className="mt-1 w-full rounded-lg bg-[#0a0a0f] border border-white/10 px-3 py-2 text-white"
-                value={form.ollama_model}
-                onChange={(e) => setForm({ ...form, ollama_model: e.target.value })}
-              />
-            </label>
-          </>
-        )}
+          {form.ai_provider === "anthropic" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-3">Anthropic API Key</label>
+              <div className="relative">
+                <input
+                  type="password"
+                  placeholder="sk-ant-..."
+                  className="w-full rounded-xl bg-[#0a0a0f] border border-white/10 px-4 py-3 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none"
+                  value={form.anthropic_api_key}
+                  onChange={(e) => setForm({ ...form, anthropic_api_key: e.target.value })}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-2">Get your key from console.anthropic.com</p>
+            </div>
+          )}
 
-        <div className="flex gap-3 pt-2">
-          <button
-            type="button"
-            onClick={save}
-            disabled={saving}
-            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-500"
-          >
-            <Save className="w-4 h-4" /> Save
-          </button>
-          <button
-            type="button"
-            onClick={healthCheck}
-            className="px-4 py-2 rounded-lg border border-white/10 text-gray-300 hover:bg-white/5"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
+          {form.ai_provider === "ollama" && (
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-3">Ollama URL</label>
+                <input
+                  className="w-full rounded-xl bg-[#0a0a0f] border border-white/10 px-4 py-3 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none"
+                  value={form.ollama_base_url}
+                  onChange={(e) => setForm({ ...form, ollama_base_url: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-3">Model</label>
+                <input
+                  className="w-full rounded-xl bg-[#0a0a0f] border border-white/10 px-4 py-3 text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none"
+                  value={form.ollama_model}
+                  onChange={(e) => setForm({ ...form, ollama_model: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
         </div>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="flex items-center gap-3 px-8 py-4 rounded-xl bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-lg hover:shadow-purple-500/25 font-medium"
+        >
+          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+          {saving ? "Saving..." : "Save Settings"}
+        </button>
       </div>
     </div>
   );

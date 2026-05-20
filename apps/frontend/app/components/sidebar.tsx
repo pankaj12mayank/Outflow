@@ -225,6 +225,20 @@ export function Sidebar() {
   const { isSystemOwner, hasAnyPermission, role } = usePermission();
   const [collapsed, setCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  const handleLogoutClick = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = async () => {
+    setShowLogoutConfirm(false);
+    await logout();
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutConfirm(false);
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -263,6 +277,28 @@ export function Sidebar() {
         collapsed ? "w-20" : "w-64"
       )}
     >
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl">
+            <h3 className="text-xl font-bold text-[var(--color-text-primary)] mb-2">Log out?</h3>
+            <p className="text-sm text-[var(--color-text-secondary)] mb-6">Are you sure you want to log out from your account?</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={cancelLogout}
+                className="px-5 py-2.5 rounded-xl bg-[var(--color-bg-tertiary)] hover:bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)] font-medium transition-colors"
+              >
+                No, stay
+              </button>
+              <button
+                onClick={confirmLogout}
+                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-medium transition-colors"
+              >
+                Yes, log out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className={cn("flex flex-col h-full", collapsed && "items-center")}>
         <div className="p-4 border-b border-[var(--color-border)]">
           <Link href="/app/dashboard" className="flex items-center gap-3 group">
@@ -373,7 +409,7 @@ export function Sidebar() {
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={logout}
+                onClick={handleLogoutClick}
                 className="p-2 rounded-lg text-[var(--color-text-tertiary)] hover:text-red-400 hover:bg-red-400/10 transition-all"
               >
                 <LogOut className="w-5 h-5" />
@@ -399,7 +435,7 @@ export function Sidebar() {
                 <motion.button
                   whileHover={{ x: 4 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={logout}
+                  onClick={handleLogoutClick}
                   className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-[var(--color-text-secondary)] hover:text-red-400 hover:bg-red-400/10 border border-transparent hover:border-red-400/20 transition-all duration-200"
                 >
                   <LogOut className="w-4 h-4" />

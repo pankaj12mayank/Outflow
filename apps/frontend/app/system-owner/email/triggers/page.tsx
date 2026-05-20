@@ -321,16 +321,23 @@ function CreateTriggerModal({ templates, onClose, onSuccess }: { templates: any[
           
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Email Template *</label>
-            <select
-              value={form.template_id}
-              onChange={(e) => setForm({ ...form, template_id: e.target.value })}
-              className="w-full px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white"
-            >
-              <option value="">Select a template</option>
-              {templates.map(t => (
-                <option key={t._id} value={t._id}>{t.name}</option>
-              ))}
-            </select>
+            {templates.length === 0 ? (
+              <div className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-sm">
+                <p>No templates available.</p>
+                <a href="/system-owner/email/templates" className="underline mt-1 inline-block">Create a template first →</a>
+              </div>
+            ) : (
+              <select
+                value={form.template_id}
+                onChange={(e) => setForm({ ...form, template_id: e.target.value })}
+                className="w-full px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white"
+              >
+                <option value="">Select a template</option>
+                {templates.map(t => (
+                  <option key={t._id || t.id} value={t._id || t.id}>{t.name}</option>
+                ))}
+              </select>
+            )}
           </div>
           
           <div className="grid grid-cols-2 gap-4">

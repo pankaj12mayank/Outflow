@@ -1,18 +1,17 @@
-# Outflo — Free Deploy Guide (Vercel + Render + MongoDB Atlas)
+# Outflo - Free Deploy Guide (Vercel + Render + MongoDB Atlas)
 
-## One-click setup (Windows)
+## Quick Start (Windows)
 
-Double-click ya run:
-
+Double-click to run:
 ```bat
 deploy-one-click.bat
 ```
 
-Yeh script secrets generate karegi, `deploy/generated/render.env` + `vercel.env` likhegi, aur Vercel/Render CLI se deploy karne ka option degi.
+This script generates secrets, creates `deploy/generated/render.env` + `vercel.env`, and offers Vercel/Render CLI deployment.
 
-**Docker zaroori nahi hai.** Tum direct Git se deploy kar sakte ho.
+**Docker is not required.** You can deploy directly from Git.
 
-| Service | Platform | Free tier | Role |
+| Service | Platform | Free Tier | Role |
 |---------|----------|-----------|------|
 | Frontend (Next.js) | **Vercel** | Hobby | UI |
 | Backend (FastAPI) | **Render** | Free Web Service | API |
@@ -20,8 +19,9 @@ Yeh script secrets generate karegi, `deploy/generated/render.env` + `vercel.env`
 
 ---
 
-## Pehle local par confirm karo
+## Pre-requisites
 
+First, verify locally:
 ```bat
 cd D:\Py_Projects\Outflo
 .\run.bat
@@ -30,58 +30,55 @@ cd D:\Py_Projects\Outflo
 - System Owner: http://localhost:3000/system-owner/login  
   - Email: `admin@outflo.com`  
   - Password: `Outflo@2024!`
-- Platform Setup (naya): http://localhost:3000/system-owner/setup
+- Platform Setup: http://localhost:3000/system-owner/setup
 
 ---
 
-## Part A — MongoDB Atlas (free database)
+## Part A — MongoDB Atlas (Free Database)
 
-### Step 1: Cluster banao
+### Step 1: Create Cluster
 
 1. https://cloud.mongodb.com → Sign up (free)
 2. **Build a Database** → **M0 FREE**
-3. Region: ap-south-1 (Mumbai) ya closest
+3. Region: ap-south-1 (Mumbai) or closest
 4. Cluster name: `outflo`
 
-### Step 2: Database user
+### Step 2: Create Database User
 
 1. **Database Access** → Add user  
 2. Username: `outflo_user`  
-3. Password: strong password (save karo)  
+3. Password: strong password (save it)  
 4. Role: **Read and write to any database**
 
-### Step 3: Network access
+### Step 3: Network Access
 
 1. **Network Access** → Add IP  
-2. Deploy ke liye: **Allow Access from Anywhere** (`0.0.0.0/0`)  
-   - Free tier par Render ka IP fixed nahi hota
+2. For deployment: **Allow Access from Anywhere** (`0.0.0.0/0`)
 
-### Step 4: Connection string
+### Step 4: Connection String
 
 1. **Database** → Connect → **Drivers**  
-2. Copy URI, example:
-
+2. Copy URI, format:
 ```
 mongodb+srv://outflo_user:YOUR_PASSWORD@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority
 ```
 
-3. Database name ke liye end mein `/outflo` add karo:
-
+3. Add database name `/outflo` at end:
 ```
 mongodb+srv://outflo_user:YOUR_PASSWORD@cluster0.xxxxx.mongodb.net/outflo?retryWrites=true&w=majority
 ```
 
-Yeh value baad mein Render par `MONGO_URL` banegi.
+This becomes `MONGO_URL` on Render.
 
 ---
 
-## Part B — Backend on Render (free)
+## Part B — Backend on Render (Free)
 
-### Step 1: GitHub par code push karo
+### Step 1: Push to GitHub
 
-Render GitHub se deploy karta hai. Repo public/private dono chal sakte hain.
+Render deploys from GitHub. Push your repo (public or private).
 
-### Step 2: New Web Service
+### Step 2: Create Web Service
 
 1. https://render.com → Sign up  
 2. **New +** → **Web Service**  
@@ -89,7 +86,7 @@ Render GitHub se deploy karta hai. Repo public/private dono chal sakte hain.
 4. Settings:
 
 | Field | Value |
-|-------|--------|
+|-------|-------|
 | **Name** | `outflo-api` |
 | **Root Directory** | `apps/backend` |
 | **Runtime** | Python 3 |
@@ -97,99 +94,98 @@ Render GitHub se deploy karta hai. Repo public/private dono chal sakte hain.
 | **Start Command** | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
 | **Plan** | Free |
 
-> Optional: repo mein `apps/backend/render.yaml` hai — Blueprint se bhi deploy ho sakta hai.
+> Optional: `apps/backend/render.yaml` exists for Blueprint deployment.
 
-### Step 3: Environment variables (Render)
+### Step 3: Environment Variables (Render)
 
 Render dashboard → **Environment** → Add:
 
 | Key | Value | Notes |
-|-----|--------|--------|
-| `MONGO_URL` | Atlas URI (step A) | Required |
+|-----|-------|-------|
+| `MONGO_URL` | Atlas URI (from Part A) | Required |
 | `MONGO_DATABASE` | `outflo` | |
 | `SECRET_KEY` | 32+ random chars | `openssl rand -hex 32` |
 | `SYSTEM_OWNER_EMAIL` | `admin@outflo.com` | |
-| `SYSTEM_OWNER_PASSWORD` | Strong password | Production mein change karo |
+| `SYSTEM_OWNER_PASSWORD` | Strong password | Change for production |
 | `SYSTEM_OWNER_JWT_SECRET` | Random string | |
 | `DEBUG` | `false` | Production |
 | `APP_ENV` | `production` | |
-| `APP_URL` | `https://YOUR-APP.vercel.app` | Vercel URL (baad mein update) |
+| `APP_URL` | `https://YOUR-APP.vercel.app` | Update after Vercel deploy |
 | `CORS_ORIGINS` | `["https://YOUR-APP.vercel.app"]` | JSON array format |
-| `SMTP_HOST` | `smtp.gmail.com` | Optional — email ke liye |
+| `SMTP_HOST` | `smtp.gmail.com` | Optional for email |
 | `SMTP_PORT` | `587` | |
 | `SMTP_USER` | your@gmail.com | |
 | `SMTP_PASSWORD` | Gmail App Password | |
 
-### Step 4: Deploy & test
+### Step 4: Deploy & Test
 
-1. **Deploy** wait karo (5–10 min first time)  
-2. API URL milega: `https://outflo-api.onrender.com`  
-3. Test:
+1. **Deploy** wait (5–10 min first time)  
+2. API URL: `https://outflo-api.onrender.com`  
+3. Test endpoints:
    - https://outflo-api.onrender.com/api/v1/ready  
-   - https://outflo-api.onrender.com/docs (agar DEBUG=true ho)
+   - https://outflo-api.onrender.com/docs (if DEBUG=true)
 
-**Free tier note:** 15 min inactive ke baad service sleep karti hai — pehli request 30–60 sec slow ho sakti hai.
+**Free tier note:** 15 min idle → service sleeps. First request 30–60s slow.
 
 ---
 
-## Part C — Frontend on Vercel (free)
+## Part C — Frontend on Vercel (Free)
 
-### Step 1: Import project
+### Step 1: Import Project
 
 1. https://vercel.com → Sign up  
 2. **Add New** → **Project**  
 3. Import same GitHub repo
 
-### Step 2: Project settings
+### Step 2: Project Settings
 
 | Field | Value |
-|-------|--------|
+|-------|-------|
 | **Framework Preset** | Next.js |
 | **Root Directory** | `apps/frontend` |
 | **Build Command** | `npm run build` (default) |
 | **Install Command** | `npm install --legacy-peer-deps` |
 
-### Step 3: Environment variables (Vercel)
+### Step 3: Environment Variables (Vercel)
 
 | Key | Value |
-|-----|--------|
+|-----|-------|
 | `NEXT_PUBLIC_API_URL` | `https://outflo-api.onrender.com` |
-| `NEXT_PUBLIC_APP_URL` | `https://your-project.vercel.app` (deploy ke baad exact URL) |
+| `NEXT_PUBLIC_APP_URL` | `https://your-project.vercel.app` (update after deploy) |
 
 ### Step 4: Deploy
 
-Deploy complete hone ke baad Vercel URL copy karo (e.g. `https://outflo.vercel.app`).
+After deploy, copy Vercel URL (e.g. `https://outflo.vercel.app`).
 
-### Step 5: Render env update (important)
+### Step 5: Update Render Env
 
-Wapas Render par jao aur update karo:
-
+Go back to Render and update:
 - `APP_URL` = Vercel URL  
 - `CORS_ORIGINS` = `["https://outflo.vercel.app"]`  
 
-Phir **Manual Deploy** → Redeploy backend.
+Then **Manual Deploy** → Redeploy backend.
 
 ---
 
-## Part D — System Owner se sab set & test (points 1–6)
+## Part D — System Owner Setup (Points 1–6)
 
 Login: `https://YOUR-APP.vercel.app/system-owner/login`
 
-Phir open karo: **`/system-owner/setup`**
+Then open: **`/system-owner/setup`**
 
-| # | Kya | System Owner se kaise |
-|---|-----|------------------------|
-| **1** | MongoDB | Setup page → MongoDB status green. Atlas URI Render par set. |
-| **2** | Real email | Setup → SMTP configs + **Send test email**. Ya Swagger `/api/v1/smtp/configs` |
-| **3** | Campaigns | Org banao → leads → campaign → **Launch** (UI). Auto-scheduler abhi manual mode. |
+| # | Task | How |
+|---|------|-----|
+| **1** | MongoDB | Setup → MongoDB status green. Set Atlas URI on Render. |
+| **2** | Real email | Setup → SMTP configs + **Send test email**. |
+| **3** | Campaigns | Create org → leads → campaign → **Launch**. |
 | **4** | Health | Setup → **Run full health check** |
-| **5** | Plans | `/system-owner/plans` — plans create/edit (Stripe abhi optional) |
-| **6** | Deploy | Yeh document + env vars Vercel/Render par |
+| **5** | Plans | `/system-owner/plans` — create/edit plans |
+| **6** | Deploy | This guide + env vars on Vercel/Render |
 
-### SMTP API se add karna (Swagger)
+### Add SMTP via Swagger
 
 1. https://outflo-api.onrender.com/docs  
-2. `POST /api/v1/smtp/configs` — body example (Gmail):
+2. `POST /api/v1/smtp/configs` — body (Gmail example):
 
 ```json
 {
@@ -206,9 +202,9 @@ Phir open karo: **`/system-owner/setup`**
 }
 ```
 
-3. Setup page se test email bhejo.
+3. Send test email from setup page.
 
-### Auth flows test checklist
+### Auth Flows Test Checklist
 
 - [ ] System owner login  
 - [ ] `/system-owner/setup` — Mongo green  
@@ -219,24 +215,23 @@ Phir open karo: **`/system-owner/setup`**
 
 ---
 
-## Part E — Docker ki zaroorat?
+## Part E — Docker Needed?
 
 | Question | Answer |
 |----------|--------|
-| Kya Docker chahiye? | **Nahi** — Vercel + Render + Atlas enough |
-| Kab Docker use karein? | Local Playwright scraping, complex workers, ya self-hosted |
-| Kya direct deploy? | **Haan** — Git push → Vercel + Render |
+| Docker required? | **No** — Vercel + Render + Atlas sufficient |
+| When use Docker? | Local Playwright scraping, complex workers, self-hosted |
+| Direct deploy? | **Yes** — Git push → Vercel + Render |
 
 ---
 
-## Part F — Paid AI (Ollama ki jagah — cloud par recommended)
+## Part F — Cloud AI (vs Ollama local)
 
-Render par Ollama **nahi** chalega. Paid API use karo:
+Render cannot run Ollama. Use paid AI APIs:
 
-### OpenAI (sabse simple)
+### OpenAI (Simplest)
 
 Render Environment:
-
 ```env
 AI_PROVIDER=openai
 OPENAI_API_KEY=sk-proj-xxxxxxxx
@@ -271,51 +266,51 @@ AI_DEFAULT_MODEL=llama-3.3-70b-versatile
 
 Test: login → `/app/ai` → connection status green.
 
-Local dev: `AI_PROVIDER=ollama` + Ollama desktop chalao.
+Local dev: `AI_PROVIDER=ollama` + Ollama desktop running.
 
 ---
 
-## Part G — Free tier limitations (honest)
+## Part G — Free Tier Limits (Honest)
 
-| Feature | Free par |
-|---------|----------|
+| Feature | Free Tier |
+|---------|-----------|
 | Render API | Sleep after idle, cold start |
 | Vercel | Bandwidth/build limits |
 | Atlas M0 | 512MB storage |
-| Ollama AI | Render par **nahi** chalega — local ya paid AI API chahiye |
-| Playwright scraping | Render free par browser install mushkil — optional disable |
-| Stripe payments | Abhi UI/mock — real Stripe keys baad mein |
+| Ollama AI | Not on Render — use paid API |
+| Playwright scraping | Hard on Render free — optional disable |
+| Stripe payments | UI/mock only — real keys later |
 
 ---
 
 ## Part H — Troubleshooting
 
-### CORS error (browser)
+### CORS Error (Browser)
 
-- Render `CORS_ORIGINS` mein exact Vercel URL (https, no trailing slash mismatch check)
+- Render `CORS_ORIGINS` must have exact Vercel URL (https, no trailing slash)
 
-### MongoDB connection failed
+### MongoDB Connection Failed
 
 - Atlas Network: `0.0.0.0/0`  
-- Password special chars URL-encode (`@` → `%40`)
+- Password special chars: URL-encode (`@` → `%40`)
 
-### System owner login fail
+### System Owner Login Fail
 
 - Render env: `SYSTEM_OWNER_PASSWORD` set  
-- Redeploy — startup `ensure_system_owner()` password sync karta hai
+- Redeploy — startup `ensure_system_owner()` syncs password
 
-### Forgot password email nahi aata
+### Forgot Password Email Not Received
 
-- SMTP configure karo + test email  
-- Dev: API response mein `reset_url` aata hai jab `DEBUG=true`
+- Configure SMTP + test email  
+- Dev: API response includes `reset_url` when `DEBUG=true`
 
-### 502 / slow first request
+### 502 / Slow First Request
 
 - Render free cold start — wait 60s, retry
 
 ---
 
-## Quick reference — URLs after deploy
+## Quick Reference — URLs After Deploy
 
 ```
 Frontend:  https://YOUR-APP.vercel.app
@@ -328,11 +323,11 @@ Health:    https://outflo-api.onrender.com/api/v1/ready
 
 ---
 
-## Files in repo (deploy helpers)
+## Files in Repo (Deploy Helpers)
 
 - `apps/frontend/vercel.json` — Vercel hints  
 - `apps/backend/render.yaml` — Render Blueprint (optional)  
-- `docs/DEPLOY_VERCEL_RENDER.md` — yeh guide  
+- `docs/DEPLOY_VERCEL_RENDER.md` — this guide  
 
 ---
 

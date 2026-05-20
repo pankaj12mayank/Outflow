@@ -151,17 +151,13 @@ MAX_LOGIN_ATTEMPTS=5
 LOCKOUT_DURATION_MINUTES=30
 ```
 
-## Database Tables
+## Database Collections
 
-- `users` - User accounts
-- `organizations` - Multi-tenant root
-- `memberships` - User-organization relation
-- `sessions` - Active sessions and tokens
+MongoDB collections (NoSQL):
+- `users` - User accounts (with organization_id reference)
+- `organizations` - Multi-tenant root entities
+- `sessions` - Active sessions and tokens (for JWT refresh)
 - `login_logs` - Login attempt history
 - `audit_logs` - Action audit trail
 
-## Migration Order
-
-1. Run `001_initial` - Core tables (orgs, users)
-2. Run `002_leads_campaigns` - Leads and campaigns
-3. System ready for authentication
+All user-scoped collections include `organization_id` for multi-tenant isolation.
