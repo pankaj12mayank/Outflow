@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import api from "@/app/lib/api";
 import { toast } from "@/app/components/toast";
-import { Save, ExternalLink, Eye, Monitor, Smartphone, Tablet, Globe, Upload, X, Check, ChevronRight } from "lucide-react";
+import { Save, ExternalLink, Eye, Globe, Upload, X, Check, ChevronRight, AlertCircle, Monitor, Tablet, Smartphone, CheckCircle } from "lucide-react";
 import Link from "next/link";
 
 type LandingContent = {
@@ -32,42 +32,57 @@ export default function LandingCmsPage() {
   const [content, setContent] = useState<LandingContent | null>(null);
   const [tab, setTab] = useState("branding");
   const [saving, setSaving] = useState(false);
-  const [previewMode, setPreviewMode] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  const [loadingError, setLoadingError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api
-      .get("/api/v1/cms/landing/content")
+      .get("/api/v1/cms/landing/content", { headers: authHeaders() })
       .then((r) => {
-        const c = r.data.content || {};
+        const c = r.data?.content || {};
         if (!c.branding) {
           c.branding = { site_name: "Outflo", logo_url: "", favicon_url: "", tagline: "" };
         }
         if (!c.hero) {
           c.hero = { badge: "AI-Powered Outreach Platform", title: "Scale Your Outreach", subtitle: "Stop wasting time", cta: "Start Free Trial", ctaSecondary: "Watch Demo", trustText: "No credit card required" };
         }
+        if (!c.features) c.features = [];
+        if (!c.stats) c.stats = [];
+        if (!c.faqs) c.faqs = [];
+        if (!c.footer) c.footer = { company: "Outflo Inc.", email: "hello@outflo.com", copyright: `© ${new Date().getFullYear()} Outflo. All rights reserved.` };
         setContent(c);
+        setLoading(false);
       })
-      .catch(() => toast.error("Failed to load landing content"));
+      .catch((err) => {
+        console.error("CMS load error:", err);
+        setLoadingError("Failed to load landing content");
+        setLoading(false);
+      });
   }, []);
 
   const saveSection = async () => {
     if (!content) return;
     setSaving(true);
     try {
+      const sectionData = content[tab as keyof LandingContent];
+      if (!sectionData) {
+        toast.error("Invalid section");
+        return;
+      }
       await api.put(
         `/api/v1/cms/landing/content?section=${tab}`,
-        content[tab as keyof LandingContent],
+        sectionData,
         { headers: authHeaders() }
       );
       toast.success("Saved", `${tab} section updated successfully`);
-    } catch {
-      toast.error("Save failed", "Could not save section");
+    } catch (err: any) {
+      toast.error("Save failed", err.response?.data?.detail || "Could not save section");
     } finally {
       setSaving(false);
     }
   };
 
-  if (!content) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f]">
         <div className="flex flex-col items-center gap-4">
@@ -78,11 +93,24 @@ export default function LandingCmsPage() {
     );
   }
 
-  const previewWidths = {
-    desktop: "100%",
-    tablet: "768px",
-    mobile: "375px",
-  };
+  if (loadingError && !content) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f]">
+        <div className="text-center">
+          <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-400" />
+          <p className="text-red-400 mb-4">{loadingError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-purple-600 rounded-lg text-white"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!content) return null;
 
   return (
     <div className="min-h-screen bg-[#0a0a0f]">
@@ -133,34 +161,6 @@ export default function LandingCmsPage() {
               );
             })}
           </nav>
-
-          {/* Preview Mode Toggle */}
-          <div className="mt-8 pt-6 border-t border-white/10">
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">Preview Mode</h2>
-            <div className="flex gap-2">
-              {[
-                { id: "desktop", icon: Monitor, label: "Desktop" },
-                { id: "tablet", icon: Tablet, label: "Tablet" },
-                { id: "mobile", icon: Smartphone, label: "Mobile" },
-              ].map((mode) => {
-                const Icon = mode.icon;
-                return (
-                  <button
-                    key={mode.id}
-                    onClick={() => setPreviewMode(mode.id as any)}
-                    className={`flex-1 p-3 rounded-xl border transition-all ${
-                      previewMode === mode.id
-                        ? "bg-purple-500/15 border-purple-500/30 text-purple-400"
-                        : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
-                    }`}
-                    title={mode.label}
-                  >
-                    <Icon className="w-5 h-5 mx-auto" />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
         </aside>
 
         {/* Main Content - Editor */}
@@ -387,65 +387,6 @@ export default function LandingCmsPage() {
             </div>
           </div>
         </main>
-
-        {/* Preview Panel - Right Side */}
-        <aside className="hidden xl:block w-96 bg-[#0c0c14] border-l border-white/10 p-6">
-          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">Live Preview</h2>
-          
-          <div className="sticky top-24">
-            {/* Device Frame */}
-            <div className="bg-gray-900 rounded-2xl p-3 shadow-2xl">
-              <div className="flex items-center gap-2 mb-3 px-2">
-                <div className="w-2 h-2 rounded-full bg-red-500" />
-                <div className="w-2 h-2 rounded-full bg-yellow-500" />
-                <div className="w-2 h-2 rounded-full bg-green-500" />
-                <span className="ml-2 text-xs text-gray-500">{previewMode.charAt(0).toUpperCase() + previewMode.slice(1)}</span>
-              </div>
-              <div 
-                className="bg-[#0a0a0f] rounded-xl overflow-hidden transition-all duration-300"
-                style={{ 
-                  width: previewWidths[previewMode],
-                  maxWidth: "100%",
-                  margin: "0 auto"
-                }}
-              >
-                <div className="p-4 space-y-3 text-xs">
-                  {/* Mini Preview */}
-                  <div className="h-16 bg-gradient-to-r from-purple-500/20 to-purple-500/5 rounded-lg flex items-center justify-center">
-                    <span className="text-purple-400 font-semibold">{content.branding?.site_name || "Outflo"}</span>
-                  </div>
-                  <div className="h-12 bg-white/5 rounded">
-                    <div className="h-3 w-3/4 bg-white/10 rounded mb-1" />
-                    <div className="h-2 w-1/2 bg-white/5 rounded" />
-                  </div>
-                  {content.features?.filter(f => f.active).slice(0, 3).map((_, i) => (
-                    <div key={i} className="h-14 bg-white/5 rounded-lg" />
-                  ))}
-                  <div className="h-8 bg-purple-500/30 rounded" />
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Stats */}
-            <div className="mt-6 p-4 rounded-xl bg-white/5 border border-white/10">
-              <h4 className="text-xs font-semibold text-gray-400 uppercase mb-3">Content Stats</h4>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Active Features</span>
-                  <span className="text-white">{content.features?.filter(f => f.active).length || 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Active FAQs</span>
-                  <span className="text-white">{content.faqs?.filter(f => f.active).length || 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Stats Count</span>
-                  <span className="text-white">{content.stats?.length || 0}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </aside>
       </div>
     </div>
   );

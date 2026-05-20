@@ -76,13 +76,24 @@ export function SystemOwnerAuthProvider({ children }: { children: ReactNode }) {
       if (error.response?.status === 401) {
         const refreshed = await refreshTokenFn(refreshToken);
         if (refreshed) {
-          await checkAuth();
-        } else {
-          clearAuth();
+          const newToken = localStorage.getItem("system_owner_token");
+          try {
+            const response = await api.get("/api/v1/system-owner-auth/me", {
+              headers: { Authorization: `Bearer ${newToken}` },
+            });
+            setState({
+              user: response.data,
+              isAuthenticated: true,
+              isLoading: false,
+            });
+            return;
+          } catch {
+            setState({ user: null, isAuthenticated: false, isLoading: false });
+            return;
+          }
         }
-      } else {
-        clearAuth();
       }
+      setState({ user: null, isAuthenticated: false, isLoading: false });
     }
   };
 

@@ -69,6 +69,7 @@ export function SystemOwnerShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { logout, user } = useSystemOwnerAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   if (pathname === "/login") {
     return <>{children}</>;
@@ -78,8 +79,6 @@ export function SystemOwnerShell({ children }: { children: React.ReactNode }) {
     await logout();
     router.push("/login");
   };
-
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const handleLogoutClick = () => {
     setShowLogoutConfirm(true);

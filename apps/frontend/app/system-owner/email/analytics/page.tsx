@@ -6,7 +6,7 @@ import { toast } from "@/app/components/toast";
 import { SoPageLayout } from "@/app/system-owner/components/SoPageLayout";
 import { 
   BarChart3, Send, Eye, Zap, MousePointer, RefreshCw,
-  TrendingUp, TrendingDown, XCircle, AlertTriangle
+  TrendingUp, TrendingDown, XCircle, AlertTriangle, CheckCircle
 } from "lucide-react";
 
 function authHeaders() {

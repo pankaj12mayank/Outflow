@@ -1,11 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
 import api from "@/app/lib/api";
-import { toast } from "@/app/components/toast";
 import { SoPageLayout } from "@/app/system-owner/components/SoPageLayout";
-import { Building2, RefreshCw, UserCheck, UserX } from "lucide-react";
+import { Building2, RefreshCw, UserCheck, UserX, Plus } from "lucide-react";
 import { SYSTEM_OWNER_EMAIL } from "@/app/lib/auth-constants";
 
 type Org = {
@@ -17,7 +15,7 @@ type Org = {
   is_active?: boolean;
   member_count?: number;
   created_at?: string;
-  admin?: { email?: string; full_name?: string; is_active?: boolean; role?: string };
+  admin?: { email?: string; full_name?: string; is_active?: boolean; role?: string } | null;
   subscription?: {
     plan?: string;
     plan_name?: string;
@@ -33,54 +31,46 @@ function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem("system_owner_token")}` };
 }
 
-function isSystemOwnerEmail(email: string): boolean {
+function isSystemOwnerEmail(email?: string): boolean {
   return email?.toLowerCase().trim() === SYSTEM_OWNER_EMAIL_LOWER;
 }
 
 export default function SystemOwnerOrganizationsPage() {
-  const [orgs, setOrgs] = useState<Org[]>([]);
-  const [total, setTotal] = useState(0);
+  const [organizations, setOrganizations] = useState<Org[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "active" | "suspended">("all");
+  const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await api.get("/api/v1/organizations", {
         headers: authHeaders(),
-        params: { page: 1, page_size: 50 },
+        params: { page: 1, page_size: 100 },
       });
-      
-      let organizations = res.data.organizations || [];
-      
-      if (organizations.length > 0) {
-        organizations = organizations.map((org: Org) => {
-          const filteredMembers = (org.members || []).filter(
-            (m) => !isSystemOwnerEmail(m.email || "")
-          );
-          
-          const regularAdmins = filteredMembers.filter((m) => m.role === "admin" || m.role === "owner");
-          
-          return {
-            ...org,
-            members: filteredMembers,
-            member_count: filteredMembers.length,
-            admin: regularAdmins.length > 0 ? regularAdmins[0] : null,
-          };
-        });
 
-        if (filter === "active") {
-          organizations = organizations.filter((o: Org) => o.is_active !== false);
-        } else if (filter === "suspended") {
-          organizations = organizations.filter((o: Org) => o.is_active === false);
-        }
-      }
-      
-      setOrgs(organizations);
-      setTotal(organizations.length);
-    } catch {
-      setOrgs([]);
-      setTotal(0);
+      let orgs: Org[] = res.data?.organizations || [];
+
+      // Filter out system owner from members
+      orgs = orgs.map((org: Org) => {
+        const filteredMembers = (org.members || []).filter(
+          (m) => !isSystemOwnerEmail(m.email)
+        );
+        const regularAdmins = filteredMembers.filter(
+          (m) => m.role === "admin" || m.role === "owner"
+        );
+        return {
+          ...org,
+          members: filteredMembers,
+          member_count: filteredMembers.length,
+          admin: regularAdmins.length > 0 ? regularAdmins[0] : null,
+        };
+      });
+
+      setOrganizations(orgs);
+    } catch (err: any) {
+      console.error("Organizations load error:", err);
+      setError("Failed to load organizations");
     } finally {
       setLoading(false);
     }
@@ -88,7 +78,7 @@ export default function SystemOwnerOrganizationsPage() {
 
   useEffect(() => {
     load();
-  }, [filter]);
+  }, []);
 
   const getStatusBadge = (org: Org) => {
     if (org.is_active === false) {
@@ -113,7 +103,6 @@ export default function SystemOwnerOrganizationsPage() {
       description="Manage registered organizations on the platform"
       actions={
         <button
-          type="button"
           onClick={load}
           className="p-2 rounded-lg border border-white/10 text-gray-400 hover:text-white hover:bg-white/5"
         >
@@ -121,15 +110,82 @@ export default function SystemOwnerOrganizationsPage() {
         </button>
       }
     >
-      {loading ? (
-        <p className="text-gray-500">Loading…</p>
-      ) : (
-        <div className="rounded-xl border border-white/10 p-12 text-center">
+      {/* Error Banner */}
+      {error && (
+        <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-between">
+          <span className="text-red-400">{error}</span>
+          <button onClick={load} className="text-sm text-red-400 hover:underline">Retry</button>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center h-64">
+          <RefreshCw className="w-8 h-8 animate-spin text-purple-500" />
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && organizations.length === 0 && !error && (
+        <div className="rounded-xl border border-white/10 bg-white/5 p-12 text-center">
           <Building2 className="w-12 h-12 mx-auto mb-4 text-gray-500" />
-          <h3 className="text-xl font-semibold text-white mb-2">No Organizations</h3>
+          <h3 className="text-xl font-semibold text-white mb-2">No Organizations Yet</h3>
           <p className="text-gray-400 max-w-md mx-auto">
             Organizations will appear here when users register on the platform.
           </p>
+        </div>
+      )}
+
+      {/* Organizations List */}
+      {!loading && organizations.length > 0 && (
+        <div className="rounded-xl border border-white/10 overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-white/5 text-gray-400 text-left">
+              <tr>
+                <th className="px-4 py-3 font-medium">Organization</th>
+                <th className="px-4 py-3 font-medium">Admin</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Plan</th>
+                <th className="px-4 py-3 font-medium">Team</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {organizations.map((org) => (
+                <tr key={org.id} className="hover:bg-white/[0.02]">
+                  <td className="px-4 py-4">
+                    <div className="font-medium text-white">{org.name}</div>
+                    {org.slug && <div className="text-xs text-gray-500">{org.slug}</div>}
+                  </td>
+                  <td className="px-4 py-4">
+                    {org.admin ? (
+                      <div>
+                        <div className="text-gray-300">{org.admin.full_name || org.admin.email}</div>
+                        <div className="text-xs text-gray-500">{org.admin.email}</div>
+                      </div>
+                    ) : (
+                      <span className="text-gray-500">No admin</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-4">{getStatusBadge(org)}</td>
+                  <td className="px-4 py-4">
+                    <span className="text-gray-300">
+                      {org.subscription?.plan_name || org.plan || "Free"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className="text-gray-300">{org.member_count ?? 0}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Stats Footer */}
+      {!loading && organizations.length > 0 && (
+        <div className="mt-6 text-sm text-gray-500">
+          Showing {organizations.length} organization{organizations.length !== 1 ? "s" : ""}
         </div>
       )}
     </SoPageLayout>
