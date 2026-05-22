@@ -239,6 +239,13 @@ def get_db() -> AsyncIOMotorDatabase:
     return MongoDB.get_database()
 
 
+async def get_database() -> AsyncIOMotorDatabase:
+    """Ensure MongoDB is connected and return the database handle."""
+    if MongoDB._database is None:
+        await MongoDB.connect()
+    return MongoDB.get_database()
+
+
 def get_collection(name: str) -> AsyncIOMotorCollection:
     return MongoDB.get_collection(name)
 

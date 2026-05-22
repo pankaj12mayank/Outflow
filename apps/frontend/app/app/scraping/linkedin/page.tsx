@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 import {
   Target,
   Loader2,
-  User,
   Briefcase,
   MapPin,
   Link as LinkIcon,
@@ -13,35 +13,62 @@ import {
   AlertCircle,
   Plus,
 } from "lucide-react";
-import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
+import { useEnrichLinkedIn, useEnrichLinkedInSync } from "@/app/hooks/use-scraping";
+import { toast } from "@/app/components/toast";
+import { PageError } from "@/app/components/page-state";
+
+type EnrichResult = {
+  name: string;
+  title: string;
+  company: string;
+  location: string;
+  email: string;
+  linkedin_url: string;
+};
 
 export default function LinkedInEnrichPage() {
   const [url, setUrl] = useState("");
-  const [isEnriching, setIsEnriching] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<EnrichResult | null>(null);
+  const [lastJobId, setLastJobId] = useState<string | null>(null);
+  const syncMutation = useEnrichLinkedInSync();
+  const jobMutation = useEnrichLinkedIn();
 
   const handleEnrich = async () => {
-    if (!url) return;
-    
-    setIsEnriching(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setResult({
-      name: "Sarah Chen",
-      title: "VP of Sales",
-      company: "TechScale Inc",
-      location: "San Francisco, CA",
-      email: "sarah.chen@techscale.io",
-      linkedin_url: url,
-    });
-    setIsEnriching(false);
+    if (!url.trim()) return;
+    setResult(null);
+    const linkedin_url = url.trim();
+
+    try {
+      const data = await syncMutation.mutateAsync({ linkedin_url });
+      setResult({
+        name: data.name || "—",
+        title: data.title || "—",
+        company: data.company || "—",
+        location: data.location || "—",
+        email: data.email || "—",
+        linkedin_url: data.linkedin_url || data.url || linkedin_url,
+      });
+    } catch (e: any) {
+      toast.error("Enrichment failed", e?.response?.data?.detail || e?.message || "Unknown error");
+      return;
+    }
+
+    try {
+      const job = await jobMutation.mutateAsync({ linkedin_url });
+      setLastJobId(job?.id || job?.job_id || null);
+      toast.success("Job queued", "Track progress under Scraping → Recent Jobs.");
+    } catch {
+      /* sync result already shown */
+    }
   };
 
+  const isLoading = syncMutation.isPending || jobMutation.isPending;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full overflow-x-hidden">
       <div className="flex items-center gap-4 text-sm text-gray-400">
         <span className="flex items-center gap-2">
           <Target className="w-4 h-4 text-blue-400" />
@@ -59,26 +86,21 @@ export default function LinkedInEnrichPage() {
         <div className="flex items-center gap-4 mb-6 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
           <AlertCircle className="w-5 h-5 text-yellow-400 flex-shrink-0" />
           <p className="text-sm text-yellow-400">
-            <strong>Manual URL input only.</strong> This tool enriches a single LinkedIn profile at a time.
-            No bulk scraping or automation is supported.
+            <strong>Manual URL input only.</strong> Enrichment uses the scraping API; empty fields mean the profile could not be parsed yet.
           </p>
         </div>
 
         <h2 className="text-xl font-bold mb-6">Enrich LinkedIn Profile</h2>
 
-        <div className="flex gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <Input
             placeholder="https://linkedin.com/in/profile-name"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             className="flex-1 bg-white/5 border-white/10"
           />
-          <Button
-            onClick={handleEnrich}
-            disabled={!url || isEnriching}
-            className="gap-2"
-          >
-            {isEnriching ? (
+          <Button onClick={handleEnrich} disabled={!url.trim() || isLoading} className="gap-2 shrink-0">
+            {isLoading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
                 Enriching...
@@ -92,6 +114,17 @@ export default function LinkedInEnrichPage() {
           </Button>
         </div>
 
+        {(syncMutation.isError || jobMutation.isError) && !result && (
+          <PageError
+            message={
+              (syncMutation.error as any)?.response?.data?.detail ||
+              (jobMutation.error as any)?.message ||
+              "Could not enrich profile."
+            }
+            onRetry={handleEnrich}
+          />
+        )}
+
         {result && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -100,13 +133,13 @@ export default function LinkedInEnrichPage() {
           >
             <div className="flex items-center gap-3 mb-4">
               <CheckCircle className="w-5 h-5 text-green-400" />
-              <span className="font-medium text-green-400">Profile Enriched Successfully</span>
+              <span className="font-medium text-green-400">API response received</span>
             </div>
 
             <div className="grid md:grid-cols-2 gap-6">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center font-bold text-lg">
-                  {result.name.charAt(0)}
+                  {(result.name !== "—" ? result.name : "?").charAt(0)}
                 </div>
                 <div>
                   <div className="font-bold">{result.name}</div>
@@ -130,11 +163,22 @@ export default function LinkedInEnrichPage() {
               </div>
             </div>
 
+            {lastJobId && (
+              <p className="text-xs text-gray-400 mt-4">
+                Background job: {lastJobId} —{" "}
+                <Link href="/app/scraping" className="text-purple-400 hover:underline">
+                  view recent jobs
+                </Link>
+              </p>
+            )}
+
             <div className="flex justify-end gap-3 mt-6">
-              <Button variant="outline" className="gap-2">
-                <Plus className="w-4 h-4" />
-                Add to Leads
-              </Button>
+              <Link href="/app/leads">
+                <Button variant="outline" className="gap-2">
+                  <Plus className="w-4 h-4" />
+                  Go to Leads
+                </Button>
+              </Link>
             </div>
           </motion.div>
         )}

@@ -3,11 +3,8 @@
 import { useState, useEffect } from "react";
 import api from "@/app/lib/api";
 import { toast } from "@/app/components/toast";
+import { getAuthHeaders } from "@/app/lib/auth";
 import { Save, Cpu, RefreshCw, Loader2 } from "lucide-react";
-
-function authHeaders() {
-  return { Authorization: `Bearer ${localStorage.getItem("system_owner_token")}` };
-}
 
 export default function SystemOwnerAiSettingsPage() {
   const [form, setForm] = useState({
@@ -23,7 +20,7 @@ export default function SystemOwnerAiSettingsPage() {
   const load = async () => {
     try {
       const res = await api.get("/api/v1/system-owner/platform/ai-settings", {
-        headers: authHeaders(),
+        headers: getAuthHeaders(),
       });
       const s = res.data.stored || {};
       setForm({
@@ -47,7 +44,7 @@ export default function SystemOwnerAiSettingsPage() {
     setSaving(true);
     try {
       await api.put("/api/v1/system-owner/platform/ai-settings", form, {
-        headers: authHeaders(),
+        headers: getAuthHeaders(),
       });
       toast.success("AI settings saved");
       load();
@@ -64,7 +61,7 @@ export default function SystemOwnerAiSettingsPage() {
       const res = await api.post(
         "/api/v1/system-owner/platform/health-check",
         {},
-        { headers: authHeaders() }
+        { headers: getAuthHeaders() }
       );
       setRuntime((r) => ({ ...r, health: res.data }));
       toast.success("Health check complete");

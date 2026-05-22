@@ -44,29 +44,7 @@ class AdminLog(BaseModel):
     ip_address: Optional[str] = None
 
 
-class Plan(BaseModel):
-    id: Optional[str] = None
-    name: str
-    slug: str
-    description: Optional[str] = None
-    price_monthly: float = 0.0
-    price_yearly: float = 0.0
-    currency: str = "USD"
-    features: List[str] = []
-    limits: Dict[str, int] = {}
-    is_active: bool = True
-
-
-class Subscription(BaseModel):
-    id: Optional[str] = None
-    organization_id: str
-    plan_id: str
-    status: str = "active"
-    billing_cycle: str = "monthly"
-    current_period_start: datetime
-    current_period_end: datetime
-    cancelled_at: Optional[datetime] = None
-
+# Plan / Subscription: use app.models.plan_models.Plan and app.models.billing_models.Subscription
 
 class Invoice(BaseModel):
     id: Optional[str] = None

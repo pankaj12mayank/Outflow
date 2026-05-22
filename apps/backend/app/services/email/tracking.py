@@ -1,5 +1,5 @@
 """
-Outflo - Email Tracking Service
+Outflo - Email Tracking Service (MongoDB)
 Open, click, bounce, reply tracking
 """
 
@@ -7,16 +7,14 @@ import asyncio
 import logging
 import re
 import hashlib
-from datetime import datetime, timedelta
-from typing import Optional, AsyncIterator
+from datetime import datetime
+from typing import Optional
 from dataclasses import dataclass
 from enum import Enum
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, update, func
-from sqlalchemy.orm import selectinload
+from bson import ObjectId
 
-from app.db import AsyncSessionLocal
+from app.db.mongodb import MongoDB, serialize_doc
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +42,28 @@ class TrackingData:
     org_id: int
 
 
+def _emails_coll():
+    return MongoDB.get_collection("emails")
+
+
+def _logs_coll():
+    return MongoDB.get_collection("email_logs")
+
+
+async def _find_email_by_message_id(message_id: str) -> Optional[dict]:
+    return await _emails_coll().find_one({"message_id": message_id})
+
+
+async def _append_email_log(org_id, email_id, event_type: str, event_data: dict):
+    await _logs_coll().insert_one({
+        "organization_id": str(org_id),
+        "email_id": str(email_id),
+        "event_type": event_type,
+        "event_data": event_data,
+        "created_at": datetime.utcnow(),
+    })
+
+
 class TrackingPixelGenerator:
     def __init__(self, tracking_domain: str = "tracking.outflo.io"):
         self.tracking_domain = tracking_domain
@@ -63,87 +83,51 @@ class TrackingPixelGenerator:
 
 class EmailTracker:
     def __init__(self):
-        self._processing = False
-        self._pending_events: list[dict] = []
         self._lock = asyncio.Lock()
 
     async def track_open(self, tracking_data: TrackingData) -> tuple[bool, str]:
         async with self._lock:
             try:
-                async with AsyncSessionLocal() as db:
-                    from app.models.models import Email, EmailLog, EmailAccount
-                    from sqlalchemy import update
-
-                    email_result = await db.execute(
-                        select(Email).where(Email.message_id == tracking_data.message_id)
-                    )
-                    email = email_result.scalar_one_or_none()
-
-                    if not email:
-                        logger.warning(f"Email not found for tracking: {tracking_data.message_id}")
-                        return False, "Email not found"
-
-                    if email.opened_at is not None:
-                        return True, "Already tracked"
-
-                    await db.execute(
-                        update(Email)
-                        .where(Email.id == email.id)
-                        .values(opened_at=datetime.utcnow())
-                    )
-
-                    log = EmailLog(
-                        organization_id=tracking_data.org_id,
-                        email_id=email.id,
-                        event_type=TrackingEvent.OPENED,
-                        event_data={"message_id": tracking_data.message_id},
-                    )
-                    db.add(log)
-                    await db.commit()
-
-                    return True, "Tracked"
-
+                email = await _find_email_by_message_id(tracking_data.message_id)
+                if not email:
+                    return False, "Email not found"
+                if email.get("opened_at"):
+                    return True, "Already tracked"
+                now = datetime.utcnow()
+                await _emails_coll().update_one(
+                    {"_id": email["_id"]},
+                    {"$set": {"opened_at": now, "updated_at": now}},
+                )
+                await _append_email_log(
+                    tracking_data.org_id,
+                    email["_id"],
+                    TrackingEvent.OPENED,
+                    {"message_id": tracking_data.message_id},
+                )
+                return True, "Tracked"
             except Exception as e:
                 logger.error(f"Failed to track open: {e}")
                 return False, str(e)
 
-    async def track_click(
-        self, tracking_data: TrackingData, clicked_url: str
-    ) -> tuple[bool, str]:
+    async def track_click(self, tracking_data: TrackingData, clicked_url: str) -> tuple[bool, str]:
         async with self._lock:
             try:
-                async with AsyncSessionLocal() as db:
-                    from app.models.models import Email, EmailLog
-
-                    email_result = await db.execute(
-                        select(Email).where(Email.message_id == tracking_data.message_id)
+                email = await _find_email_by_message_id(tracking_data.message_id)
+                if not email:
+                    return False, "Email not found"
+                now = datetime.utcnow()
+                if not email.get("clicked_at"):
+                    await _emails_coll().update_one(
+                        {"_id": email["_id"]},
+                        {"$set": {"clicked_at": now, "updated_at": now}},
                     )
-                    email = email_result.scalar_one_or_none()
-
-                    if not email:
-                        return False, "Email not found"
-
-                    if email.clicked_at is None:
-                        await db.execute(
-                            update(Email)
-                            .where(Email.id == email.id)
-                            .values(clicked_at=datetime.utcnow())
-                        )
-
-                    log = EmailLog(
-                        organization_id=tracking_data.org_id,
-                        email_id=email.id,
-                        event_type=TrackingEvent.CLICKED,
-                        event_data={
-                            "message_id": tracking_data.message_id,
-                            "clicked_url": clicked_url,
-                        },
-                    )
-                    db.add(log)
-                    await db.commit()
-
-                    return True, "Tracked"
-
+                await _append_email_log(
+                    tracking_data.org_id,
+                    email["_id"],
+                    TrackingEvent.CLICKED,
+                    {"message_id": tracking_data.message_id, "clicked_url": clicked_url},
+                )
+                return True, "Tracked"
             except Exception as e:
                 logger.error(f"Failed to track click: {e}")
                 return False, str(e)
@@ -156,145 +140,94 @@ class EmailTracker:
     ) -> bool:
         async with self._lock:
             try:
-                async with AsyncSessionLocal() as db:
-                    from app.models.models import Email, EmailLog, BouncedEmail, Lead
-
-                    email_result = await db.execute(
-                        select(Email).where(Email.message_id == tracking_data.message_id)
+                email = await _find_email_by_message_id(tracking_data.message_id)
+                lead_id = email.get("lead_id") if email else tracking_data.lead_id
+                bounced_coll = MongoDB.get_collection("bounced_emails")
+                await bounced_coll.insert_one({
+                    "organization_id": str(tracking_data.org_id),
+                    "email": tracking_data.message_id,
+                    "bounce_type": bounce_type,
+                    "reason": reason,
+                    "bounce_count": 1,
+                    "created_at": datetime.utcnow(),
+                })
+                if lead_id:
+                    await MongoDB.get_collection("leads").update_one(
+                        {"_id": ObjectId(str(lead_id))} if ObjectId.is_valid(str(lead_id)) else {"_id": lead_id},
+                        {"$set": {"is_valid_email": False, "updated_at": datetime.utcnow()}},
                     )
-                    email = email_result.scalar_one_or_none()
-
-                    if not email:
-                        lead_id = tracking_data.lead_id
-                    else:
-                        lead_id = email.lead_id
-
-                    bounce_record = BouncedEmail(
-                        organization_id=tracking_data.org_id,
-                        email=tracking_data.message_id.split("@")[0] if "@" in tracking_data.message_id else "",
-                        bounce_type=bounce_type,
-                        reason=reason,
-                        bounce_count=1,
+                if email:
+                    now = datetime.utcnow()
+                    await _emails_coll().update_one(
+                        {"_id": email["_id"]},
+                        {"$set": {"bounced_at": now, "updated_at": now}},
                     )
-                    db.add(bounce_record)
-
-                    if lead_id:
-                        await db.execute(
-                            update(Lead)
-                            .where(Lead.id == lead_id)
-                            .values(is_valid_email=False)
-                        )
-
-                    if email:
-                        await db.execute(
-                            update(Email)
-                            .where(Email.id == email.id)
-                            .values(bounced_at=datetime.utcnow())
-                        )
-
-                        log = EmailLog(
-                            organization_id=tracking_data.org_id,
-                            email_id=email.id,
-                            event_type=TrackingEvent.BOUNCED,
-                            event_data={"bounce_type": bounce_type, "reason": reason},
-                        )
-                        db.add(log)
-
-                    await db.commit()
-                    return True
-
+                    await _append_email_log(
+                        tracking_data.org_id,
+                        email["_id"],
+                        TrackingEvent.BOUNCED,
+                        {"bounce_type": bounce_type, "reason": reason},
+                    )
+                return True
             except Exception as e:
                 logger.error(f"Failed to record bounce: {e}")
                 return False
 
-    async def record_complaint(
-        self, tracking_data: TrackingData, complaint_type: str = "spam"
-    ) -> bool:
+    async def record_complaint(self, tracking_data: TrackingData, complaint_type: str = "spam") -> bool:
         async with self._lock:
             try:
-                async with AsyncSessionLocal() as db:
-                    from app.models.models import Email, EmailLog, Lead
-
-                    email_result = await db.execute(
-                        select(Email).where(Email.message_id == tracking_data.message_id)
+                email = await _find_email_by_message_id(tracking_data.message_id)
+                if email:
+                    now = datetime.utcnow()
+                    await _emails_coll().update_one(
+                        {"_id": email["_id"]},
+                        {"$set": {"unsubscribed_at": now, "updated_at": now}},
                     )
-                    email = email_result.scalar_one_or_none()
-
-                    if email:
-                        await db.execute(
-                            update(Email)
-                            .where(Email.id == email.id)
-                            .values(unsubscribed_at=datetime.utcnow())
-                        )
-
-                        log = EmailLog(
-                            organization_id=tracking_data.org_id,
-                            email_id=email.id,
-                            event_type=TrackingEvent.COMPLAINED,
-                            event_data={"complaint_type": complaint_type},
-                        )
-                        db.add(log)
-
-                    if tracking_data.lead_id:
-                        await db.execute(
-                            update(Lead)
-                            .where(Lead.id == tracking_data.lead_id)
-                            .values(is_valid_email=False)
-                        )
-
-                    await db.commit()
-                    return True
-
+                    await _append_email_log(
+                        tracking_data.org_id,
+                        email["_id"],
+                        TrackingEvent.COMPLAINED,
+                        {"complaint_type": complaint_type},
+                    )
+                if tracking_data.lead_id:
+                    await MongoDB.get_collection("leads").update_one(
+                        {"_id": ObjectId(str(tracking_data.lead_id))} if ObjectId.is_valid(str(tracking_data.lead_id)) else {"_id": tracking_data.lead_id},
+                        {"$set": {"is_valid_email": False}},
+                    )
+                return True
             except Exception as e:
                 logger.error(f"Failed to record complaint: {e}")
                 return False
 
-    async def record_unsubscribe(
-        self, tracking_data: TrackingData, source: str = "link"
-    ) -> bool:
+    async def record_unsubscribe(self, tracking_data: TrackingData, source: str = "link") -> bool:
         async with self._lock:
             try:
-                async with AsyncSessionLocal() as db:
-                    from app.models.models import Email, EmailLog, Lead, UnsubscribedEmail
-
-                    email_result = await db.execute(
-                        select(Email).where(Email.message_id == tracking_data.message_id)
+                email = await _find_email_by_message_id(tracking_data.message_id)
+                unsub_coll = MongoDB.get_collection("unsubscribed_emails")
+                await unsub_coll.insert_one({
+                    "organization_id": str(tracking_data.org_id),
+                    "email": email.get("to_email") if email else "",
+                    "source": source,
+                    "unsubscribed_at": datetime.utcnow(),
+                })
+                if email:
+                    now = datetime.utcnow()
+                    await _emails_coll().update_one(
+                        {"_id": email["_id"]},
+                        {"$set": {"unsubscribed_at": now, "updated_at": now}},
                     )
-                    email = email_result.scalar_one_or_none()
-
-                    unsub = UnsubscribedEmail(
-                        organization_id=tracking_data.org_id,
-                        email=email.to_email if email else "",
-                        source=source,
-                        unsubscribed_at=datetime.utcnow(),
+                    await _append_email_log(
+                        tracking_data.org_id,
+                        email["_id"],
+                        TrackingEvent.UNSUBSCRIBED,
+                        {"source": source},
                     )
-                    db.add(unsub)
-
-                    if email:
-                        await db.execute(
-                            update(Email)
-                            .where(Email.id == email.id)
-                            .values(unsubscribed_at=datetime.utcnow())
-                        )
-
-                        log = EmailLog(
-                            organization_id=tracking_data.org_id,
-                            email_id=email.id,
-                            event_type=TrackingEvent.UNSUBSCRIBED,
-                            event_data={"source": source},
-                        )
-                        db.add(log)
-
-                    if tracking_data.lead_id:
-                        await db.execute(
-                            update(Lead)
-                            .where(Lead.id == tracking_data.lead_id)
-                            .values(is_valid_email=False)
-                        )
-
-                    await db.commit()
-                    return True
-
+                if tracking_data.lead_id:
+                    await MongoDB.get_collection("leads").update_one(
+                        {"_id": ObjectId(str(tracking_data.lead_id))} if ObjectId.is_valid(str(tracking_data.lead_id)) else {"_id": tracking_data.lead_id},
+                        {"$set": {"is_valid_email": False}},
+                    )
+                return True
             except Exception as e:
                 logger.error(f"Failed to record unsubscribe: {e}")
                 return False
@@ -306,161 +239,111 @@ class EmailTracker:
             r"vacation",
             r"currently.?away",
             r"not.?available",
-            r"收到邮件",
-            r"不在办公室",
         ]
         body_lower = body.lower()
         return any(re.search(pattern, body_lower) for pattern in auto_reply_patterns)
 
 
 class EmailAnalytics:
-    def __init__(self):
-        self._cache: dict = {}
-        self._cache_ttl = 300
+    async def get_email_stats(self, email_id: str) -> dict:
+        try:
+            oid = ObjectId(email_id)
+        except Exception:
+            return {}
+        email = await _emails_coll().find_one({"_id": oid})
+        if not email:
+            return {}
+        logs = await _logs_coll().find({"email_id": str(email_id)}).to_list(length=100)
+        event_counts: dict = {}
+        for log in logs:
+            et = log.get("event_type")
+            event_counts[et] = event_counts.get(et, 0) + 1
+        return {
+            "sent": email.get("sent_at") is not None,
+            "delivered": email.get("sent_at") is not None and email.get("bounced_at") is None,
+            "opened": email.get("opened_at") is not None,
+            "clicked": email.get("clicked_at") is not None,
+            "replied": email.get("replied_at") is not None,
+            "bounced": email.get("bounced_at") is not None,
+            "unsubscribed": email.get("unsubscribed_at") is not None,
+            "events": event_counts,
+        }
 
-    async def get_email_stats(self, email_id: int) -> dict:
-        async with AsyncSessionLocal() as db:
-            from app.models.models import Email, EmailLog
+    async def get_campaign_stats(self, campaign_id: str) -> dict:
+        cursor = _emails_coll().find({"campaign_id": str(campaign_id)})
+        emails = await cursor.to_list(length=10000)
+        total = len(emails)
+        sent = sum(1 for e in emails if e.get("sent_at"))
+        delivered = sum(1 for e in emails if e.get("sent_at") and not e.get("bounced_at"))
+        opened = sum(1 for e in emails if e.get("opened_at"))
+        clicked = sum(1 for e in emails if e.get("clicked_at"))
+        replied = sum(1 for e in emails if e.get("replied_at"))
+        bounced = sum(1 for e in emails if e.get("bounced_at"))
+        return {
+            "campaign_id": campaign_id,
+            "total_emails": total,
+            "sent": sent,
+            "delivered": delivered,
+            "opened": opened,
+            "clicked": clicked,
+            "replied": replied,
+            "bounced": bounced,
+            "delivery_rate": delivered / sent if sent else 0,
+            "open_rate": opened / delivered if delivered else 0,
+            "click_rate": clicked / delivered if delivered else 0,
+            "reply_rate": replied / delivered if delivered else 0,
+            "bounce_rate": bounced / sent if sent else 0,
+        }
 
-            email_result = await db.execute(select(Email).where(Email.id == email_id))
-            email = email_result.scalar_one_or_none()
+    async def get_sequence_stats(self, sequence_id: str) -> dict:
+        cursor = _emails_coll().find({"sequence_id": str(sequence_id)})
+        emails = await cursor.to_list(length=10000)
+        total = len(emails)
+        sent = sum(1 for e in emails if e.get("sent_at"))
+        opened = sum(1 for e in emails if e.get("opened_at"))
+        replied = sum(1 for e in emails if e.get("replied_at"))
+        step_stats: dict = {}
+        for email in emails:
+            step = email.get("sequence_step") or 0
+            if step not in step_stats:
+                step_stats[step] = {"total": 0, "sent": 0, "opened": 0, "replied": 0}
+            step_stats[step]["total"] += 1
+            if email.get("sent_at"):
+                step_stats[step]["sent"] += 1
+            if email.get("opened_at"):
+                step_stats[step]["opened"] += 1
+            if email.get("replied_at"):
+                step_stats[step]["replied"] += 1
+        return {
+            "sequence_id": sequence_id,
+            "total_emails": total,
+            "sent": sent,
+            "opened": opened,
+            "replied": replied,
+            "open_rate": opened / sent if sent else 0,
+            "reply_rate": replied / sent if sent else 0,
+            "step_stats": step_stats,
+        }
 
-            if not email:
-                return {}
-
-            logs_result = await db.execute(
-                select(EmailLog).where(EmailLog.email_id == email_id)
-            )
-            logs = logs_result.scalars().all()
-
-            stats = {
-                "sent": False,
-                "delivered": False,
-                "opened": email.opened_at is not None,
-                "clicked": email.clicked_at is not None,
-                "replied": email.replied_at is not None,
-                "bounced": email.bounced_at is not None,
-                "unsubscribed": email.unsubscribed_at is not None,
-                "sent_at": email.sent_at.isoformat() if email.sent_at else None,
-                "opened_at": email.opened_at.isoformat() if email.opened_at else None,
-                "clicked_at": email.clicked_at.isoformat() if email.clicked_at else None,
-                "replied_at": email.replied_at.isoformat() if email.replied_at else None,
-            }
-
-            event_counts = {}
-            for log in logs:
-                event_type = log.event_type
-                event_counts[event_type] = event_counts.get(event_type, 0) + 1
-
-            stats["events"] = event_counts
-            return stats
-
-    async def get_campaign_stats(self, campaign_id: int) -> dict:
-        async with AsyncSessionLocal() as db:
-            from app.models.models import Email, Campaign
-
-            campaign_result = await db.execute(
-                select(Campaign).where(Campaign.id == campaign_id)
-            )
-            campaign = campaign_result.scalar_one_or_none()
-
-            if not campaign:
-                return {}
-
-            emails_result = await db.execute(
-                select(Email).where(Email.campaign_id == campaign_id)
-            )
-            emails = emails_result.scalars().all()
-
-            total = len(emails)
-            sent = sum(1 for e in emails if e.sent_at is not None)
-            delivered = sum(1 for e in emails if e.sent_at is not None and e.bounced_at is None)
-            opened = sum(1 for e in emails if e.opened_at is not None)
-            clicked = sum(1 for e in emails if e.clicked_at is not None)
-            replied = sum(1 for e in emails if e.replied_at is not None)
-            bounced = sum(1 for e in emails if e.bounced_at is not None)
-
-            return {
-                "campaign_id": campaign_id,
-                "total_emails": total,
-                "sent": sent,
-                "delivered": delivered,
-                "opened": opened,
-                "clicked": clicked,
-                "replied": replied,
-                "bounced": bounced,
-                "delivery_rate": delivered / sent if sent > 0 else 0,
-                "open_rate": opened / delivered if delivered > 0 else 0,
-                "click_rate": clicked / delivered if delivered > 0 else 0,
-                "reply_rate": replied / delivered if delivered > 0 else 0,
-                "bounce_rate": bounced / sent if sent > 0 else 0,
-            }
-
-    async def get_sequence_stats(self, sequence_id: int) -> dict:
-        async with AsyncSessionLocal() as db:
-            from app.models.models import Email
-
-            emails_result = await db.execute(
-                select(Email).where(Email.sequence_id == sequence_id)
-            )
-            emails = emails_result.scalars().all()
-
-            total = len(emails)
-            sent = sum(1 for e in emails if e.sent_at is not None)
-            opened = sum(1 for e in emails if e.opened_at is not None)
-            replied = sum(1 for e in emails if e.replied_at is not None)
-
-            step_stats = {}
-            for email in emails:
-                step = email.sequence_step or 0
-                if step not in step_stats:
-                    step_stats[step] = {"total": 0, "sent": 0, "opened": 0, "replied": 0}
-                step_stats[step]["total"] += 1
-                if email.sent_at:
-                    step_stats[step]["sent"] += 1
-                if email.opened_at:
-                    step_stats[step]["opened"] += 1
-                if email.replied_at:
-                    step_stats[step]["replied"] += 1
-
-            return {
-                "sequence_id": sequence_id,
-                "total_emails": total,
-                "sent": sent,
-                "opened": opened,
-                "replied": replied,
-                "open_rate": opened / sent if sent > 0 else 0,
-                "reply_rate": replied / sent if sent > 0 else 0,
-                "step_stats": step_stats,
-            }
-
-    async def get_lead_journey(self, lead_id: int) -> list[dict]:
-        async with AsyncSessionLocal() as db:
-            from app.models.models import Email, EmailLog
-
-            emails_result = await db.execute(
-                select(Email)
-                .where(Email.lead_id == lead_id)
-                .order_by(Email.sent_at)
-            )
-            emails = emails_result.scalars().all()
-
-            journey = []
-            for email in emails:
-                journey.append({
-                    "email_id": email.id,
-                    "message_id": email.message_id,
-                    "subject": email.subject,
-                    "sent_at": email.sent_at.isoformat() if email.sent_at else None,
-                    "opened": email.opened_at is not None,
-                    "clicked": email.clicked_at is not None,
-                    "replied": email.replied_at is not None,
-                    "campaign_id": email.campaign_id,
-                    "sequence_id": email.sequence_id,
-                    "sequence_step": email.sequence_step,
-                })
-
-            return journey
+    async def get_lead_journey(self, lead_id: str) -> list[dict]:
+        cursor = _emails_coll().find({"lead_id": str(lead_id)}).sort("sent_at", 1)
+        emails = await cursor.to_list(length=500)
+        journey = []
+        for email in emails:
+            doc = serialize_doc(email)
+            journey.append({
+                "email_id": doc.get("id"),
+                "message_id": email.get("message_id"),
+                "subject": email.get("subject"),
+                "sent_at": email.get("sent_at").isoformat() if isinstance(email.get("sent_at"), datetime) else email.get("sent_at"),
+                "opened": email.get("opened_at") is not None,
+                "clicked": email.get("clicked_at") is not None,
+                "replied": email.get("replied_at") is not None,
+                "campaign_id": email.get("campaign_id"),
+                "sequence_id": email.get("sequence_id"),
+                "sequence_step": email.get("sequence_step"),
+            })
+        return journey
 
 
 _email_tracker: Optional[EmailTracker] = None

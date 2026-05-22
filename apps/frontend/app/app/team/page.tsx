@@ -30,7 +30,7 @@ const teamMembers = [
     id: 1,
     name: "Sarah Chen",
     email: "sarah@techscale.io",
-    role: "admin",
+    role: "organization_admin",
     status: "active",
     avatar: "SC",
     joinedAt: "2026-01-15",
@@ -40,7 +40,7 @@ const teamMembers = [
     id: 2,
     name: "Michael Torres",
     email: "michael@techscale.io",
-    role: "admin",
+    role: "organization_admin",
     status: "active",
     avatar: "MT",
     joinedAt: "2026-02-01",
@@ -50,7 +50,7 @@ const teamMembers = [
     id: 3,
     name: "Emma Williams",
     email: "emma@techscale.io",
-    role: "admin",
+    role: "organization_admin",
     status: "active",
     avatar: "EW",
     joinedAt: "2026-02-15",
@@ -78,30 +78,24 @@ const teamMembers = [
   },
 ];
 
-const roleLabels = {
-  admin: "Admin",
+const roleLabels: Record<string, string> = {
+  organization_admin: "Organization Admin",
   team_member: "Team Member",
-  member: "Team Member",
-  viewer: "Viewer",
 };
 
-const roleColors = {
-  admin: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+const roleColors: Record<string, string> = {
+  organization_admin: "bg-purple-500/10 text-purple-400 border-purple-500/20",
   team_member: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  member: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  viewer: "bg-gray-500/10 text-gray-400 border-gray-500/20",
 };
 
-const roleIcons = {
-  admin: Shield,
+const roleIcons: Record<string, any> = {
+  organization_admin: Shield,
   team_member: Users,
-  member: Users,
-  viewer: Users,
 };
 
 const pendingInvites = [
-  { email: "david@techscale.io", role: "member", sentAt: "2026-05-12" },
-  { email: "rachel@techscale.io", role: "admin", sentAt: "2026-05-13" },
+  { email: "david@techscale.io", role: "team_member", sentAt: "2026-05-12" },
+  { email: "rachel@techscale.io", role: "organization_admin", sentAt: "2026-05-13" },
 ];
 
 export default function TeamPage() {
@@ -110,7 +104,7 @@ export default function TeamPage() {
   const [roleFilter, setRoleFilter] = useState("all");
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("member");
+  const [inviteRole, setInviteRole] = useState("team_member");
   const [members, setMembers] = useState(teamMembers);
   const [pendingInvitesList, setPendingInvitesList] = useState(pendingInvites);
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
@@ -130,7 +124,7 @@ export default function TeamPage() {
     }
     setPendingInvitesList([...pendingInvitesList, { email: inviteEmail, role: inviteRole, sentAt: "2026-05-16" }]);
     setInviteEmail("");
-    setInviteRole("member");
+    setInviteRole("team_member");
     setShowInviteModal(false);
     toast.invite(inviteEmail);
   };
@@ -275,7 +269,7 @@ export default function TeamPage() {
           />
         </div>
         <div className="flex items-center gap-2">
-          {["all", "owner", "admin", "member"].map((role) => (
+          {["all", "organization_admin", "team_member"].map((role) => (
             <button
               key={role}
               onClick={() => setRoleFilter(role)}
@@ -311,14 +305,14 @@ export default function TeamPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{member.name}</span>
-                  {member.role === "owner" && (
+                  {member.role === "organization_admin" && (
                     <Crown className="w-4 h-4 text-yellow-400" />
                   )}
                 </div>
                 <div className="text-sm text-gray-400">{member.email}</div>
               </div>
               <Badge className={cn("capitalize", roleColors[member.role as keyof typeof roleColors])}>
-                {member.role}
+                {member.role === "organization_admin" ? "Admin" : "Member"}
               </Badge>
               <div className="text-right">
                 <div className="text-sm text-gray-400">
@@ -331,7 +325,7 @@ export default function TeamPage() {
                 </div>
               </div>
               <div className="flex items-center gap-1">
-                {member.role !== "owner" && user?.role === "owner" && (
+                {member.role !== "organization_admin" && user?.role === "organization_admin" && (
                   <>
                     <div className="relative">
                       <Button variant="ghost" size="icon" onClick={() => setActiveMenu(activeMenu === member.id ? null : member.id)}>
@@ -339,8 +333,8 @@ export default function TeamPage() {
                       </Button>
                       {activeMenu === member.id && (
                         <div className="absolute right-0 top-full mt-1 z-50 w-36 p-1 rounded-lg bg-gray-900 border border-white/10 shadow-xl">
-                          <button onClick={() => handleUpdateRole(member.id, "admin")} className="w-full text-left px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5 hover:text-white">Make Admin</button>
-                          <button onClick={() => handleUpdateRole(member.id, "member")} className="w-full text-left px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5 hover:text-white">Make Member</button>
+                          <button onClick={() => handleUpdateRole(member.id, "organization_admin")} className="w-full text-left px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5 hover:text-white">Make Admin</button>
+                          <button onClick={() => handleUpdateRole(member.id, "team_member")} className="w-full text-left px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5 hover:text-white">Make Member</button>
                           <button onClick={() => { setShowRemoveConfirm(member.id); setActiveMenu(null); }} className="w-full text-left px-3 py-2 rounded-md text-sm text-red-400 hover:bg-red-500/10">Remove</button>
                         </div>
                       )}
@@ -398,9 +392,8 @@ export default function TeamPage() {
                     onChange={(e) => setInviteRole(e.target.value)}
                     className="w-full appearance-none px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white"
                   >
-                    <option value="viewer">Viewer - Can view data</option>
-                    <option value="member">Member - Can manage leads and campaigns</option>
-                    <option value="admin">Admin - Full access except billing</option>
+                    <option value="team_member">Member - Can manage leads and campaigns</option>
+                    <option value="organization_admin">Admin - Full access except billing</option>
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
                 </div>

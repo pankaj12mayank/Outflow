@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import {
@@ -28,15 +28,17 @@ import {
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
+import { useScrapingJobs, useScrapingStats } from "@/app/hooks/use-scraping";
+import { PageError, PageLoading } from "@/app/components/page-state";
+import { aggregateToolStatsFromJobs } from "@/app/lib/scraping-stats";
 
-const scrapingTools = [
+const scrapingToolDefs = [
   {
     id: "google-maps",
     name: "Google Maps Scraper",
     description: "Search and extract business data from Google Maps",
     icon: MapPin,
     color: "purple",
-    stats: { total: 1247, success: 1189, failed: 58 },
   },
   {
     id: "website",
@@ -44,7 +46,6 @@ const scrapingTools = [
     description: "Crawl websites and extract contact information",
     icon: Globe,
     color: "green",
-    stats: { total: 892, success: 856, failed: 36 },
   },
   {
     id: "linkedin",
@@ -52,7 +53,6 @@ const scrapingTools = [
     description: "Enrich leads with LinkedIn profile data",
     icon: Target,
     color: "blue",
-    stats: { total: 456, success: 432, failed: 24 },
   },
   {
     id: "csv-import",
@@ -60,45 +60,7 @@ const scrapingTools = [
     description: "Import leads from CSV files with smart mapping",
     icon: FileSpreadsheet,
     color: "yellow",
-    stats: { total: 2341, success: 2298, failed: 43 },
     path: "/app/scraping/csv-import",
-  },
-];
-
-const recentJobs = [
-  {
-    id: "job-1",
-    type: "google_maps",
-    keyword: "software companies",
-    location: "San Francisco, CA",
-    status: "completed",
-    results: 127,
-    createdAt: "2 hours ago",
-  },
-  {
-    id: "job-2",
-    type: "website",
-    url: "techcorp.com",
-    status: "running",
-    progress: 68,
-    createdAt: "1 hour ago",
-  },
-  {
-    id: "job-3",
-    type: "csv_import",
-    filename: "leads_q2.csv",
-    rows: 542,
-    status: "completed",
-    results: 538,
-    createdAt: "3 hours ago",
-  },
-  {
-    id: "job-4",
-    type: "linkedin",
-    name: "Sarah Chen",
-    status: "completed",
-    results: 1,
-    createdAt: "5 hours ago",
   },
 ];
 
@@ -125,13 +87,65 @@ function StatCard({ label, value, icon: Icon, color }: any) {
   );
 }
 
+type ScrapingJobRow = {
+  id: string | number;
+  type: string;
+  keyword?: string;
+  location?: string;
+  url?: string;
+  filename?: string;
+  name?: string;
+  rows?: number;
+  status: string;
+  progress?: number;
+  results?: number;
+  createdAt: string;
+};
+
+function formatJob(job: Record<string, unknown>): ScrapingJobRow {
+  const params = (job.params as Record<string, unknown>) || {};
+  return {
+    id: (job.id ?? job._id) as string | number,
+    type: String(job.job_type || job.type || "unknown"),
+    keyword: params.keyword as string | undefined,
+    location: params.location as string | undefined,
+    url: params.url as string | undefined,
+    filename: params.filename as string | undefined,
+    name: (params.name || params.linkedin_url) as string | undefined,
+    rows: params.rows as number | undefined,
+    status: String(job.status || "pending"),
+    progress: job.progress as number | undefined,
+    results: (job.results_count ?? job.results) as number | undefined,
+    createdAt: job.created_at ? new Date(String(job.created_at)).toLocaleString() : "",
+  };
+}
+
 export default function ScrapingPage() {
   const [activeTab, setActiveTab] = useState<"tools" | "jobs">("tools");
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { data: stats, isLoading: statsLoading, isError: statsError, refetch: refetchStats } = useScrapingStats();
+  const { data: jobsData, isLoading: jobsLoading, isError: jobsError, refetch: refetchJobs } = useScrapingJobs({ limit: 100 });
+
+  const rawJobs = Array.isArray(jobsData)
+    ? jobsData
+    : (jobsData as { jobs?: Record<string, unknown>[]; data?: Record<string, unknown>[] } | undefined)?.jobs
+      ?? (jobsData as { data?: Record<string, unknown>[] } | undefined)?.data
+      ?? [];
+  const recentJobs: ScrapingJobRow[] = rawJobs.map(formatJob);
+
+  const toolStats = useMemo(() => aggregateToolStatsFromJobs(rawJobs), [rawJobs]);
+
+  const scrapingTools = useMemo(
+    () =>
+      scrapingToolDefs.map((tool) => ({
+        ...tool,
+        stats: toolStats[tool.id] || { total: 0, success: 0, failed: 0 },
+      })),
+    [toolStats]
+  );
 
   const handleRefreshStats = () => {
-    setIsRefreshing(true);
-    setTimeout(() => setIsRefreshing(false), 1500);
+    refetchStats();
+    refetchJobs();
   };
 
   return (
@@ -146,19 +160,22 @@ export default function ScrapingPage() {
             variant="outline" 
             className="gap-2" 
             onClick={handleRefreshStats}
-            disabled={isRefreshing}
+            disabled={statsLoading || jobsLoading}
           >
-            <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
-            {isRefreshing ? "Refreshing..." : "Refresh Stats"}
+            <RefreshCw className={cn("w-4 h-4", (statsLoading || jobsLoading) && "animate-spin")} />
+            Refresh
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard label="Total Leads" value="4,936" icon={Users} color="purple" />
-        <StatCard label="Enriched" value="4,775" icon={CheckCircle} color="green" />
-        <StatCard label="Active Jobs" value="3" icon={Play} color="blue" />
-        <StatCard label="Success Rate" value="97.8%" icon={TrendingUp} color="yellow" />
+      {statsError && (
+        <PageError message="Could not load scraping stats." onRetry={() => refetchStats()} />
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Total Jobs" value={String(stats?.total_jobs ?? stats?.total ?? "—")} icon={Users} color="purple" />
+        <StatCard label="Completed" value={String(stats?.completed ?? stats?.success ?? "—")} icon={CheckCircle} color="green" />
+        <StatCard label="Active Jobs" value={String(stats?.active ?? stats?.running ?? "—")} icon={Play} color="blue" />
+        <StatCard label="Failed" value={String(stats?.failed ?? "—")} icon={TrendingUp} color="yellow" />
       </div>
 
       <div className="flex items-center gap-4">
@@ -252,11 +269,16 @@ export default function ScrapingPage() {
         <div className="rounded-2xl border border-white/5 bg-gradient-to-b from-white/5 to-transparent overflow-hidden">
           <div className="p-4 border-b border-white/5 flex items-center justify-between">
             <h2 className="font-bold">Recent Scraping Jobs</h2>
-            <Button variant="outline" size="sm" className="gap-2">
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => refetchJobs()}>
               <Filter className="w-4 h-4" />
-              Filter
+              Refresh
             </Button>
           </div>
+          {jobsLoading && <PageLoading label="Loading jobs..." />}
+          {jobsError && <PageError message="Could not load scraping jobs." onRetry={() => refetchJobs()} />}
+          {!jobsLoading && !jobsError && recentJobs.length === 0 && (
+            <p className="p-8 text-center text-gray-400 text-sm">No scraping jobs yet. Run a tool to create one.</p>
+          )}
           <div className="divide-y divide-white/5">
             {recentJobs.map((job, i) => (
               <motion.div
@@ -275,19 +297,20 @@ export default function ScrapingPage() {
                     job.type === "linkedin" && "bg-blue-500/10"
                   )}
                 >
-                  {job.type === "google_maps" && <MapPin className="w-5 h-5 text-purple-400" />}
-                  {job.type === "website" && <Globe className="w-5 h-5 text-green-400" />}
-                  {job.type === "csv_import" && <FileSpreadsheet className="w-5 h-5 text-yellow-400" />}
-                  {job.type === "linkedin" && <Target className="w-5 h-5 text-blue-400" />}
+                  {(job.type?.includes("google_maps") || job.type === "google_maps") && <MapPin className="w-5 h-5 text-purple-400" />}
+                  {job.type?.includes("website") && <Globe className="w-5 h-5 text-green-400" />}
+                  {job.type?.includes("csv") && <FileSpreadsheet className="w-5 h-5 text-yellow-400" />}
+                  {job.type?.includes("linkedin") && <Target className="w-5 h-5 text-blue-400" />}
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium">
-                      {job.type === "google_maps" && `Search: "${job.keyword}"`}
-                      {job.type === "website" && `Crawl: ${job.url}`}
-                      {job.type === "csv_import" && `Import: ${job.filename}`}
-                      {job.type === "linkedin" && `Enrich: ${job.name}`}
+                      {(job.type?.includes("google_maps") || job.type === "google_maps") && `Search: "${job.keyword || "—"}"`}
+                      {(job.type?.includes("website") || job.type === "website") && `Crawl: ${job.url || "—"}`}
+                      {(job.type?.includes("csv") || job.type === "csv_import") && `Import: ${job.filename || "—"}`}
+                      {(job.type?.includes("linkedin") || job.type === "linkedin") && `Enrich: ${job.name || "—"}`}
+                      {!job.type && "Scraping job"}
                     </span>
                     {job.location && (
                       <span className="text-sm text-gray-400">in {job.location}</span>

@@ -49,21 +49,6 @@ class CampaignLead(BaseModel):
     completed_at: Optional[datetime] = None
 
 
-class EmailTemplate(BaseModel):
-    id: Optional[str] = None
-    organization_id: str
-    name: str
-    slug: str
-    subject_template: str
-    body_html_template: Optional[str] = None
-    body_text_template: Optional[str] = None
-    template_type: str = "custom"
-    variables: List[str] = []
-    is_active: bool = True
-    is_system: bool = False
-    usage_count: int = 0
-
-
 class EmailAccount(BaseModel):
     id: Optional[str] = None
     organization_id: str

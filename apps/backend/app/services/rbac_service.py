@@ -4,7 +4,7 @@ from bson import ObjectId
 from app.db.mongodb import MongoDB, serialize_doc
 from app.models.rbac_models import (
     Role, Permission, PermissionCategory, 
-    ROLE_PERMISSIONS, UserRole, Plan, OrganizationPlan, FeatureToggle
+    ROLE_PERMISSIONS, UserRole, FeatureToggle
 )
 
 
@@ -328,8 +328,6 @@ class SystemOwnerService:
 
     @staticmethod
     async def get_analytics_overview() -> dict:
-        from app.services.analytics.engine import AnalyticsEngine
-        
         users_coll = MongoDB.get_collection("users")
         leads_coll = MongoDB.get_collection("leads")
         campaigns_coll = MongoDB.get_collection("campaigns")

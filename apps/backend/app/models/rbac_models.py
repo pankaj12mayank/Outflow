@@ -37,46 +37,23 @@ class Permission(BaseModel):
     is_system: bool = False
 
 
+from app.core.role_permissions import (
+    ORGANIZATION_ADMIN_PERMISSIONS,
+    TEAM_MEMBER_PERMISSIONS,
+    SYSTEM_OWNER_PLATFORM_PERMISSIONS,
+)
+
+# Stored on user_roles documents; system_owner JWT uses ["*"] via PermissionChecker.
 ROLE_PERMISSIONS = {
-    Role.SYSTEM_OWNER: [
-        "organizations:read", "organizations:create", "organizations:update", "organizations:delete",
-        "plans:read", "plans:create", "plans:update", "plans:delete",
-        "pricing:read", "pricing:create", "pricing:update", "pricing:delete",
-        "smtp:read", "smtp:create", "smtp:update", "smtp:delete",
-        "cms:read", "cms:create", "cms:update", "cms:delete",
-        "analytics:read", "analytics:export",
-        "invoices:read", "invoices:create", "invoices:update",
-        "features:read", "features:create", "features:update", "features:delete",
-        "billing:read", "billing:update",
-        "teams:read", "teams:create", "teams:update", "teams:delete",
-        "leads:read", "leads:create", "leads:update", "leads:delete", "leads:enrich",
-        "campaigns:read", "campaigns:create", "campaigns:update", "campaigns:delete", "campaigns:start", "campaigns:pause",
-        "sequences:read", "sequences:create", "sequences:update", "sequences:delete",
-        "scraping:read", "scraping:create", "scraping:update", "scraping:delete",
-        "settings:read", "settings:update",
-        "users:read", "users:create", "users:update", "users:delete",
-    ],
-    Role.ORGANIZATION_ADMIN: [
-        "organizations:read",
-        "analytics:read", "analytics:export",
-        "invoices:read",
-        "features:read",
-        "billing:read", "billing:update",
-        "teams:read", "teams:create", "teams:update", "teams:delete",
-        "leads:read", "leads:create", "leads:update", "leads:delete", "leads:enrich",
-        "campaigns:read", "campaigns:create", "campaigns:update", "campaigns:delete", "campaigns:start", "campaigns:pause",
-        "sequences:read", "sequences:create", "sequences:update", "sequences:delete",
-        "scraping:read", "scraping:create", "scraping:update", "scraping:delete",
-        "settings:read", "settings:update",
-    ],
-    Role.TEAM_MEMBER: [
-        "teams:read",
-        "leads:read", "leads:create", "leads:update",
-        "campaigns:read",
-        "sequences:read",
-        "scraping:read",
-        "settings:read",
-    ],
+    Role.SYSTEM_OWNER: list(
+        dict.fromkeys(
+            ORGANIZATION_ADMIN_PERMISSIONS
+            + SYSTEM_OWNER_PLATFORM_PERMISSIONS
+            + ["invoices:create", "invoices:update", "features:create", "features:update", "features:delete"]
+        )
+    ),
+    Role.ORGANIZATION_ADMIN: list(ORGANIZATION_ADMIN_PERMISSIONS),
+    Role.TEAM_MEMBER: list(TEAM_MEMBER_PERMISSIONS),
 }
 
 
@@ -88,29 +65,6 @@ class UserRole(BaseModel):
     permissions: List[str] = []
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-
-class Plan(BaseModel):
-    id: str = Field(default=None, alias="_id")
-    name: str
-    description: str
-    price: float
-    billing_cycle: str
-    features: List[str]
-    is_active: bool = True
-    is_default: bool = False
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-
-class OrganizationPlan(BaseModel):
-    id: str = Field(default=None, alias="_id")
-    organization_id: str
-    plan_id: str
-    status: str = "active"
-    start_date: datetime
-    end_date: datetime
-    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class FeatureToggle(BaseModel):

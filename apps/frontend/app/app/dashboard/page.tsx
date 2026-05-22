@@ -180,7 +180,7 @@ export default function DashboardPage() {
     setLoading(true);
     try {
       const [analyticsRes, campaignsRes] = await Promise.all([
-        api.get("/analytics/overview"),
+        api.get("/api/v1/analytics/overview"),
         api.get("/api/v1/campaigns"),
       ]);
 
@@ -305,7 +305,8 @@ export default function DashboardPage() {
             <p className="text-gray-400">Here's what's happening with your outreach today.</p>
           </div>
         </ScrollReveal>
-        <div className="flex items-center gap-3 relative">
+        <div className="flex flex-wrap items-center gap-3 relative max-w-full">
+          <div className="relative">
           <button
             onClick={() => setShowDatePicker(!showDatePicker)}
             className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 hover:border-white/20 text-white font-medium transition-all"
@@ -313,8 +314,8 @@ export default function DashboardPage() {
             <Calendar className="w-4 h-4" />
             {dateRange}
           </button>
-          {showDatePicker && (
-            <div className="absolute top-full mt-2 right-0 z-50 w-48 p-2 rounded-xl bg-gray-900 border border-white/10 shadow-xl">
+{showDatePicker && (
+  <div className="absolute top-full mt-2 left-0 right-auto sm:left-auto sm:right-0 z-50 w-48 max-w-[calc(100vw-2rem)] p-2 rounded-xl bg-gray-900 border border-white/10 shadow-xl">
               {dateOptions.map((option) => (
                 <button
                   key={option}
@@ -334,6 +335,7 @@ export default function DashboardPage() {
               ))}
             </div>
           )}
+          </div>
           <button
             onClick={() => router.push("/app/campaigns")}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-medium transition-all"

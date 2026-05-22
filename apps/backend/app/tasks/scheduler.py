@@ -1,15 +1,13 @@
 import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, List
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from sqlalchemy.orm import selectinload
+from bson import ObjectId
 
-from app.db import AsyncSessionLocal
-from app.models import Campaign, CampaignLead, Email, Sequence, BackgroundTask
-from app.services import TaskService
+from app.db.mongodb import MongoDB, serialize_doc
+from app.services.task_service import TaskService
 
 
 class PollingService:
@@ -43,112 +41,105 @@ class PollingService:
         self.scheduler.shutdown(wait=False)
         self._running = False
 
+    def get_active_count(self) -> int:
+        return 0
+
     async def check_pending_tasks(self):
-        async with AsyncSessionLocal() as db:
-            try:
-                task_service = TaskService(db)
-                tasks = await task_service.get_pending_tasks(10)
-                for task in tasks:
-                    await self.process_task(task, db)
-                await db.commit()
-            except Exception as e:
-                await db.rollback()
-                print(f"Error checking pending tasks: {e}")
-
-    async def process_task(self, task: BackgroundTask, db: AsyncSession):
         try:
-            task_service = TaskService(db)
-            await task_service.mark_task_started(task.id)
-
-            task_type = task.task_name
-            if task_type == "send_email":
-                await self._process_send_email(task, db)
-            elif task_type == "personalize_content":
-                await self._process_personalize_content(task, db)
-            elif task_type == "enrich_lead":
-                await self._process_enrich_lead(task, db)
-            elif task_type == "scrape_data":
-                await self._process_scrape_data(task, db)
-            else:
-                await task_service.mark_task_completed(task.id, {"status": "unknown_task_type"})
-
-            await task_service.mark_task_completed(task.id, {"status": "completed"})
+            task_service = TaskService()
+            tasks = await task_service.get_pending_tasks(10)
+            for task in tasks:
+                await self.process_task(task, task_service)
         except Exception as e:
-            await task_service.mark_task_failed(task.id, str(e))
+            print(f"Error checking pending tasks: {e}")
 
-    async def _process_send_email(self, task: BackgroundTask, db: AsyncSession):
-        payload = task.payload
-        lead_id = payload.get("lead_id")
-        campaign_id = payload.get("campaign_id")
-        sequence_id = payload.get("sequence_id")
-
-        result = await db.execute(
-            select(CampaignLead).where(
-                and_(CampaignLead.campaign_id == campaign_id, CampaignLead.lead_id == lead_id)
-            )
-        )
-        campaign_lead = result.scalar_one_or_none()
-        if not campaign_lead:
+    async def process_task(self, task: dict, task_service: TaskService):
+        task_id = task.get("id")
+        if not task_id:
             return
+        try:
+            await task_service.mark_task_started(task_id)
+            task_type = task.get("task_name") or task.get("task_type")
+            if task_type == "send_email":
+                await self._process_send_email(task)
+            elif task_type == "personalize_content":
+                await self._process_personalize_content(task)
+            elif task_type == "enrich_lead":
+                await self._process_enrich_lead(task)
+            elif task_type == "scrape_data":
+                pass
+            await task_service.mark_task_completed(task_id, {"status": "completed"})
+        except Exception as e:
+            await task_service.mark_task_failed(task_id, str(e))
 
-        campaign_lead.status = "completed"
-
-    async def _process_personalize_content(self, task: BackgroundTask, db: AsyncSession):
-        payload = task.payload
-        campaign_lead_id = payload.get("campaign_lead_id")
-
-        result = await db.execute(
-            select(CampaignLead).where(CampaignLead.id == campaign_lead_id)
-        )
-        campaign_lead = result.scalar_one_or_none()
-        if campaign_lead:
-            campaign_lead.ai_personalized_content = "Personalized content generated."
-
-    async def _process_enrich_lead(self, task: BackgroundTask, db: AsyncSession):
-        payload = task.payload
+    async def _process_send_email(self, task: dict):
+        payload = task.get("payload") or {}
+        campaign_id = payload.get("campaign_id")
         lead_id = payload.get("lead_id")
+        if not campaign_id or not lead_id:
+            return
+        coll = MongoDB.get_collection("campaign_leads")
+        await coll.update_one(
+            {"campaign_id": str(campaign_id), "lead_id": str(lead_id)},
+            {"$set": {"status": "completed", "updated_at": datetime.utcnow()}},
+            upsert=True,
+        )
 
-        result = await db.execute(select(__import__("app.models", fromlist=["Lead"]).Lead).where(__import__("app.models", fromlist=["Lead"]).Lead.id == lead_id))
-        lead = result.scalar_one_or_none()
-        if lead:
-            lead.enriched_data = {"enriched": True, "timestamp": datetime.utcnow().isoformat()}
+    async def _process_personalize_content(self, task: dict):
+        payload = task.get("payload") or {}
+        campaign_lead_id = payload.get("campaign_lead_id")
+        if not campaign_lead_id:
+            return
+        coll = MongoDB.get_collection("campaign_leads")
+        try:
+            oid = ObjectId(campaign_lead_id)
+        except Exception:
+            return
+        await coll.update_one(
+            {"_id": oid},
+            {"$set": {"ai_personalized_content": "Personalized content generated.", "updated_at": datetime.utcnow()}},
+        )
 
-    async def _process_scrape_data(self, task: BackgroundTask, db: AsyncSession):
-        pass
+    async def _process_enrich_lead(self, task: dict):
+        payload = task.get("payload") or {}
+        lead_id = payload.get("lead_id")
+        if not lead_id:
+            return
+        coll = MongoDB.get_collection("leads")
+        try:
+            oid = ObjectId(lead_id)
+        except Exception:
+            return
+        await coll.update_one(
+            {"_id": oid},
+            {"$set": {"enriched_data": {"enriched": True, "timestamp": datetime.utcnow().isoformat()}, "updated_at": datetime.utcnow()}},
+        )
 
     async def check_campaign_schedules(self):
-        async with AsyncSessionLocal() as db:
-            try:
-                now = datetime.utcnow()
-                result = await db.execute(
-                    select(Campaign).where(
-                        and_(
-                            Campaign.status == "active",
-                            Campaign.next_run_at <= now,
-                        )
-                    )
-                )
-                campaigns = result.scalars().all()
-                for campaign in campaigns:
-                    await self.process_campaign(campaign, db)
-                await db.commit()
-            except Exception as e:
-                await db.rollback()
-                print(f"Error checking campaign schedules: {e}")
+        try:
+            now = datetime.utcnow()
+            coll = MongoDB.get_collection("campaigns")
+            cursor = coll.find({"status": "active", "next_run_at": {"$lte": now}})
+            campaigns = await cursor.to_list(length=50)
+            for campaign in campaigns:
+                await self.process_campaign(campaign)
+        except Exception as e:
+            print(f"Error checking campaign schedules: {e}")
 
-    async def process_campaign(self, campaign: Campaign, db: AsyncSession):
-        campaign.last_run_at = datetime.utcnow()
-
-        result = await db.execute(
-            select(Sequence).where(Sequence.campaign_id == campaign.id).order_by(Sequence.step_number)
-        )
-        sequences = result.scalars().all()
-
-        for seq in sequences:
-            delay_total = seq.delay_days * 86400 + seq.delay_hours * 3600
+    async def process_campaign(self, campaign: dict):
+        coll = MongoDB.get_collection("campaigns")
+        campaign_id = campaign.get("_id")
+        seq_coll = MongoDB.get_collection("sequences")
+        sequences = await seq_coll.find({"campaign_id": str(campaign_id)}).sort("step_number", 1).to_list(length=10)
+        next_run = datetime.utcnow()
+        if sequences:
+            seq = sequences[0]
+            delay_total = (seq.get("delay_days") or 0) * 86400 + (seq.get("delay_hours") or 0) * 3600
             next_run = datetime.utcnow() + timedelta(seconds=delay_total)
-            campaign.next_run_at = next_run
-            break
+        await coll.update_one(
+            {"_id": campaign_id},
+            {"$set": {"last_run_at": datetime.utcnow(), "next_run_at": next_run, "updated_at": datetime.utcnow()}},
+        )
 
     async def check_email_statuses(self):
         pass

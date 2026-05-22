@@ -22,65 +22,42 @@ import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
+import { useGoogleMapsSearch } from "@/app/hooks/use-scraping";
+import { toast } from "@/app/components/toast";
+import Link from "next/link";
 
-const sampleResults = [
-  {
-    id: 1,
-    name: "Acme Corporation",
-    website: "acme.com",
-    phone: "+1 (415) 555-0123",
-    address: "123 Market St, San Francisco, CA",
-    category: "Software Company",
-    email: "info@acme.com",
-  },
-  {
-    id: 2,
-    name: "TechStart Inc",
-    website: "techstart.io",
-    phone: "+1 (415) 555-0456",
-    address: "456 Mission St, San Francisco, CA",
-    category: "Technology",
-    email: "contact@techstart.io",
-  },
-  {
-    id: 3,
-    name: "CloudNine Solutions",
-    website: "cloudnine.co",
-    phone: "+1 (415) 555-0789",
-    address: "789 Howard St, San Francisco, CA",
-    category: "Cloud Services",
-    email: "hello@cloudnine.co",
-  },
-  {
-    id: 4,
-    name: "DataFlow Systems",
-    website: "dataflow.com",
-    phone: "+1 (415) 555-0234",
-    address: "321 Folsom St, San Francisco, CA",
-    category: "Data Analytics",
-    email: "sales@dataflow.com",
-  },
-];
+type MapResult = {
+  id: string;
+  name: string;
+  website?: string;
+  phone?: string;
+  address?: string;
+  category?: string;
+  email?: string;
+};
 
 export default function GoogleMapsScraperPage() {
   const [keyword, setKeyword] = useState("");
   const [location, setLocation] = useState("");
   const [limit, setLimit] = useState(50);
-  const [isSearching, setIsSearching] = useState(false);
-  const [results, setResults] = useState<typeof sampleResults>([]);
-  const [selectedResults, setSelectedResults] = useState<number[]>([]);
+  const [results, setResults] = useState<MapResult[]>([]);
+  const [selectedResults, setSelectedResults] = useState<string[]>([]);
+  const [lastJobId, setLastJobId] = useState<string | null>(null);
+  const searchMutation = useGoogleMapsSearch();
 
   const handleSearch = async () => {
     if (!keyword) return;
-    
-    setIsSearching(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setResults(sampleResults);
-    setIsSearching(false);
+    try {
+      const res = await searchMutation.mutateAsync({ keyword, location, limit });
+      setLastJobId(res?.id || res?.job_id || null);
+      toast.success("Search queued", "Check Scraping → Recent Jobs for progress.");
+      setResults([]);
+    } catch (e: any) {
+      toast.error("Search failed", e?.response?.data?.detail || e?.message || "Unknown error");
+    }
   };
 
-  const toggleSelection = (id: number) => {
+  const toggleSelection = (id: string) => {
     setSelectedResults((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
@@ -142,10 +119,10 @@ export default function GoogleMapsScraperPage() {
 
         <Button
           onClick={handleSearch}
-          disabled={!keyword || isSearching}
+          disabled={!keyword || searchMutation.isPending}
           className="gap-2"
         >
-          {isSearching ? (
+          {searchMutation.isPending ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
               Searching...
@@ -157,6 +134,14 @@ export default function GoogleMapsScraperPage() {
             </>
           )}
         </Button>
+        {lastJobId && (
+          <p className="mt-4 text-sm text-gray-400">
+            Job <span className="text-purple-400 font-mono">{lastJobId}</span> created.{" "}
+            <Link href="/app/scraping" className="text-purple-400 hover:underline">
+              View all jobs
+            </Link>
+          </p>
+        )}
       </div>
 
       {results.length > 0 && (

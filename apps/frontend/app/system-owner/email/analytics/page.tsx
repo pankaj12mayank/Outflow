@@ -8,10 +8,7 @@ import {
   BarChart3, Send, Eye, Zap, MousePointer, RefreshCw,
   TrendingUp, TrendingDown, XCircle, AlertTriangle, CheckCircle
 } from "lucide-react";
-
-function authHeaders() {
-  return { Authorization: `Bearer ${localStorage.getItem("system_owner_token")}` };
-}
+import { getAuthHeaders } from "@/app/lib/auth";
 
 export default function EmailAnalyticsPage() {
   const [loading, setLoading] = useState(true);
@@ -25,15 +22,15 @@ export default function EmailAnalyticsPage() {
     try {
       const [analyticsRes, failuresRes, retriesRes] = await Promise.all([
         api.get("/api/v1/email-engine/analytics", { 
-          headers: authHeaders(),
+          headers: getAuthHeaders(),
           params: { days }
         }),
         api.get("/api/v1/email-engine/analytics/failures", { 
-          headers: authHeaders(),
+          headers: getAuthHeaders(),
           params: { days }
         }),
         api.get("/api/v1/email-engine/analytics/retries", { 
-          headers: authHeaders(),
+          headers: getAuthHeaders(),
           params: { days }
         }),
       ]);

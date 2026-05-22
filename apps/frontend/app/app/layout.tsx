@@ -1,12 +1,9 @@
-"use client";
+import type { Metadata } from "next";
+import { pageMetadata } from "@/app/lib/site-metadata";
 
-import { AppLayout } from "@/app/components/sidebar";
-import { AuthProviders } from "@/app/providers/auth-providers";
+export const metadata: Metadata = pageMetadata(
+  "Dashboard",
+  "Manage leads, campaigns, scraping, and analytics in Outflo."
+);
 
-export default function Layout({ children }: { children: React.ReactNode }) {
-  return (
-    <AuthProviders>
-      <AppLayout>{children}</AppLayout>
-    </AuthProviders>
-  );
-}
+export { default } from "./app-layout-client";

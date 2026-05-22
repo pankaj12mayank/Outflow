@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth } from "./useAuth";
+import { useAuth, getPermissionsForRole as getAuthPermissions, normalizeRole } from "./useAuth";
 
 export type Role = "system_owner" | "organization_admin" | "team_member";
 
@@ -10,59 +10,21 @@ export interface UserRole {
   organization_id?: string;
 }
 
+export function getPermissionsForRole(role: Role): string[] {
+  return getAuthPermissions(role);
+}
+
 const ROLE_HIERARCHY: Record<Role, number> = {
   system_owner: 3,
   organization_admin: 2,
   team_member: 1,
 };
 
-const PERMISSIONS: Record<string, string[]> = {
-  system_owner: [
-    "organizations:read", "organizations:create", "organizations:update", "organizations:delete",
-    "plans:read", "plans:create", "plans:update", "plans:delete",
-    "pricing:read", "pricing:create", "pricing:update", "pricing:delete",
-    "smtp:read", "smtp:create", "smtp:update", "smtp:delete",
-    "cms:read", "cms:create", "cms:update", "cms:delete",
-    "analytics:read", "analytics:export",
-    "invoices:read", "invoices:create", "invoices:update",
-    "features:read", "features:create", "features:update", "features:delete",
-    "billing:read", "billing:update",
-    "teams:read", "teams:create", "teams:update", "teams:delete",
-    "leads:read", "leads:create", "leads:update", "leads:delete", "leads:enrich",
-    "campaigns:read", "campaigns:create", "campaigns:update", "campaigns:delete", "campaigns:start", "campaigns:pause",
-    "sequences:read", "sequences:create", "sequences:update", "sequences:delete",
-    "scraping:read", "scraping:create", "scraping:update", "scraping:delete",
-    "settings:read", "settings:update",
-    "users:read", "users:create", "users:update", "users:delete",
-  ],
-  organization_admin: [
-    "organizations:read",
-    "analytics:read", "analytics:export",
-    "invoices:read",
-    "features:read",
-    "billing:read", "billing:update",
-    "teams:read", "teams:create", "teams:update", "teams:delete",
-    "leads:read", "leads:create", "leads:update", "leads:delete", "leads:enrich",
-    "campaigns:read", "campaigns:create", "campaigns:update", "campaigns:delete", "campaigns:start", "campaigns:pause",
-    "sequences:read", "sequences:create", "sequences:update", "sequences:delete",
-    "scraping:read", "scraping:create", "scraping:update", "scraping:delete",
-    "settings:read", "settings:update",
-  ],
-  team_member: [
-    "teams:read",
-    "leads:read", "leads:create", "leads:update",
-    "campaigns:read",
-    "sequences:read",
-    "scraping:read",
-    "settings:read",
-  ],
-};
-
 export function usePermission() {
   const { user } = useAuth();
   
-  const role = (user?.role as Role) || "team_member";
-  const permissions = user?.permissions || PERMISSIONS[role] || [];
+  const role = (normalizeRole(user?.role) as Role) || "team_member";
+  const permissions = user?.permissions?.length ? user.permissions : getAuthPermissions(role);
 
   const hasPermission = (permission: string): boolean => {
     if (permissions.includes("*")) return true;
@@ -100,8 +62,4 @@ export function usePermission() {
     isOrganizationAdmin,
     isTeamMember,
   };
-}
-
-export function getPermissionsForRole(role: Role): string[] {
-  return PERMISSIONS[role] || [];
 }

@@ -5,6 +5,7 @@ import { Edit2, X, Save, RefreshCw, Eye, EyeOff } from "lucide-react";
 import api from "@/app/lib/api";
 import { toast } from "@/app/components/toast";
 import { SoPageLayout } from "@/app/system-owner/components/SoPageLayout";
+import { getAuthHeaders } from "@/app/lib/auth";
 
 type Plan = {
   id: string;
@@ -19,9 +20,6 @@ type Plan = {
   features?: { feature_key: string; enabled: boolean; limit?: number }[];
 };
 
-function authHeaders() {
-  return { Authorization: `Bearer ${localStorage.getItem("system_owner_token")}` };
-}
 
 export default function SystemOwnerPlansPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -40,7 +38,7 @@ export default function SystemOwnerPlansPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get("/api/v1/plans", { headers: authHeaders() });
+      const res = await api.get("/api/v1/plans", { headers: getAuthHeaders() });
       setPlans(res.data.plans || []);
     } catch {
       toast.error("Failed to load plans");
@@ -55,7 +53,7 @@ export default function SystemOwnerPlansPage() {
 
   const ensureTemplates = async () => {
     try {
-      await api.post("/api/v1/plans/seed-templates", {}, { headers: authHeaders() });
+      await api.post("/api/v1/plans/seed-templates", {}, { headers: getAuthHeaders() });
       toast.success("Plans ready", "Free, Starter, Pro, Enterprise templates loaded");
       load();
     } catch {
@@ -110,7 +108,7 @@ export default function SystemOwnerPlansPage() {
           limits: limits.length ? limits : undefined,
           status: editing.status || "active",
         },
-        { headers: authHeaders() }
+        { headers: getAuthHeaders() }
       );
       toast.success("Plan updated", `${form.name} settings saved successfully`);
       setEditing(null);
@@ -131,7 +129,7 @@ export default function SystemOwnerPlansPage() {
       await api.put(
         `/api/v1/plans/${plan.id}`,
         { show_on_landing: newState },
-        { headers: authHeaders() }
+        { headers: getAuthHeaders() }
       );
       toast.success(newState ? "Plan is now visible" : "Plan hidden from landing", `${plan.name} ${newState ? "will appear" : "won't appear"} on the landing page`);
       load();
@@ -149,7 +147,7 @@ export default function SystemOwnerPlansPage() {
           status: activating ? "active" : "inactive",
           show_on_landing: activating ? plan.show_on_landing === true : false,
         },
-        { headers: authHeaders() }
+        { headers: getAuthHeaders() }
       );
       toast.success(activating ? "Plan is now active" : "Plan has been deactivated", `${plan.name} is ${activating ? "live and ready to use" : "no longer available"}`);
       load();

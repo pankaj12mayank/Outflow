@@ -7,6 +7,7 @@ import api from "@/app/lib/api";
 import { toast } from "@/app/components/toast";
 import { SoPageLayout } from "@/app/system-owner/components/SoPageLayout";
 import { ArrowLeft } from "lucide-react";
+import { getAuthHeaders } from "@/app/lib/auth";
 
 type Member = {
   user_id: string;
@@ -31,9 +32,6 @@ type OrgDetail = {
   };
 };
 
-function authHeaders() {
-  return { Authorization: `Bearer ${localStorage.getItem("system_owner_token")}` };
-}
 
 export default function OrganizationDetailPage() {
   const params = useParams();
@@ -45,7 +43,7 @@ export default function OrganizationDetailPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await api.get(`/api/v1/organizations/${id}`, { headers: authHeaders() });
+      const res = await api.get(`/api/v1/organizations/${id}`, { headers: getAuthHeaders() });
       setOrg(res.data);
     } catch {
       toast.error("Organization not found");
@@ -64,7 +62,7 @@ export default function OrganizationDetailPage() {
       await api.patch(
         `/api/v1/organizations/${id}/members/${userId}/status`,
         { is_active: isActive },
-        { headers: authHeaders() }
+        { headers: getAuthHeaders() }
       );
       toast.success(isActive ? "User activated" : "User deactivated", "Access updated");
       load();

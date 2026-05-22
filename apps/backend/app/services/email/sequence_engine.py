@@ -10,8 +10,7 @@ from typing import Optional
 from dataclasses import dataclass, field
 from enum import Enum
 
-from app.db import AsyncSessionLocal
-from sqlalchemy import select, and_
+from app.db.mongodb import MongoDB
 
 logger = logging.getLogger(__name__)
 
@@ -188,61 +187,43 @@ class SequenceEngine:
         condition = step.condition_type
         value = step.condition_value
 
-        async with AsyncSessionLocal() as db:
-            from app.models.models import Email, EmailLog
+        emails_coll = MongoDB.get_collection("emails")
+        logs_coll = MongoDB.get_collection("email_logs")
+        lead_q = str(lead_id)
+        seq_q = str(enrollment.sequence_id)
 
-            if condition == ConditionType.REPLIED:
-                result = await db.execute(
-                    select(Email).where(
-                        and_(
-                            Email.lead_id == lead_id,
-                            Email.sequence_id == enrollment.sequence_id,
-                            Email.replied_at.isnot(None),
-                        )
-                    )
-                )
-                has_reply = result.scalar_one_or_none() is not None
-                if has_reply:
-                    return True, step.branch_options[0] if step.branch_options else None
+        if condition == ConditionType.REPLIED:
+            has_reply = await emails_coll.find_one({
+                "lead_id": lead_q,
+                "sequence_id": seq_q,
+                "replied_at": {"$ne": None},
+            }) is not None
+            if has_reply:
+                return True, step.branch_options[0] if step.branch_options else None
 
-            elif condition == ConditionType.OPENED:
-                result = await db.execute(
-                    select(Email).where(
-                        and_(
-                            Email.lead_id == lead_id,
-                            Email.opened_at.isnot(None),
-                        )
-                    )
-                )
-                has_open = result.scalar_one_or_none() is not None
-                if has_open:
-                    return True, step.branch_options[0] if step.branch_options else None
+        elif condition == ConditionType.OPENED:
+            has_open = await emails_coll.find_one({
+                "lead_id": lead_q,
+                "opened_at": {"$ne": None},
+            }) is not None
+            if has_open:
+                return True, step.branch_options[0] if step.branch_options else None
 
-            elif condition == ConditionType.BOUNCED:
-                result = await db.execute(
-                    select(EmailLog).where(
-                        and_(
-                            EmailLog.lead_id == lead_id,
-                            EmailLog.event_type == "bounce",
-                        )
-                    )
-                )
-                has_bounce = result.scalar_one_or_none() is not None
-                if has_bounce:
-                    return True, step.branch_options[1] if len(step.branch_options) > 1 else None
+        elif condition == ConditionType.BOUNCED:
+            has_bounce = await logs_coll.find_one({
+                "lead_id": lead_q,
+                "event_type": "bounce",
+            }) is not None
+            if has_bounce:
+                return True, step.branch_options[1] if len(step.branch_options) > 1 else None
 
-            elif condition == ConditionType.OUT_OF_OFFICE:
-                result = await db.execute(
-                    select(EmailLog).where(
-                        and_(
-                            EmailLog.lead_id == lead_id,
-                            EmailLog.event_type == "auto_reply",
-                        )
-                    )
-                )
-                has_oof = result.scalar_one_or_none() is not None
-                if has_oof:
-                    return True, step.branch_options[0] if step.branch_options else None
+        elif condition == ConditionType.OUT_OF_OFFICE:
+            has_oof = await logs_coll.find_one({
+                "lead_id": lead_q,
+                "event_type": "auto_reply",
+            }) is not None
+            if has_oof:
+                return True, step.branch_options[0] if step.branch_options else None
 
         return False, None
 

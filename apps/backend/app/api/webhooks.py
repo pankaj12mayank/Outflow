@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta
-from app.middleware import get_current_user
+from app.middleware import get_current_user, require_system_owner
 from app.db.mongodb import MongoDB
 from bson import ObjectId
 
@@ -260,6 +260,21 @@ async def email_bounce_webhook(
         {"$set": {"email_valid": False, "bounced_at": datetime.utcnow().isoformat()}}
     )
     
+    # Create notification for organization admins
+    try:
+        from app.services.notification_service import NotificationService
+        from app.models.notification_models import NotificationType, NotificationPriority, NotificationChannel
+        await NotificationService.create_notification({
+            "organization_id": org_id,
+            "type": NotificationType.SMTP_FAILURE,
+            "title": "Email Bounced",
+            "message": f"Email to {request.get('email')} bounced ({request.get('type', 'hard')})",
+            "priority": NotificationPriority.HIGH,
+            "channels": [NotificationChannel.IN_APP],
+        })
+    except Exception:
+        pass
+    
     return {"processed": True}
 
 
@@ -279,3 +294,32 @@ async def email_open_webhook(
     )
     
     return {"processed": True}
+
+
+@router.get("/bounces/stats")
+async def bounce_stats(
+    limit: int = 50,
+    current_user: dict = Depends(require_system_owner),
+):
+    """Bounce webhook records for system-owner ops."""
+    await MongoDB.connect()
+    coll = MongoDB.get_collection("bounces")
+    total = await coll.count_documents({})
+    hard = await coll.count_documents({"bounce_type": "hard"})
+    soft = await coll.count_documents({"bounce_type": "soft"})
+    cursor = coll.find({}).sort("timestamp", -1).limit(limit)
+    recent = []
+    async for doc in cursor:
+        recent.append({
+            "id": str(doc.get("_id")),
+            "email": doc.get("email"),
+            "bounce_type": doc.get("bounce_type", "hard"),
+            "organization_id": doc.get("organization_id"),
+            "timestamp": doc.get("timestamp"),
+        })
+    return {
+        "total": total,
+        "hard": hard,
+        "soft": soft,
+        "recent": recent,
+    }

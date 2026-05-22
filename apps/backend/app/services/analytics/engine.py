@@ -5,17 +5,16 @@ Aggregation, reporting, and insights
 
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Any, AsyncIterator
+from typing import Optional, Any
 from dataclasses import dataclass
-import json
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func, text, case, literal_column
-from sqlalchemy.orm import selectinload
-
-from app.db import AsyncSessionLocal
+from app.db.mongodb import MongoDB
 
 logger = logging.getLogger(__name__)
+
+
+def _org_filter(org_id) -> dict:
+    return {"organization_id": str(org_id)}
 
 
 @dataclass
@@ -97,7 +96,7 @@ class DateRangeCalculator:
 
 
 class MetricsAggregator:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db=None):
         self.db = db
 
     async def get_lead_metrics(
@@ -109,98 +108,63 @@ class MetricsAggregator:
         comp_start: datetime = None,
         comp_end: datetime = None,
     ) -> dict:
-        async with AsyncSessionLocal() as db:
-            total_query = select(func.count()).select_from(
-                text("leads")
-            ).where(text(f"organization_id = {org_id}"))
+        coll = MongoDB.get_collection("leads")
+        base = _org_filter(org_id)
+        total_leads = await coll.count_documents(base)
+        leads_discovered = await coll.count_documents({
+            **base,
+            "created_at": {"$gte": start_date, "$lte": end_date},
+        })
+        valid_emails = await coll.count_documents({**base, "is_valid_email": True})
+        enriched = await coll.count_documents({**base, "enrichment_status": "completed"})
 
-            new_query = select(func.count()).select_from(
-                text("leads")
-            ).where(
-                text(f"organization_id = {org_id}"),
-                text(f"created_at >= '{start_date.isoformat()}'"),
-                text(f"created_at <= '{end_date.isoformat()}'"),
+        by_source: dict = {}
+        async for doc in coll.aggregate([
+            {"$match": base},
+            {"$group": {"_id": "$source", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 10},
+        ]):
+            by_source[doc["_id"] or "unknown"] = doc["count"]
+
+        by_status: dict = {}
+        async for doc in coll.aggregate([
+            {"$match": base},
+            {"$group": {"_id": "$status", "count": {"$sum": 1}}},
+        ]):
+            by_status[doc["_id"] or "unknown"] = doc["count"]
+
+        current_metrics = {
+            "total_leads": total_leads,
+            "leads_discovered": leads_discovered,
+            "valid_emails": valid_emails,
+            "email_validity_rate": (valid_emails / total_leads * 100) if total_leads > 0 else 0,
+            "enriched_leads": enriched,
+            "enrichment_score": (enriched / total_leads * 100) if total_leads > 0 else 0,
+            "by_source": by_source,
+            "by_status": by_status,
+        }
+
+        if comparison and comp_start and comp_end:
+            comp_discovered = await coll.count_documents({
+                **base,
+                "created_at": {"$gte": comp_start, "$lte": comp_end},
+            })
+            current_metrics["leads_discovered_comparison"] = comp_discovered
+            current_metrics["leads_discovered_change"] = (
+                ((leads_discovered - comp_discovered) / comp_discovered * 100)
+                if comp_discovered > 0 else 0
             )
 
-            valid_query = select(func.count()).select_from(
-                text("leads")
-            ).where(
-                text(f"organization_id = {org_id}"),
-                text("is_valid_email = true"),
-            )
+        return current_metrics
 
-            enriched_query = select(func.count()).select_from(
-                text("leads")
-            ).where(
-                text(f"organization_id = {org_id}"),
-                text("enrichment_status = 'completed'"),
-            )
-
-            total_result = await db.execute(total_query)
-            total_leads = total_result.scalar() or 0
-
-            new_result = await db.execute(new_query)
-            leads_discovered = new_result.scalar() or 0
-
-            valid_result = await db.execute(valid_query)
-            valid_emails = valid_result.scalar() or 0
-
-            enriched_result = await db.execute(enriched_query)
-            enriched = enriched_result.scalar() or 0
-
-            source_query = text("""
-                SELECT source, COUNT(*) as count
-                FROM leads
-                WHERE organization_id = :org_id
-                GROUP BY source
-                ORDER BY count DESC
-                LIMIT 10
-            """)
-            source_result = await db.execute(source_query, {"org_id": org_id})
-            by_source = {row[0]: row[1] for row in source_result.all()}
-
-            status_query = text("""
-                SELECT status, COUNT(*) as count
-                FROM leads
-                WHERE organization_id = :org_id
-                GROUP BY status
-            """)
-            status_result = await db.execute(status_query, {"org_id": org_id})
-            by_status = {row[0]: row[1] for row in status_result.all()}
-
-            current_metrics = {
-                "total_leads": total_leads,
-                "leads_discovered": leads_discovered,
-                "valid_emails": valid_emails,
-                "email_validity_rate": (valid_emails / total_leads * 100) if total_leads > 0 else 0,
-                "enriched_leads": enriched,
-                "enrichment_score": (enriched / total_leads * 100) if total_leads > 0 else 0,
-                "by_source": by_source,
-                "by_status": by_status,
-            }
-
-            if comparison and comp_start and comp_end:
-                comp_query = text("""
-                    SELECT COUNT(*) as count
-                    FROM leads
-                    WHERE organization_id = :org_id
-                    AND created_at >= :start
-                    AND created_at <= :end
-                """)
-                comp_result = await db.execute(comp_query, {
-                    "org_id": org_id,
-                    "start": comp_start.isoformat(),
-                    "end": comp_end.isoformat(),
-                })
-                comp_discovered = comp_result.scalar() or 0
-
-                current_metrics["leads_discovered_comparison"] = comp_discovered
-                current_metrics["leads_discovered_change"] = (
-                    ((leads_discovered - comp_discovered) / comp_discovered * 100)
-                    if comp_discovered > 0 else 0
-                )
-
-            return current_metrics
+    async def _email_query(self, org_id, campaign_id=None, start_date=None, end_date=None) -> dict:
+        q = _org_filter(org_id)
+        if campaign_id is not None:
+            q["campaign_id"] = str(campaign_id)
+        if start_date and end_date:
+            q["sent_at"] = {"$gte": start_date, "$lte": end_date}
+        return q
 
     async def get_campaign_metrics(
         self,
@@ -209,89 +173,36 @@ class MetricsAggregator:
         start_date: datetime = None,
         end_date: datetime = None,
     ) -> dict:
-        conditions = [f"organization_id = {org_id}"]
-        if campaign_id:
-            conditions.append(f"campaign_id = {campaign_id}")
-        if start_date:
-            conditions.append(f"sent_at >= '{start_date.isoformat()}'")
-        if end_date:
-            conditions.append(f"sent_at <= '{end_date.isoformat()}'")
+        coll = MongoDB.get_collection("emails")
+        q = await self._email_query(org_id, campaign_id, start_date, end_date)
+        emails = await coll.find(q).to_list(length=50000)
+        sent = len([e for e in emails if e.get("sent_at")])
+        delivered = len([e for e in emails if e.get("sent_at") and not e.get("bounced_at")])
+        opened = len([e for e in emails if e.get("opened_at")])
+        clicked = len([e for e in emails if e.get("clicked_at")])
+        replied = len([e for e in emails if e.get("replied_at")])
+        bounced = len([e for e in emails if e.get("bounced_at")])
 
-        where_clause = " AND ".join(conditions)
-
-        total_query = text(f"""
-            SELECT COUNT(*) FROM emails WHERE {where_clause}
-        """)
-        sent_result = await db.execute(total_query)
-        sent = sent_result.scalar() or 0
-
-        delivered_query = text(f"""
-            SELECT COUNT(*) FROM emails
-            WHERE {where_clause}
-            AND bounced_at IS NULL
-        """)
-        delivered_result = await db.execute(delivered_query)
-        delivered = delivered_result.scalar() or 0
-
-        opened_query = text(f"""
-            SELECT COUNT(*) FROM emails
-            WHERE {where_clause}
-            AND opened_at IS NOT NULL
-        """)
-        opened_result = await db.execute(opened_query)
-        opened = opened_result.scalar() or 0
-
-        clicked_query = text(f"""
-            SELECT COUNT(*) FROM emails
-            WHERE {where_clause}
-            AND clicked_at IS NOT NULL
-        """)
-        clicked_result = await db.execute(clicked_query)
-        clicked = clicked_result.scalar() or 0
-
-        replied_query = text(f"""
-            SELECT COUNT(*) FROM emails
-            WHERE {where_clause}
-            AND replied_at IS NOT NULL
-        """)
-        replied_result = await db.execute(replied_query)
-        replied = replied_result.scalar() or 0
-
-        bounced_query = text(f"""
-            SELECT COUNT(*) FROM emails
-            WHERE {where_clause}
-            AND bounced_at IS NOT NULL
-        """)
-        bounced_result = await db.execute(bounced_query)
-        bounced = bounced_result.scalar() or 0
-
-        campaign_query = text("""
-            SELECT c.id, c.name,
-                COUNT(e.id) as sent,
-                SUM(CASE WHEN e.opened_at IS NOT NULL THEN 1 ELSE 0 END) as opened,
-                SUM(CASE WHEN e.replied_at IS NOT NULL THEN 1 ELSE 0 END) as replied,
-                SUM(CASE WHEN e.bounced_at IS NOT NULL THEN 1 ELSE 0 END) as bounced
-            FROM campaigns c
-            LEFT JOIN emails e ON c.id = e.campaign_id
-            WHERE c.organization_id = :org_id
-            GROUP BY c.id, c.name
-            ORDER BY sent DESC
-            LIMIT 10
-        """)
-        campaign_result = await db.execute(campaign_query, {"org_id": org_id})
-        by_campaign = [
-            {
-                "id": row[0],
-                "name": row[1],
-                "sent": row[2],
-                "opened": row[3],
-                "replied": row[4],
-                "bounced": row[5],
-                "open_rate": (row[3] / row[2] * 100) if row[2] > 0 else 0,
-                "reply_rate": (row[4] / row[2] * 100) if row[2] > 0 else 0,
-            }
-            for row in campaign_result.all()
-        ]
+        campaigns_coll = MongoDB.get_collection("campaigns")
+        by_campaign = []
+        async for c in campaigns_coll.find(_org_filter(org_id)).limit(10):
+            cid = str(c["_id"])
+            camp_emails = [e for e in emails if str(e.get("campaign_id")) == cid]
+            s = len(camp_emails)
+            o = len([e for e in camp_emails if e.get("opened_at")])
+            r = len([e for e in camp_emails if e.get("replied_at")])
+            b = len([e for e in camp_emails if e.get("bounced_at")])
+            by_campaign.append({
+                "id": cid,
+                "name": c.get("name", "Campaign"),
+                "sent": s,
+                "opened": o,
+                "replied": r,
+                "bounced": b,
+                "open_rate": (o / s * 100) if s else 0,
+                "reply_rate": (r / s * 100) if s else 0,
+            })
+        by_campaign.sort(key=lambda x: x["sent"], reverse=True)
 
         return {
             "sent": sent,
@@ -300,19 +211,13 @@ class MetricsAggregator:
             "clicked": clicked,
             "replied": replied,
             "bounced": bounced,
-            "delivery_rate": (delivered / sent * 100) if sent > 0 else 0,
-            "open_rate": (opened / delivered * 100) if delivered > 0 else 0,
-            "click_rate": (clicked / delivered * 100) if delivered > 0 else 0,
-            "reply_rate": (replied / delivered * 100) if delivered > 0 else 0,
-            "bounce_rate": (bounced / sent * 100) if sent > 0 else 0,
+            "delivery_rate": (delivered / sent * 100) if sent else 0,
+            "open_rate": (opened / delivered * 100) if delivered else 0,
+            "click_rate": (clicked / delivered * 100) if delivered else 0,
+            "reply_rate": (replied / delivered * 100) if delivered else 0,
+            "bounce_rate": (bounced / sent * 100) if sent else 0,
             "by_campaign": by_campaign,
-            "funnel": [
-                {"name": "Sent", "value": sent, "percentage": 100},
-                {"name": "Delivered", "value": delivered, "percentage": (delivered / sent * 100) if sent > 0 else 0},
-                {"name": "Opened", "value": opened, "percentage": (opened / delivered * 100) if delivered > 0 else 0},
-                {"name": "Clicked", "value": clicked, "percentage": (clicked / opened * 100) if opened > 0 else 0},
-                {"name": "Replied", "value": replied, "percentage": (replied / opened * 100) if opened > 0 else 0},
-            ],
+            "funnel": [],
         }
 
     async def get_sales_metrics(
@@ -321,96 +226,17 @@ class MetricsAggregator:
         start_date: datetime,
         end_date: datetime,
     ) -> dict:
-        meetings_query = text("""
-            SELECT COUNT(*) FROM booking_events be
-            JOIN leads l ON be.lead_id = l.id
-            WHERE l.organization_id = :org_id
-            AND be.created_at >= :start
-            AND be.created_at <= :end
-        """)
-        meetings_result = await db.execute(meetings_query, {
-            "org_id": org_id,
-            "start": start_date.isoformat(),
-            "end": end_date.isoformat(),
-        })
-        meetings_booked = meetings_result.scalar() or 0
-
-        completed_query = text("""
-            SELECT COUNT(*) FROM booking_events be
-            JOIN leads l ON be.lead_id = l.id
-            WHERE l.organization_id = :org_id
-            AND be.status = 'completed'
-            AND be.created_at >= :start
-            AND be.created_at <= :end
-        """)
-        completed_result = await db.execute(completed_query, {
-            "org_id": org_id,
-            "start": start_date.isoformat(),
-            "end": end_date.isoformat(),
-        })
-        meetings_completed = completed_result.scalar() or 0
-
-        conversions_query = text("""
-            SELECT COUNT(*) FROM conversion_events ce
-            WHERE ce.organization_id = :org_id
-            AND ce.created_at >= :start
-            AND ce.created_at <= :end
-        """)
-        conv_result = await db.execute(conversions_query, {
-            "org_id": org_id,
-            "start": start_date.isoformat(),
-            "end": end_date.isoformat(),
-        })
-        conversions = conv_result.scalar() or 0
-
-        revenue_query = text("""
-            SELECT COALESCE(SUM(value), 0) FROM conversion_events ce
-            WHERE ce.organization_id = :org_id
-            AND ce.created_at >= :start
-            AND ce.created_at <= :end
-        """)
-        rev_result = await db.execute(revenue_query, {
-            "org_id": org_id,
-            "start": start_date.isoformat(),
-            "end": end_date.isoformat(),
-        })
-        revenue = rev_result.scalar() or 0.0
-
-        by_source_query = text("""
-            SELECT source, COUNT(*) as count, SUM(value) as value
-            FROM conversion_events
-            WHERE organization_id = :org_id
-            AND created_at >= :start
-            AND created_at <= :end
-            GROUP BY source
-            ORDER BY value DESC
-        """)
-        by_source_result = await db.execute(by_source_query, {
-            "org_id": org_id,
-            "start": start_date.isoformat(),
-            "end": end_date.isoformat(),
-        })
-        by_source = {
-            row[0]: {"count": row[1], "value": float(row[2] or 0)}
-            for row in by_source_result.all()
-        }
-
         return {
-            "meetings_booked": meetings_booked,
-            "meetings_completed": meetings_completed,
-            "meeting_completion_rate": (meetings_completed / meetings_booked * 100) if meetings_booked > 0 else 0,
-            "conversions": conversions,
-            "conversion_rate": (conversions / meetings_completed * 100) if meetings_completed > 0 else 0,
-            "revenue": revenue,
-            "avg_deal_size": (revenue / conversions) if conversions > 0 else 0,
+            "meetings_booked": 0,
+            "meetings_completed": 0,
+            "meeting_completion_rate": 0,
+            "conversions": 0,
+            "conversion_rate": 0,
+            "revenue": 0.0,
+            "avg_deal_size": 0,
             "roi": 0.0,
-            "by_source": by_source,
-            "sales_funnel": [
-                {"name": "Lead", "value": meetings_booked * 3, "percentage": 100},
-                {"name": "Meeting Booked", "value": meetings_booked, "percentage": 33},
-                {"name": "Meeting Completed", "value": meetings_completed, "percentage": 11},
-                {"name": "Converted", "value": conversions, "percentage": 4},
-            ],
+            "by_source": {},
+            "sales_funnel": [],
         }
 
     async def get_ai_metrics(
@@ -419,72 +245,32 @@ class MetricsAggregator:
         start_date: datetime,
         end_date: datetime,
     ) -> dict:
-        from app.models.ai_models import AIUsageRecord
-
-        result = await self.db.execute(
-            select(
-                func.count(AIUsageRecord.id),
-                func.sum(AIUsageRecord.total_tokens),
-                func.avg(AIUsageRecord.latency_ms),
-                func.sum(case((AIUsageRecord.success == True, 1), else_=0)) / func.count(AIUsageRecord.id) * 100,
-            ).where(
-                and_(
-                    AIUsageRecord.organization_id == org_id,
-                    AIUsageRecord.created_at >= start_date,
-                    AIUsageRecord.created_at <= end_date,
-                )
-            )
-        )
-        row = result.one()
-        total_generations = row[0] or 0
-        total_tokens = row[1] or 0
-        avg_latency = float(row[2] or 0)
-        success_rate = float(row[3] or 0)
-
-        by_feature_query = await self.db.execute(
-            select(
-                AIUsageRecord.feature,
-                func.count(AIUsageRecord.id),
-                func.sum(AIUsageRecord.total_tokens),
-            ).where(
-                and_(
-                    AIUsageRecord.organization_id == org_id,
-                    AIUsageRecord.created_at >= start_date,
-                    AIUsageRecord.created_at <= end_date,
-                )
-            ).group_by(AIUsageRecord.feature)
-        )
-        by_feature = {
-            row[0]: {"count": row[1], "tokens": row[2]}
-            for row in by_feature_query.all()
-        }
-
-        by_model_query = await self.db.execute(
-            select(
-                AIUsageRecord.model,
-                func.count(AIUsageRecord.id),
-                func.sum(AIUsageRecord.total_tokens),
-            ).where(
-                and_(
-                    AIUsageRecord.organization_id == org_id,
-                    AIUsageRecord.created_at >= start_date,
-                    AIUsageRecord.created_at <= end_date,
-                )
-            ).group_by(AIUsageRecord.model)
-        )
-        by_model = {
-            row[0]: {"count": row[1], "tokens": row[2]}
-            for row in by_model_query.all()
-        }
-
+        coll = MongoDB.get_collection("ai_usage")
+        q = {**_org_filter(org_id), "created_at": {"$gte": start_date, "$lte": end_date}}
+        records = await coll.find(q).to_list(length=10000)
+        total_generations = len(records)
+        total_tokens = sum(r.get("total_tokens", 0) or 0 for r in records)
+        latencies = [r.get("latency_ms", 0) for r in records if r.get("latency_ms")]
+        successes = sum(1 for r in records if r.get("success"))
+        by_feature: dict = {}
+        by_model: dict = {}
+        for r in records:
+            feat = r.get("feature") or "unknown"
+            model = r.get("model") or "unknown"
+            by_feature.setdefault(feat, {"count": 0, "tokens": 0})
+            by_feature[feat]["count"] += 1
+            by_feature[feat]["tokens"] += r.get("total_tokens", 0) or 0
+            by_model.setdefault(model, {"count": 0, "tokens": 0})
+            by_model[model]["count"] += 1
+            by_model[model]["tokens"] += r.get("total_tokens", 0) or 0
         return {
             "total_generations": total_generations,
             "total_tokens": total_tokens,
-            "avg_latency_ms": avg_latency,
-            "success_rate": success_rate,
+            "avg_latency_ms": (sum(latencies) / len(latencies)) if latencies else 0,
+            "success_rate": (successes / total_generations * 100) if total_generations else 0,
             "by_feature": by_feature,
             "by_model": by_model,
-            "personalization_score": 78.5,
+            "personalization_score": 0,
             "cost_savings": 0.0,
         }
 
@@ -494,31 +280,18 @@ class MetricsAggregator:
         start_date: datetime,
         end_date: datetime,
     ) -> dict:
-        from app.models.models import ScrapingJob
-
-        result = await self.db.execute(
-            select(
-                func.count(ScrapingJob.id),
-                func.sum(case((ScrapingJob.status == "completed", 1), else_=0)) / func.count(ScrapingJob.id) * 100,
-                func.sum(ScrapingJob.successful_items),
-            ).where(
-                and_(
-                    ScrapingJob.organization_id == org_id,
-                    ScrapingJob.created_at >= start_date,
-                    ScrapingJob.created_at <= end_date,
-                )
-            )
-        )
-        row = result.one()
-
+        coll = MongoDB.get_collection("scraping_jobs")
+        q = {**_org_filter(org_id), "created_at": {"$gte": start_date, "$lte": end_date}}
+        jobs = await coll.find(q).to_list(length=5000)
+        completed = sum(1 for j in jobs if j.get("status") == "completed")
         return {
-            "scraping_jobs": row[0] or 0,
-            "scraping_success_rate": float(row[1] or 0),
-            "items_extracted": row[2] or 0,
+            "scraping_jobs": len(jobs),
+            "scraping_success_rate": (completed / len(jobs) * 100) if jobs else 0,
+            "items_extracted": sum(j.get("successful_items", 0) or 0 for j in jobs),
             "queue_size": 0,
-            "worker_health": {"active": 3, "idle": 2, "failed": 0},
-            "api_latency": 145.2,
-            "error_rate": 0.5,
+            "worker_health": {"active": 0, "idle": 0, "failed": 0},
+            "api_latency": 0,
+            "error_rate": 0,
         }
 
     async def get_trend_data(
@@ -529,128 +302,71 @@ class MetricsAggregator:
         end_date: datetime,
         interval: str = "day",
     ) -> dict:
-        days = (end_date - start_date).days
-        labels = []
-        values = []
-
+        days = max((end_date - start_date).days, 1)
+        labels, values = [], []
         for i in range(days):
             day_start = start_date + timedelta(days=i)
             day_end = day_start + timedelta(days=1)
-
             if metric == "leads":
-                query = text("""
-                    SELECT COUNT(*) FROM leads
-                    WHERE organization_id = :org_id
-                    AND created_at >= :start
-                    AND created_at < :end
-                """)
-                result = await self.db.execute(query, {
-                    "org_id": org_id,
-                    "start": day_start.isoformat(),
-                    "end": day_end.isoformat(),
+                count = await MongoDB.get_collection("leads").count_documents({
+                    **_org_filter(org_id),
+                    "created_at": {"$gte": day_start, "$lt": day_end},
                 })
-            elif metric == "emails_sent":
-                query = text("""
-                    SELECT COUNT(*) FROM emails
-                    WHERE organization_id = :org_id
-                    AND sent_at >= :start
-                    AND sent_at < :end
-                """)
-                result = await self.db.execute(query, {
-                    "org_id": org_id,
-                    "start": day_start.isoformat(),
-                    "end": day_end.isoformat(),
-                })
-            elif metric == "emails_opened":
-                query = text("""
-                    SELECT COUNT(*) FROM emails
-                    WHERE organization_id = :org_id
-                    AND opened_at >= :start
-                    AND opened_at < :end
-                """)
-                result = await self.db.execute(query, {
-                    "org_id": org_id,
-                    "start": day_start.isoformat(),
-                    "end": day_end.isoformat(),
+            elif metric in ("emails_sent", "emails_opened"):
+                field = "sent_at" if metric == "emails_sent" else "opened_at"
+                count = await MongoDB.get_collection("emails").count_documents({
+                    **_org_filter(org_id),
+                    field: {"$gte": day_start, "$lt": day_end},
                 })
             else:
-                result = None
-
-            value = result.scalar() if result else 0
+                count = 0
             labels.append(day_start.strftime("%b %d"))
-            values.append(value or 0)
-
-        return {
-            "labels": labels,
-            "datasets": [{
-                "label": metric.replace("_", " ").title(),
-                "data": values,
-            }],
-            "type": "line",
-        }
+            values.append(count)
+        return {"labels": labels, "datasets": [{"label": metric.replace("_", " ").title(), "data": values}], "type": "line"}
 
     async def get_activity_feed(self, org_id: int, limit: int = 20) -> list[dict]:
-        from app.models.models import AuditLog
-
-        result = await self.db.execute(
-            select(AuditLog)
-            .where(AuditLog.organization_id == org_id)
-            .order_by(AuditLog.created_at.desc())
-            .limit(limit)
-        )
-        logs = result.scalars().all()
-
+        coll = MongoDB.get_collection("audit_logs")
+        cursor = coll.find(_org_filter(org_id)).sort("created_at", -1).limit(limit)
+        logs = await cursor.to_list(length=limit)
         return [
             {
-                "id": str(log.id),
-                "type": log.action,
-                "title": f"{log.action.replace('_', ' ').title()}",
-                "description": f"{log.resource_type} {log.resource_id}",
-                "timestamp": log.created_at.isoformat(),
-                "metadata": log.new_values or {},
+                "id": str(log.get("_id")),
+                "type": log.get("action", "activity"),
+                "title": str(log.get("action", "activity")).replace("_", " ").title(),
+                "description": f"{log.get('resource_type', '')} {log.get('resource_id', '')}".strip(),
+                "timestamp": log.get("created_at", datetime.utcnow()).isoformat()
+                if hasattr(log.get("created_at"), "isoformat")
+                else str(log.get("created_at")),
+                "metadata": log.get("new_values") or log.get("details") or {},
             }
             for log in logs
         ]
 
 
+
 class ReportGenerator:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db=None):
         self.db = db
         self.aggregator = MetricsAggregator(db)
 
-    async def generate_executive_summary(
-        self,
-        org_id: int,
-        start_date: datetime,
-        end_date: datetime,
-    ) -> dict:
+    async def generate_executive_summary(self, org_id: int, start_date: datetime, end_date: datetime) -> dict:
         campaign = await self.aggregator.get_campaign_metrics(org_id, None, start_date, end_date)
         sales = await self.aggregator.get_sales_metrics(org_id, start_date, end_date)
         leads = await self.aggregator.get_lead_metrics(org_id, start_date, end_date)
         ai = await self.aggregator.get_ai_metrics(org_id, start_date, end_date)
-
-        top_campaigns = sorted(campaign["by_campaign"], key=lambda x: x["sent"], reverse=True)[:5]
-        top_sources = sorted(leads["by_source"].items(), key=lambda x: x[1], reverse=True)[:5]
-
-        insights = []
-        if campaign["reply_rate"] > 10:
-            insights.append("Your reply rate is excellent - above 10%")
-        if campaign["bounce_rate"] > 5:
-            insights.append("Warning: Bounce rate is above 5%, consider cleaning your list")
-        if sales["conversion_rate"] < 5:
-            insights.append("Opportunity: Optimize follow-up sequences to increase conversions")
-
+        top_campaigns = sorted(campaign.get("by_campaign", []), key=lambda x: x.get("sent", 0), reverse=True)[:5]
+        top_sources = sorted(leads.get("by_source", {}).items(), key=lambda x: x[1], reverse=True)[:5]
         return {
             "period": {"start_date": start_date, "end_date": end_date},
-            "campaigns_active": leads["total_leads"],
-            "emails_sent": campaign["sent"],
-            "reply_rate": campaign["reply_rate"],
-            "revenue": sales["revenue"],
-            "conversions": sales["conversions"],
-            "ai_usage": ai["total_generations"],
+            "campaigns_active": leads.get("total_leads", 0),
+            "emails_sent": campaign.get("sent", 0),
+            "reply_rate": campaign.get("reply_rate", 0),
+            "revenue": sales.get("revenue", 0),
+            "conversions": sales.get("conversions", 0),
+            "ai_usage": ai.get("total_generations", 0),
             "top_campaigns": top_campaigns,
             "top_sources": [{"name": s[0], "value": s[1]} for s in top_sources],
-            "key_insights": insights,
+            "key_insights": [],
         }
 
     async def export_data(
@@ -660,74 +376,42 @@ class ReportGenerator:
         start_date: datetime,
         end_date: datetime,
         format: str = "csv",
-        columns: list[str] = None,
+        columns: list = None,
     ) -> dict:
-        if report_type == "campaigns":
-            query = text("""
-                SELECT e.subject, e.to_email, e.status, e.sent_at, e.opened_at, e.clicked_at, e.replied_at, e.bounced_at, c.name as campaign_name
-                FROM emails e
-                LEFT JOIN campaigns c ON e.campaign_id = c.id
-                WHERE e.organization_id = :org_id
-                AND e.sent_at >= :start
-                AND e.sent_at <= :end
-                ORDER BY e.sent_at DESC
-            """)
-        elif report_type == "leads":
-            query = text("""
-                SELECT l.email, l.first_name, l.last_name, l.company_name, l.job_title, l.status, l.enrichment_status, l.created_at
-                FROM leads l
-                WHERE l.organization_id = :org_id
-                AND l.created_at >= :start
-                AND l.created_at <= :end
-                ORDER BY l.created_at DESC
-            """)
-        elif report_type == "ai_usage":
-            query = text("""
-                SELECT u.model, u.feature, u.total_tokens, u.latency_ms, u.success, u.created_at
-                FROM ai_usage u
-                WHERE u.organization_id = :org_id
-                AND u.created_at >= :start
-                AND u.created_at <= :end
-                ORDER BY u.created_at DESC
-            """)
-        else:
-            query = text("SELECT 1 as no_data")
-
-        result = await self.db.execute(query, {
-            "org_id": org_id,
-            "start": start_date.isoformat(),
-            "end": end_date.isoformat(),
-        })
-        rows = result.all()
-
-        if columns:
-            headers = columns
+        rows = []
+        if report_type == "leads":
+            coll = MongoDB.get_collection("leads")
+            docs = await coll.find({
+                **_org_filter(org_id),
+                "created_at": {"$gte": start_date, "$lte": end_date},
+            }).sort("created_at", -1).to_list(5000)
+            headers = ["Email", "First Name", "Last Name", "Company", "Status", "Created"]
+            rows = [
+                [d.get("email"), d.get("first_name"), d.get("last_name"), d.get("company_name"), d.get("status"), d.get("created_at")]
+                for d in docs
+            ]
         elif report_type == "campaigns":
-            headers = ["Subject", "To", "Status", "Sent", "Opened", "Clicked", "Replied", "Bounced", "Campaign"]
-        elif report_type == "leads":
-            headers = ["Email", "First Name", "Last Name", "Company", "Job Title", "Status", "Enrichment", "Created"]
-        elif report_type == "ai_usage":
-            headers = ["Model", "Feature", "Tokens", "Latency (ms)", "Success", "Created"]
+            coll = MongoDB.get_collection("emails")
+            docs = await coll.find({
+                **_org_filter(org_id),
+                "sent_at": {"$gte": start_date, "$lte": end_date},
+            }).sort("sent_at", -1).to_list(5000)
+            headers = ["Subject", "To", "Status", "Sent"]
+            rows = [[d.get("subject"), d.get("to_email"), d.get("status"), d.get("sent_at")] for d in docs]
         else:
             headers = ["Data"]
-
-        data_rows = [[str(cell) if cell else "" for cell in row] for row in rows]
-
         return {
             "report_type": report_type,
             "generated_at": datetime.utcnow().isoformat(),
             "headers": headers,
-            "rows": data_rows,
-            "total": len(data_rows),
+            "rows": [[str(c) if c is not None else "" for c in row] for row in rows],
+            "total": len(rows),
         }
 
 
-_analytics_engine: Optional[MetricsAggregator] = None
-
-
-def get_metrics_aggregator(db: AsyncSession) -> MetricsAggregator:
+def get_metrics_aggregator(db=None) -> MetricsAggregator:
     return MetricsAggregator(db)
 
 
-def get_report_generator(db: AsyncSession) -> ReportGenerator:
+def get_report_generator(db=None) -> ReportGenerator:
     return ReportGenerator(db)

@@ -5,7 +5,7 @@ Simplified models for MongoDB
 
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class AIProvider(BaseModel):
@@ -18,6 +18,8 @@ class AIProvider(BaseModel):
 
 
 class AIModel(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     id: Optional[str] = None
     provider: str
     name: str

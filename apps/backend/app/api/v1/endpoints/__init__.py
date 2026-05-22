@@ -4,5 +4,8 @@ from .leads import router as leads_router
 from .campaigns import router as campaigns_router
 from .tasks import router as tasks_router
 from .health import router as health_router
-from .scraping import router as scraping_router
+from app.api.scraping import router as scraping_router
 from .team import router as team_router
+from .sequences import router as sequences_router
+from .emails import router as emails_router
+from .email_templates import router as email_templates_router

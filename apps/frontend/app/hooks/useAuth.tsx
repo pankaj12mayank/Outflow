@@ -19,6 +19,7 @@ export interface User {
   } | null;
 }
 
+/** Keep in sync with apps/backend/app/core/role_permissions.py */
 export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   system_owner: [
     "organizations:read", "organizations:create", "organizations:update", "organizations:delete",
@@ -38,7 +39,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "settings:read", "settings:update",
     "users:read", "users:create", "users:update", "users:delete",
   ],
-  admin: [
+  organization_admin: [
     "organizations:read",
     "analytics:read", "analytics:export",
     "invoices:read",
@@ -50,6 +51,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "sequences:read", "sequences:create", "sequences:update", "sequences:delete",
     "scraping:read", "scraping:create", "scraping:update", "scraping:delete",
     "settings:read", "settings:update",
+    "notifications:read",
+    "monitoring:read",
   ],
   team_member: [
     "teams:read",
@@ -82,13 +85,26 @@ export interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const ROLE_ALIASES: Record<string, string> = {
+  admin: "organization_admin",
+  org_admin: "organization_admin",
+  super_admin: "system_owner",
+  member: "team_member",
+};
+
+export function normalizeRole(role?: string): string {
+  if (!role) return "team_member";
+  return ROLE_ALIASES[role] || role;
+}
+
 export function addPermissionsToUser(user: User): User {
   if (!user) return user as any;
-  const role = user?.role || "team_member";
-  const permissions = user?.permissions?.length > 0
-    ? user.permissions 
-    : DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS["team_member"];
-  return { ...user, permissions };
+  const role = normalizeRole(user?.role);
+  const permissions =
+    user?.permissions?.length > 0
+      ? user.permissions
+      : DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS.team_member;
+  return { ...user, role, permissions };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -124,33 +140,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return false;
     }
 
-    if (!accessToken.startsWith("so_")) {
-      try {
-        const response = await api.get("/api/v1/auth/me", {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        const userWithPermissions = addPermissionsToUser(response.data);
-        setState({
-          user: userWithPermissions,
-          isAuthenticated: true,
-          isLoading: false,
-        });
-        api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
-        return true;
-      } catch (error: any) {
-        if (error.response?.status === 401) {
-          if (isRefreshing && refreshPromiseRef.current) {
-            const refreshed = await refreshPromiseRef.current;
-            if (refreshed) {
-              const newAccessToken = localStorage.getItem("access_token");
-              if (newAccessToken) {
-                return await checkAuth();
-              }
-            }
-            clearAuth();
-            return false;
-          }
-          const refreshed = await refreshTokenFn(refreshToken);
+    try {
+      const response = await api.get("/api/v1/auth/me", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const userWithPermissions = addPermissionsToUser(response.data);
+      setState({
+        user: userWithPermissions,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+      api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+      return true;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        if (isRefreshing && refreshPromiseRef.current) {
+          const refreshed = await refreshPromiseRef.current;
           if (refreshed) {
             const newAccessToken = localStorage.getItem("access_token");
             if (newAccessToken) {
@@ -159,23 +164,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           clearAuth();
           return false;
-        } else {
-          clearAuth();
-          return false;
         }
+        const refreshed = await refreshTokenFn(refreshToken);
+        if (refreshed) {
+          const newAccessToken = localStorage.getItem("access_token");
+          if (newAccessToken) {
+            return await checkAuth();
+          }
+        }
+        clearAuth();
+        return false;
+      } else {
+        clearAuth();
+        return false;
       }
-    } else {
-      clearAuth();
-      return false;
     }
     return false;
   }, [clearAuth, isRefreshing]);
 
   const refreshTokenFn = useCallback(async (refresh: string): Promise<boolean> => {
-    if (refresh.startsWith("so_")) {
-      return false;
-    }
-
     if (isRefreshing && refreshPromiseRef.current) {
       return await refreshPromiseRef.current;
     }
@@ -222,7 +229,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setState({ user, isAuthenticated: true, isLoading: false });
 
-      if (user.role === "system_owner" || user.is_super_admin) {
+      if (user.role === "system_owner") {
         router.push("/system-owner/dashboard");
       } else {
         router.push("/app/dashboard");
@@ -375,18 +382,25 @@ export function useRequireRole(allowedRoles: string[]) {
 export function usePermissions() {
   const { user } = useAuth();
 
+  const permissions =
+    user?.permissions?.length
+      ? user.permissions
+      : user
+        ? getPermissionsForRole(normalizeRole(user.role))
+        : [];
+
   const hasPermission = (resource: string, action: string): boolean => {
     if (!user) return false;
-
-    const permissions = getPermissionsForRole(user.role);
-    return permissions.includes("*") || 
-           permissions.includes(`${resource}:${action}`) || 
-           permissions.includes(`${resource}:*`);
+    return (
+      permissions.includes("*") ||
+      permissions.includes(`${resource}:${action}`) ||
+      permissions.includes(`${resource}:*`)
+    );
   };
 
-  return { hasPermission, permissions: user ? getPermissionsForRole(user.role) : [] };
+  return { hasPermission, permissions };
 }
 
 export function getPermissionsForRole(role: string): string[] {
-  return DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS["team_member"];
+  return DEFAULT_PERMISSIONS[normalizeRole(role)] || DEFAULT_PERMISSIONS.team_member;
 }

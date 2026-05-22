@@ -8,10 +8,7 @@ import {
   FileText, Plus, Search, Edit, Copy, Trash2, Eye, 
   RefreshCw, CheckCircle, XCircle, MoreVertical
 } from "lucide-react";
-
-function authHeaders() {
-  return { Authorization: `Bearer ${localStorage.getItem("system_owner_token")}` };
-}
+import { getAuthHeaders } from "@/app/lib/auth";
 
 export default function EmailTemplatesPage() {
   const [loading, setLoading] = useState(true);
@@ -25,7 +22,7 @@ export default function EmailTemplatesPage() {
     setLoading(true);
     try {
       const res = await api.get("/api/v1/email-engine/templates", {
-        headers: authHeaders(),
+        headers: getAuthHeaders(),
         params: { status: filter === "all" ? undefined : filter, page_size: 50 }
       });
       setTemplates(res.data?.templates || []);
@@ -45,7 +42,7 @@ export default function EmailTemplatesPage() {
     
     try {
       await api.delete(`/api/v1/email-engine/templates/${templateId}`, {
-        headers: authHeaders()
+        headers: getAuthHeaders()
       });
       toast.success("Template deleted");
       loadTemplates();
@@ -58,7 +55,7 @@ export default function EmailTemplatesPage() {
     try {
       await api.post(`/api/v1/email-engine/templates/${templateId}/duplicate`, 
         { new_name: newName },
-        { headers: authHeaders() }
+        { headers: getAuthHeaders() }
       );
       toast.success("Template duplicated");
       loadTemplates();
@@ -209,7 +206,7 @@ function CreateTemplateModal({ onClose, onSuccess }: { onClose: () => void; onSu
 
   useEffect(() => {
     api.get("/api/v1/email-engine/triggers", {
-      headers: authHeaders(),
+      headers: getAuthHeaders(),
       params: { status: "active", page_size: 50 }
     }).then(res => {
       setTriggers(res.data?.triggers || []);
@@ -235,7 +232,7 @@ function CreateTemplateModal({ onClose, onSuccess }: { onClose: () => void; onSu
         ...form,
         status: "draft"
       }, {
-        headers: authHeaders()
+        headers: getAuthHeaders()
       });
       toast.success("Template ready", `Template created - now link it to your selected trigger`);
       onSuccess();
@@ -365,7 +362,7 @@ function EditTemplateModal({ template, onClose, onSuccess }: { template: any; on
     setSaving(true);
     try {
       await api.put(`/api/v1/email-engine/templates/${template._id}`, form, {
-        headers: authHeaders()
+        headers: getAuthHeaders()
       });
       toast.success("Template updated");
       onSuccess();

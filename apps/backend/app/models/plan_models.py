@@ -80,20 +80,7 @@ class OrganizationLimit(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
-class Subscription(BaseModel):
-    id: str = Field(default=None, alias="_id")
-    organization_id: str
-    plan_id: str
-    status: str = "active"
-    billing_cycle: BillingCycle
-    stripe_subscription_id: Optional[str] = None
-    stripe_customer_id: Optional[str] = None
-    current_period_start: datetime
-    current_period_end: datetime
-    cancel_at_period_end: bool = False
-    canceled_at: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+# Subscription: canonical definition in app.models.billing_models.Subscription
 
 
 class FeatureFlag(BaseModel):

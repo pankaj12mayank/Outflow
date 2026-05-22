@@ -8,7 +8,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, List
 
 from app.core.security import verify_token
-from app.services.auth_service import PermissionChecker
+from app.services.auth_service import PermissionChecker, normalize_role
 
 security = HTTPBearer()
 
@@ -40,7 +40,7 @@ async def get_current_user(
     return {
         "sub": payload.get("sub"),
         "email": payload.get("email"),
-        "role": payload.get("role"),
+        "role": normalize_role(payload.get("role")),
         "organization_id": payload.get("organization_id"),
     }
 
@@ -61,7 +61,7 @@ async def get_current_user_optional(
         return {
             "sub": payload.get("sub"),
             "email": payload.get("email"),
-            "role": payload.get("role"),
+            "role": normalize_role(payload.get("role")),
             "organization_id": payload.get("organization_id"),
         }
     return None
@@ -115,19 +115,19 @@ def require_permission(resource: str, action: str):
     return permission_checker
 
 
-def require_super_admin(current_user: dict = Depends(get_current_user)) -> dict:
-    """Require super admin role."""
-    if current_user.get("role") != "super_admin":
+def require_system_owner(current_user: dict = Depends(get_current_user)) -> dict:
+    """Require system_owner role (platform admin)."""
+    if normalize_role(current_user.get("role")) != "system_owner":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Super admin access required",
+            detail="System owner access required",
         )
     return current_user
 
 
 def require_owner_or_admin(current_user: dict = Depends(get_current_user)) -> dict:
-    """Require admin or super_admin role."""
-    if current_user.get("role") not in ["admin", "super_admin"]:
+    """Require organization_admin or system_owner role."""
+    if current_user.get("role") not in ["organization_admin", "system_owner"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Owner or admin access required",
@@ -136,8 +136,8 @@ def require_owner_or_admin(current_user: dict = Depends(get_current_user)) -> di
 
 
 def require_owner(current_user: dict = Depends(get_current_user)) -> dict:
-    """Require admin role."""
-    if current_user.get("role") not in ["admin", "super_admin"]:
+    """Require system_owner role."""
+    if current_user.get("role") not in ["system_owner", "organization_admin"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Owner access required",
@@ -164,7 +164,7 @@ class RBACMiddleware:
             request.state.user = {
                 "sub": payload.get("sub"),
                 "email": payload.get("email"),
-                "role": payload.get("role"),
+                "role": normalize_role(payload.get("role")),
                 "organization_id": payload.get("organization_id"),
             }
 
@@ -183,5 +183,5 @@ def can_access_resource(role: str, resource: str) -> bool:
     return PermissionChecker.can_access_resource(role, resource)
 
 
-require_admin = require_roles(["admin", "super_admin"])
-require_team_member = require_roles(["admin", "team_member", "super_admin"])
+require_admin = require_roles(["organization_admin", "system_owner"])
+require_team_member = require_roles(["organization_admin", "team_member", "system_owner"])

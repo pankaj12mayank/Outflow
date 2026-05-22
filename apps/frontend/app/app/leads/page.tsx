@@ -32,87 +32,39 @@ import { toast } from "@/app/components/toast";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
+import { useLeads, useLeadStats } from "@/app/hooks/use-leads";
+import { PageError, PageLoading } from "@/app/components/page-state";
 
-const leads = [
-  {
-    id: 1,
-    name: "Sarah Chen",
-    email: "sarah.chen@techscale.io",
-    phone: "+1 415 555 0123",
-    company: "TechScale Inc.",
-    title: "VP of Sales",
-    website: "techscale.io",
-    enrichment: "completed",
-    score: 92,
-    source: "Google Maps",
-    lastContact: "2026-05-12",
-  },
-  {
-    id: 2,
-    name: "Michael Torres",
-    email: "m.torres@dataflow.com",
-    phone: "+1 212 555 0456",
-    company: "DataFlow Systems",
-    title: "Head of Growth",
-    website: "dataflow.com",
-    enrichment: "completed",
-    score: 87,
-    source: "CSV Import",
-    lastContact: "2026-05-11",
-  },
-  {
-    id: 3,
-    name: "Emma Williams",
-    email: "emma.w@cloudnine.co",
-    phone: "+1 650 555 0789",
-    company: "CloudNine Solutions",
-    title: "CRO",
-    website: "cloudnine.co",
-    enrichment: "in_progress",
-    score: 78,
-    source: "Website Crawler",
-    lastContact: "2026-05-10",
-  },
-  {
-    id: 4,
-    name: "James Miller",
-    email: null,
-    phone: "+1 408 555 0234",
-    company: "Nexus AI",
-    title: "CEO",
-    website: "nexusai.io",
-    enrichment: "pending",
-    score: 65,
-    source: "Google Maps",
-    lastContact: "2026-05-08",
-  },
-  {
-    id: 5,
-    name: "Lisa Park",
-    email: "lisa.park@synthetix.com",
-    phone: "+1 510 555 0567",
-    company: "Synthetix Labs",
-    title: "Director of Marketing",
-    website: "synthetix.com",
-    enrichment: "completed",
-    score: 89,
-    source: "LinkedIn",
-    lastContact: "2026-05-13",
-  },
-  {
-    id: 6,
-    name: "David Kim",
-    email: "d.kim@brightstack.io",
-    phone: "+1 628 555 0890",
-    company: "BrightStack",
-    title: "VP Engineering",
-    website: "brightstack.io",
-    enrichment: "failed",
-    score: 45,
-    source: "Website Crawler",
-    lastContact: "2026-04-28",
-  },
-];
+type LeadRow = {
+  id: string | number;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  company: string;
+  title: string;
+  website: string;
+  enrichment: string;
+  score: number;
+  source: string;
+  lastContact: string;
+};
+
+function mapApiLead(row: Record<string, any>): LeadRow {
+  const name = [row.first_name, row.last_name].filter(Boolean).join(" ") || row.name || row.email || "Unknown";
+  return {
+    id: row.id || row._id,
+    name,
+    email: row.email ?? null,
+    phone: row.phone ?? null,
+    company: row.company || row.company_name || "",
+    title: row.job_title || row.title || "",
+    website: row.website || row.company_domain || "",
+    enrichment: row.enriched_data ? "completed" : row.email_verified ? "completed" : row.status === "new" ? "pending" : (row.status || "pending"),
+    score: row.score ?? 0,
+    source: row.source || "API",
+    lastContact: row.updated_at?.slice?.(0, 10) || row.created_at?.slice?.(0, 10) || "",
+  };
+}
 
 const statusConfig = {
   completed: { color: "green", icon: CheckCircle, label: "Enriched" },
@@ -123,12 +75,21 @@ const statusConfig = {
 
 export default function LeadsPage() {
   const router = useRouter();
+  const { data: apiData, isLoading, isError, error, refetch } = useLeads();
+  useLeadStats();
+  const apiLeads = Array.isArray(apiData) ? apiData : apiData?.leads || apiData?.data || [];
+  const leads: LeadRow[] = apiLeads.map(mapApiLead);
+
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedLeads, setSelectedLeads] = useState<number[]>([]);
+  const [selectedLeads, setSelectedLeads] = useState<(string | number)[]>([]);
   const [enrichmentFilter, setEnrichmentFilter] = useState<string>("all");
-  const [activeMenu, setActiveMenu] = useState<number | null>(null);
+  const [activeMenu, setActiveMenu] = useState<string | number | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | number | null>(null);
+
+  if (isLoading && apiLeads.length === 0) {
+    return <PageLoading label="Loading leads..." />;
+  }
 
   const handleEnrichSelected = () => {
     if (selectedLeads.length > 0) {
@@ -149,7 +110,7 @@ export default function LeadsPage() {
     window.open(`https://${website}`, "_blank");
   };
 
-  const handleDeleteLead = (id: number) => {
+  const handleDeleteLead = (id: string | number) => {
     setShowDeleteConfirm(null);
     toast.delete(`Lead ${id}`);
   };
@@ -165,7 +126,7 @@ export default function LeadsPage() {
     window.URL.revokeObjectURL(url);
   };
 
-  const filteredLeads = leads.filter((lead) => {
+  const filteredLeads = leads.filter((lead: LeadRow) => {
     const matchesSearch =
       lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       lead.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -175,14 +136,20 @@ export default function LeadsPage() {
     return matchesSearch && matchesFilter;
   });
 
-  const toggleLeadSelection = (id: number) => {
+  const toggleLeadSelection = (id: string | number) => {
     setSelectedLeads((prev) =>
       prev.includes(id) ? prev.filter((l) => l !== id) : [...prev, id]
     );
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full overflow-x-hidden">
+      {isError && (
+        <PageError
+          message={(error as any)?.response?.data?.detail || "Could not load leads from API."}
+          onRetry={() => refetch()}
+        />
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold mb-2">Leads</h1>
@@ -267,14 +234,14 @@ export default function LeadsPage() {
             className="pl-10 bg-white/5 border-white/10"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
           {["all", "completed", "in_progress", "pending", "failed"].map(
             (filter) => (
               <button
                 key={filter}
                 onClick={() => setEnrichmentFilter(filter)}
                 className={cn(
-                  "px-4 py-2 rounded-xl text-sm font-medium transition-all capitalize",
+                  "px-4 py-2 rounded-xl text-sm font-medium transition-all capitalize whitespace-nowrap",
                   enrichmentFilter === filter
                     ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
                     : "border border-white/10 text-gray-400 hover:text-white"
@@ -325,7 +292,9 @@ export default function LeadsPage() {
           )}
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="relative">
+          <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white/5 to-transparent pointer-events-none z-10" />
+          <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-white/5">
@@ -354,6 +323,17 @@ export default function LeadsPage() {
               </tr>
             </thead>
             <tbody>
+              {!isLoading && filteredLeads.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="p-12 text-center text-gray-400">
+                    <p className="font-medium text-white mb-1">No leads yet</p>
+                    <p className="text-sm mb-4">Import CSV or run a scraping tool to add prospects.</p>
+                    <Button variant="outline" onClick={() => router.push("/app/scraping/csv-import")}>
+                      Import leads
+                    </Button>
+                  </td>
+                </tr>
+              )}
               {filteredLeads.map((lead, i) => {
                 const status = statusConfig[lead.enrichment as keyof typeof statusConfig];
                 const StatusIcon = status.icon;
@@ -531,6 +511,7 @@ export default function LeadsPage() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
     </div>

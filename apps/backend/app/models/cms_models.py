@@ -1,7 +1,9 @@
 from datetime import datetime
 from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, JSON, Text, ForeignKey, Index
-from sqlalchemy.orm import relationship
-from app.db import Base
+from sqlalchemy.orm import relationship, declarative_base
+
+# Legacy SQLAlchemy models (unused at runtime; MongoDB is canonical for CMS)
+Base = declarative_base()
 
 
 class LandingPageSection(Base):

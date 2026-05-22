@@ -1,7 +1,15 @@
+"""
+RBAC helpers for system-owner and DB-backed role lookups.
+
+Prefer app.middleware.auth.require_permission() / require_roles() for org app routes.
+Use require_permissions() here when loading permissions from RoleService collections.
+"""
+
 from typing import List, Optional, Callable
 from functools import wraps
 from fastapi import HTTPException, status, Request, Depends
 from app.services.rbac_service import RoleService, RBACService, FeatureToggleService
+from app.services.auth_service import PermissionChecker, normalize_role
 from app.models.rbac_models import Role
 
 
@@ -29,12 +37,15 @@ async def get_current_user_with_role(request: Request):
         
         if user_roles:
             primary_role = user_roles[0]
-            user["role"] = primary_role.get("role")
-            user["permissions"] = primary_role.get("permissions", [])
+            user["role"] = normalize_role(primary_role.get("role"))
+            user["permissions"] = primary_role.get("permissions") or PermissionChecker.get_user_permissions(
+                user["role"]
+            )
             user["organization_id"] = primary_role.get("organization_id")
         else:
-            user["role"] = Role.TEAM_MEMBER.value
-            user["permissions"] = RBACService.get_permissions_for_role(Role.TEAM_MEMBER)
+            role = normalize_role(user.get("role"))
+            user["role"] = role
+            user["permissions"] = PermissionChecker.get_user_permissions(role)
         
         user["all_roles"] = user_roles
         
@@ -43,89 +54,53 @@ async def get_current_user_with_role(request: Request):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
 
+async def _check_permissions(current_user: dict, required_permissions: List[str]):
+    user_permissions = current_user.get("permissions", [])
+    if "*" in user_permissions:
+        return current_user
+    if not RBACService.has_any_permission(user_permissions, required_permissions):
+        raise HTTPException(403, detail=f"Missing required permissions: {', '.join(required_permissions)}")
+    return current_user
+
+
+async def _check_role(current_user: dict, required_role: Role):
+    user_role = current_user.get("role")
+    role_hierarchy = {
+        Role.SYSTEM_OWNER: 3,
+        Role.ORGANIZATION_ADMIN: 2,
+        Role.TEAM_MEMBER: 1,
+    }
+    user_level = role_hierarchy.get(Role(user_role), 0)
+    required_level = role_hierarchy.get(required_role, 0)
+    if user_level < required_level:
+        raise HTTPException(403, detail=f"Role '{required_role.value}' required. Current role: '{user_role}'")
+    return current_user
+
+
+async def _check_feature(current_user: dict, feature_key: str):
+    user_role = Role(current_user.get("role", Role.TEAM_MEMBER.value))
+    is_enabled = await FeatureToggleService.is_feature_enabled(feature_key, user_role, current_user.get("organization_id"))
+    if not is_enabled:
+        raise HTTPException(403, detail=f"Feature '{feature_key}' is not enabled")
+    return current_user
+
+
 def require_permissions(required_permissions: List[str]):
-    def decorator(func: Callable):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            request = kwargs.get("current_user") or kwargs.get("request")
-            
-            if not request:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-            
-            user_permissions = request.get("permissions", [])
-            
-            if "*" in user_permissions:
-                return await func(*args, **kwargs)
-            
-            has_permission = RBACService.has_any_permission(user_permissions, required_permissions)
-            
-            if not has_permission:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Missing required permissions: {', '.join(required_permissions)}"
-                )
-            
-            return await func(*args, **kwargs)
-        return wrapper
-    return decorator
+    async def dependency(current_user: dict = Depends(get_current_user_with_role)):
+        return await _check_permissions(current_user, required_permissions)
+    return dependency
 
 
 def require_role(required_role: Role):
-    def decorator(func: Callable):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            current_user = kwargs.get("current_user")
-            
-            if not current_user:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-            
-            user_role = current_user.get("role")
-            
-            role_hierarchy = {
-                Role.SYSTEM_OWNER: 3,
-                Role.ORGANIZATION_ADMIN: 2,
-                Role.TEAM_MEMBER: 1,
-            }
-            
-            user_level = role_hierarchy.get(Role(user_role), 0)
-            required_level = role_hierarchy.get(required_role, 0)
-            
-            if user_level < required_level:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Role '{required_role.value}' required. Current role: '{user_role}'"
-                )
-            
-            return await func(*args, **kwargs)
-        return wrapper
-    return decorator
+    async def dependency(current_user: dict = Depends(get_current_user_with_role)):
+        return await _check_role(current_user, required_role)
+    return dependency
 
 
 def require_feature(feature_key: str):
-    def decorator(func: Callable):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            current_user = kwargs.get("current_user")
-            
-            if not current_user:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-            
-            user_role = Role(current_user.get("role", Role.TEAM_MEMBER.value))
-            organization_id = current_user.get("organization_id")
-            
-            is_enabled = await FeatureToggleService.is_feature_enabled(
-                feature_key, user_role, organization_id
-            )
-            
-            if not is_enabled:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Feature '{feature_key}' is not enabled"
-                )
-            
-            return await func(*args, **kwargs)
-        return wrapper
-    return decorator
+    async def dependency(current_user: dict = Depends(get_current_user_with_role)):
+        return await _check_feature(current_user, feature_key)
+    return dependency
 
 
 async def check_permission(user_permissions: List[str], permission: str) -> bool:

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
-from app.middleware.rbac import get_current_user_with_role, require_permissions
+from app.middleware.rbac import require_permissions
 from app.repositories.mongo_repositories import TeamMemberRepository, TeamInvitationRepository
 
 router = APIRouter(prefix="/team", tags=["Team"])
@@ -31,9 +31,8 @@ class TeamInvitationResponse(BaseModel):
 
 
 @router.get("/members", response_model=List[TeamMemberResponse])
-@require_permissions(["teams:read"])
 async def list_team_members(
-    current_user: dict = Depends(get_current_user_with_role),
+    current_user: dict = Depends(require_permissions(["teams:read"])),
 ):
     org_id = current_user.get("organization_id")
     member_repo = TeamMemberRepository(org_id)
@@ -42,10 +41,9 @@ async def list_team_members(
 
 
 @router.post("/members", response_model=TeamMemberResponse, status_code=status.HTTP_201_CREATED)
-@require_permissions(["teams:create"])
 async def add_team_member(
     member_in: dict,
-    current_user: dict = Depends(get_current_user_with_role),
+    current_user: dict = Depends(require_permissions(["teams:create"])),
 ):
     org_id = current_user.get("organization_id")
     member_repo = TeamMemberRepository(org_id)
@@ -60,12 +58,11 @@ async def add_team_member(
     return member
 
 
-@router.put("/members/{member_id}", response_model=TeamMemberResponse)
-@require_permissions(["teams:update"])
+@router.api_route("/members/{member_id}", methods=["PUT", "PATCH"], response_model=TeamMemberResponse)
 async def update_team_member(
     member_id: str,
     member_in: dict,
-    current_user: dict = Depends(get_current_user_with_role),
+    current_user: dict = Depends(require_permissions(["teams:update"])),
 ):
     org_id = current_user.get("organization_id")
     member_repo = TeamMemberRepository(org_id)
@@ -77,10 +74,9 @@ async def update_team_member(
 
 
 @router.delete("/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
-@require_permissions(["teams:delete"])
 async def remove_team_member(
     member_id: str,
-    current_user: dict = Depends(get_current_user_with_role),
+    current_user: dict = Depends(require_permissions(["teams:delete"])),
 ):
     org_id = current_user.get("organization_id")
     member_repo = TeamMemberRepository(org_id)
@@ -91,9 +87,8 @@ async def remove_team_member(
 
 
 @router.get("/invitations", response_model=List[TeamInvitationResponse])
-@require_permissions(["teams:read"])
 async def list_pending_invitations(
-    current_user: dict = Depends(get_current_user_with_role),
+    current_user: dict = Depends(require_permissions(["teams:read"])),
 ):
     org_id = current_user.get("organization_id")
     invite_repo = TeamInvitationRepository(org_id)
@@ -102,10 +97,9 @@ async def list_pending_invitations(
 
 
 @router.post("/invitations", response_model=TeamInvitationResponse, status_code=status.HTTP_201_CREATED)
-@require_permissions(["teams:create"])
 async def invite_team_member(
     invitation_in: dict,
-    current_user: dict = Depends(get_current_user_with_role),
+    current_user: dict = Depends(require_permissions(["teams:create"])),
 ):
     from app.db.mongodb import MongoDB
     from app.services.plan_service import PlanService, SubscriptionService
@@ -141,10 +135,9 @@ async def invite_team_member(
 
 
 @router.delete("/invitations/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT)
-@require_permissions(["teams:delete"])
 async def cancel_invitation(
     invitation_id: str,
-    current_user: dict = Depends(get_current_user_with_role),
+    current_user: dict = Depends(require_permissions(["teams:delete"])),
 ):
     org_id = current_user.get("organization_id")
     invite_repo = TeamInvitationRepository(org_id)
@@ -155,10 +148,9 @@ async def cancel_invitation(
 
 
 @router.post("/invitations/{invitation_id}/resend", response_model=TeamInvitationResponse)
-@require_permissions(["teams:update"])
 async def resend_invitation(
     invitation_id: str,
-    current_user: dict = Depends(get_current_user_with_role),
+    current_user: dict = Depends(require_permissions(["teams:update"])),
 ):
     org_id = current_user.get("organization_id")
     invite_repo = TeamInvitationRepository(org_id)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bell,
@@ -25,10 +25,13 @@ import {
   Search,
   Filter,
   RefreshCw,
+  CreditCard,
+  PauseCircle,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
+import { notificationsAPI } from "@/app/lib/api";
 
 interface Notification {
   id: string;
@@ -39,7 +42,24 @@ interface Notification {
   is_read: boolean;
   action_url?: string;
   action_label?: string;
+  metadata?: any;
   created_at: string;
+}
+
+function normalizeNotification(raw: Record<string, unknown>): Notification {
+  const id = String(raw.id ?? raw._id ?? "");
+  return {
+    id,
+    type: String(raw.type ?? "system"),
+    title: String(raw.title ?? ""),
+    message: String(raw.message ?? ""),
+    priority: String(raw.priority ?? "normal"),
+    is_read: Boolean(raw.is_read ?? raw.read ?? false),
+    action_url: raw.action_url as string | undefined,
+    action_label: raw.action_label as string | undefined,
+    metadata: raw.metadata,
+    created_at: String(raw.created_at ?? new Date().toISOString()),
+  };
 }
 
 interface Toast {
@@ -50,44 +70,6 @@ interface Toast {
   duration?: number;
 }
 
-const mockNotifications: Notification[] = [
-  { id: "1", type: "campaign", title: "Campaign Completed", message: "Your Q1 Outreach campaign has finished sending.", priority: "high", is_read: false, action_url: "/campaigns/1", created_at: "2 min ago" },
-  { id: "2", type: "ai", title: "AI Personalization Complete", message: "125 emails have been personalized using website analysis.", priority: "normal", is_read: false, action_url: "/campaigns/1", created_at: "15 min ago" },
-  { id: "3", type: "scraping", title: "Scraping Job Finished", message: "Google Maps scrape found 234 leads in San Francisco.", priority: "normal", is_read: true, action_url: "/leads", created_at: "1 hour ago" },
-  { id: "4", type: "email", title: "New Reply Received", message: "Sarah Chen from Acme Corp replied to your email.", priority: "high", is_read: true, action_url: "/inbox", created_at: "2 hours ago" },
-  { id: "5", type: "meeting", title: "Meeting Reminder", message: "Demo call with John in 30 minutes.", priority: "urgent", is_read: true, action_url: "/calendar", created_at: "3 hours ago" },
-  { id: "6", type: "system", title: "Email Account Warmup", message: "sales@acme.com completed day 15 of warmup.", priority: "low", is_read: true, created_at: "5 hours ago" },
-];
-
-const typeIcons: Record<string, any> = {
-  campaign: Target,
-  ai: Zap,
-  scraping: Users,
-  email: Mail,
-  meeting: Calendar,
-  lead: Users,
-  system: Bell,
-  security: AlertTriangle,
-};
-
-const typeColors: Record<string, string> = {
-  campaign: "purple",
-  ai: "cyan",
-  scraping: "green",
-  email: "blue",
-  meeting: "yellow",
-  lead: "pink",
-  system: "gray",
-  security: "red",
-};
-
-const priorityColors: Record<string, string> = {
-  urgent: "text-red-400 bg-red-500/10 border-red-500/20",
-  high: "text-yellow-400 bg-yellow-500/10 border-yellow-500/20",
-  normal: "text-gray-400 bg-white/5 border-white/10",
-  low: "text-gray-500 bg-white/5 border-white/5",
-};
-
 function NotificationItem({
   notification,
   onMarkRead,
@@ -97,8 +79,40 @@ function NotificationItem({
   onMarkRead: () => void;
   onDismiss: () => void;
 }) {
-  const Icon = typeIcons[notification.type] || Bell;
-  const color = typeColors[notification.type] || "gray";
+  const typeIconMap: Record<string, any> = {
+    campaign: Target,
+    ai: Zap,
+    scraping: Users,
+    email: Mail,
+    meeting: Calendar,
+    lead: Users,
+    system: Bell,
+    security: AlertTriangle,
+    billing_alert: CreditCard,
+    smtp_failure: Mail,
+    subscription_expiry: AlertCircle,
+    ai_usage_alert: Zap,
+    scraping_failure: Search,
+  };
+
+  const typeColorMap: Record<string, string> = {
+    campaign: "purple",
+    ai: "cyan",
+    scraping: "green",
+    email: "blue",
+    meeting: "yellow",
+    lead: "pink",
+    system: "gray",
+    security: "red",
+    billing_alert: "yellow",
+    smtp_failure: "green",
+    subscription_expiry: "red",
+    ai_usage_alert: "cyan",
+    scraping_failure: "green",
+  };
+
+  const Icon = typeIconMap[notification.type] || Bell;
+  const color = typeColorMap[notification.type] || "gray";
 
   return (
     <motion.div
@@ -141,7 +155,9 @@ function NotificationItem({
             </div>
           </div>
           <div className="flex items-center justify-between mt-2">
-            <span className="text-xs text-gray-500">{notification.created_at}</span>
+            <span className="text-xs text-gray-500">
+              {new Date(notification.created_at).toLocaleString()}
+            </span>
             <div className="flex items-center gap-2">
               {notification.action_url && (
                 <Button variant="ghost" size="sm" className="text-xs h-7">
@@ -189,7 +205,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
       initial={{ opacity: 0, y: -50, scale: 0.9 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -20, scale: 0.9 }}
-      className={cn("p-4 rounded-xl border backdrop-blur-xl flex items-start gap-3 min-w-[320px] max-w-[400px]", colors[toast.type])}
+      className={cn("p-4 rounded-xl border backdrop-blur-xl flex items-start gap-3 min-w-[280px] max-w-[90vw] sm:max-w-[400px]", colors[toast.type])}
     >
       <Icon className={cn("w-5 h-5 flex-shrink-0 mt-0.5", iconColors[toast.type])} />
       <div className="flex-1 min-w-0">
@@ -216,42 +232,88 @@ export function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismi
 }
 
 export function NotificationCenter({
-  notifications = mockNotifications,
-  unreadCount = 2,
-  onMarkAllRead,
+  onMarkAllRead: externalMarkAllRead,
   onSettings,
 }: {
-  notifications?: Notification[];
-  unreadCount?: number;
   onMarkAllRead?: () => void;
   onSettings?: () => void;
 }) {
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
-  const [notifList, setNotifList] = useState(notifications);
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  const filtered = notifList.filter((n) => {
+  const fetchNotifications = async () => {
+    try {
+      const data = await notificationsAPI.list({ limit: 50 });
+      const items = (Array.isArray(data) ? data : []).map((n) =>
+        normalizeNotification(n as Record<string, unknown>)
+      );
+      setNotifications(items);
+      setUnreadCount(items.filter((n) => !n.is_read).length);
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) fetchNotifications();
+  }, [isOpen]);
+
+  const handleMarkRead = async (id: string) => {
+    try {
+      await notificationsAPI.markRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+      );
+      setUnreadCount((c) => Math.max(0, c - 1));
+    } catch (error) {
+      console.error("Failed to mark notification as read:", error);
+    }
+  };
+
+  const handleDismiss = async (id: string) => {
+    try {
+      await notificationsAPI.delete(id);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      setUnreadCount((c) => Math.max(0, c - 1));
+    } catch (error) {
+      console.error("Failed to dismiss notification:", error);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    if (externalMarkAllRead) {
+      externalMarkAllRead();
+      return;
+    }
+    try {
+      await notificationsAPI.markAllRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+    } catch (error) {
+      console.error("Failed to mark all notifications as read:", error);
+    }
+  };
+
+  const filtered = notifications.filter((n) => {
     if (filter !== "all" && n.type !== filter) return false;
     if (search && !n.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
-  const handleMarkRead = (id: string) => {
-    setNotifList((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
-    );
-  };
-
-  const handleDismiss = (id: string) => {
-    setNotifList((prev) => prev.filter((n) => n.id !== id));
-  };
+  const notifTypes = ["all", "campaign", "ai", "scraping", "email", "meeting", "billing_alert", "smtp_failure"];
 
   return (
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="relative p-2 rounded-xl hover:bg-white/5 transition-all"
+        aria-label="Toggle notifications"
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
@@ -267,14 +329,14 @@ export function NotificationCenter({
             initial={{ opacity: 0, scale: 0.95, y: -10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -10 }}
-            className="absolute right-0 top-full mt-2 w-[420px] rounded-2xl border border-white/10 bg-gradient-to-b from-black/90 to-black/60 backdrop-blur-xl shadow-2xl overflow-hidden z-50"
+            className="fixed sm:absolute right-0 top-full mt-2 w-[90vw] sm:w-[420px] rounded-2xl border border-white/10 bg-gradient-to-b from-black/90 to-black/60 backdrop-blur-xl shadow-2xl overflow-hidden z-50 sm:right-0 left-4 sm:left-auto"
           >
             <div className="p-4 border-b border-white/5">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-bold">Notifications</h3>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={onMarkAllRead}
+                    onClick={handleMarkAllRead}
                     className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
                   >
                     <CheckCheck className="w-3 h-3" />
@@ -283,6 +345,7 @@ export function NotificationCenter({
                   <button
                     onClick={onSettings}
                     className="p-1.5 rounded-lg hover:bg-white/5"
+                    aria-label="Notification settings"
                   >
                     <Settings className="w-4 h-4 text-gray-400" />
                   </button>
@@ -302,8 +365,8 @@ export function NotificationCenter({
                 </div>
               </div>
 
-              <div className="flex items-center gap-1 mt-3 overflow-x-auto">
-                {["all", "campaign", "ai", "scraping", "email", "meeting"].map((f) => (
+              <div className="flex items-center gap-1 mt-3 overflow-x-auto scrollbar-thin">
+                {notifTypes.map((f) => (
                   <button
                     key={f}
                     onClick={() => setFilter(f)}
@@ -314,25 +377,32 @@ export function NotificationCenter({
                         : "text-gray-400 hover:bg-white/5"
                     )}
                   >
-                    {f === "all" ? "All" : f === "ai" ? "AI" : f}
+                    {f === "all" ? "All" : f === "ai" ? "AI" : f.replace("_", " ")}
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="max-h-[400px] overflow-y-auto">
-              <AnimatePresence>
-                {filtered.map((notif) => (
-                  <NotificationItem
-                    key={notif.id}
-                    notification={notif}
-                    onMarkRead={() => handleMarkRead(notif.id)}
-                    onDismiss={() => handleDismiss(notif.id)}
-                  />
-                ))}
-              </AnimatePresence>
+              {loading ? (
+                <div className="p-8 text-center text-gray-400">
+                  <RefreshCw className="w-8 h-8 mx-auto mb-2 animate-spin opacity-50" />
+                  <div>Loading...</div>
+                </div>
+              ) : (
+                <AnimatePresence>
+                  {filtered.map((notif) => (
+                    <NotificationItem
+                      key={notif.id}
+                      notification={notif}
+                      onMarkRead={() => handleMarkRead(notif.id)}
+                      onDismiss={() => handleDismiss(notif.id)}
+                    />
+                  ))}
+                </AnimatePresence>
+              )}
 
-              {filtered.length === 0 && (
+              {!loading && filtered.length === 0 && (
                 <div className="p-8 text-center text-gray-400">
                   <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
                   <div>No notifications</div>
@@ -341,7 +411,10 @@ export function NotificationCenter({
             </div>
 
             <div className="p-3 border-t border-white/5 text-center">
-              <button className="text-sm text-purple-400 hover:text-purple-300">
+              <button
+                onClick={() => setIsOpen(false)}
+                className="text-sm text-purple-400 hover:text-purple-300"
+              >
                 View all notifications
               </button>
             </div>

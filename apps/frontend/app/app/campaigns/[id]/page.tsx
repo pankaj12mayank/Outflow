@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState, use, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -13,70 +13,77 @@ import {
   MousePointerClick,
   AlertCircle,
   CheckCircle,
-  BarChart3,
   Calendar,
-  Zap,
-  ChevronDown,
   Search,
-  Filter,
   Download,
-  RefreshCw,
   FlaskConical,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
+import { useCampaign, useCampaignStats, useCampaignEmails, useLaunchCampaign, usePauseCampaign } from "@/app/hooks/use-campaigns";
+import { PageError, PageLoading } from "@/app/components/page-state";
+import { toast } from "@/app/components/toast";
+
+type LeadStatus = "sent" | "delivered" | "opened" | "clicked" | "replied" | "bounced" | "unsubscribed" | "pending" | "failed";
 
 interface Lead {
-  id: number;
+  id: string | number;
   name: string;
   email: string;
   company: string;
-  status: "sent" | "delivered" | "opened" | "clicked" | "replied" | "bounced" | "unsubscribed";
+  status: LeadStatus;
   sentAt: string;
   openedAt: string | null;
   clickedAt: string | null;
   repliedAt: string | null;
 }
 
-const campaign = {
-  id: "1",
-  name: "Enterprise SaaS Outreach",
-  description: "Targeting VP and C-level executives at Series B-C startups",
-  status: "active" as const,
-  startDate: "2026-05-01",
-  createdBy: "Sarah Chen",
-  leads: 2847,
-  sent: 12840,
-  delivered: 12756,
-  opened: 5423,
-  clicked: 1117,
-  replied: 3842,
-  bounced: 84,
-  unsubscribed: 12,
-  openRate: 42.5,
-  clickRate: 8.8,
-  replyRate: 30.1,
-  bounceRate: 0.7,
-};
+function mapCampaignView(raw: Record<string, unknown>, stats: Record<string, unknown>) {
+  const sent = Number(raw.emails_sent ?? 0);
+  const opened = Number(raw.emails_opened ?? 0);
+  const clicked = Number(raw.emails_clicked ?? 0);
+  const replied = Number(raw.emails_replied ?? 0);
+  const bounced = Number(raw.emails_bounced ?? 0);
+  const pct = (n: number) => (sent ? Math.round((n / sent) * 1000) / 10 : 0);
+  return {
+    id: String(raw.id ?? ""),
+    name: String(raw.name ?? "Campaign"),
+    description: String(raw.description ?? ""),
+    status: String(raw.status ?? "draft"),
+    startDate: String(raw.started_at ?? raw.created_at ?? "").slice(0, 10) || "—",
+    createdBy: "—",
+    leads: Number(stats.total_leads ?? raw.lead_count ?? 0),
+    sent,
+    delivered: Number(raw.emails_delivered ?? sent),
+    opened,
+    clicked,
+    replied,
+    bounced,
+    unsubscribed: 0,
+    openRate: pct(opened),
+    clickRate: pct(clicked),
+    replyRate: pct(replied),
+    bounceRate: pct(bounced),
+  };
+}
 
-const leads: Lead[] = [
-  { id: 1, name: "Sarah Chen", email: "sarah.chen@techscale.io", company: "TechScale Inc.", status: "replied", sentAt: "2026-05-01 09:00", openedAt: "2026-05-01 10:15", clickedAt: "2026-05-01 10:30", repliedAt: "2026-05-02 14:20" },
-  { id: 2, name: "Michael Torres", email: "m.torres@dataflow.com", company: "DataFlow Systems", status: "clicked", sentAt: "2026-05-01 09:00", openedAt: "2026-05-01 11:45", clickedAt: "2026-05-01 12:00", repliedAt: null },
-  { id: 3, name: "Emma Williams", email: "emma.w@cloudnine.co", company: "CloudNine Solutions", status: "opened", sentAt: "2026-05-01 09:00", openedAt: "2026-05-01 14:30", clickedAt: null, repliedAt: null },
-  { id: 4, name: "James Miller", email: "james@nexusai.io", company: "Nexus AI", status: "delivered", sentAt: "2026-05-01 09:00", openedAt: null, clickedAt: null, repliedAt: null },
-  { id: 5, name: "Lisa Park", email: "lisa.park@synthetix.com", company: "Synthetix Labs", status: "bounced", sentAt: "2026-05-01 09:00", openedAt: null, clickedAt: null, repliedAt: null },
-  { id: 6, name: "David Kim", email: "d.kim@brightstack.io", company: "BrightStack", status: "replied", sentAt: "2026-05-01 09:00", openedAt: "2026-05-01 16:00", clickedAt: "2026-05-01 16:15", repliedAt: "2026-05-03 09:00" },
-  { id: 7, name: "Alex Johnson", email: "alex@startupxyz.com", company: "StartupXYZ", status: "opened", sentAt: "2026-05-01 09:00", openedAt: "2026-05-02 08:00", clickedAt: null, repliedAt: null },
-  { id: 8, name: "Rachel Green", email: "rachel@acmeco.com", company: "Acme Corp", status: "unsubscribed", sentAt: "2026-05-01 09:00", openedAt: "2026-05-01 10:00", clickedAt: null, repliedAt: null },
-];
-
-const abTestResults = {
-  variantA: { name: "Personalized", sent: 6420, opened: 2978, clicked: 687, replied: 2145, openRate: 46.4, clickRate: 10.7, replyRate: 33.4 },
-  variantB: { name: "Generic", sent: 6420, opened: 2445, clicked: 430, replied: 1697, openRate: 38.1, clickRate: 6.7, replyRate: 26.4 },
-  winner: "A",
-};
+function mapEmailRow(e: Record<string, unknown>): Lead {
+  const status = (String(e.status || "sent").toLowerCase() as LeadStatus) || "sent";
+  const created = String(e.created_at ?? "");
+  return {
+    id: String(e.id ?? e._id ?? Math.random()),
+    name: String(e.to_email ?? e.from_email ?? "Contact").split("@")[0],
+    email: String(e.to_email ?? ""),
+    company: "—",
+    status,
+    sentAt: created ? new Date(created).toLocaleString() : "—",
+    openedAt: null,
+    clickedAt: null,
+    repliedAt: null,
+  };
+}
 
 const statusColors = {
   sent: "bg-gray-500/10 text-gray-400 border-gray-500/20",
@@ -86,9 +93,11 @@ const statusColors = {
   replied: "bg-green-500/10 text-green-400 border-green-500/20",
   bounced: "bg-red-500/10 text-red-400 border-red-500/20",
   unsubscribed: "bg-orange-500/10 text-orange-400 border-orange-500/20",
+  pending: "bg-gray-500/10 text-gray-400 border-gray-500/20",
+  failed: "bg-red-500/10 text-red-400 border-red-500/20",
 };
 
-const statusIcons = {
+const statusIcons: Record<string, typeof Mail> = {
   sent: Mail,
   delivered: CheckCircle,
   opened: Mail,
@@ -96,13 +105,60 @@ const statusIcons = {
   replied: TrendingUp,
   bounced: AlertCircle,
   unsubscribed: AlertCircle,
+  pending: Mail,
+  failed: AlertCircle,
 };
 
 export default function CampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
+  const campaignId = resolvedParams.id;
+  const { data: rawCampaign, isLoading, isError, error, refetch } = useCampaign(campaignId);
+  const { data: stats } = useCampaignStats(campaignId);
+  const { data: emailsData } = useCampaignEmails(campaignId, { limit: 100 });
+  const launchMutation = useLaunchCampaign();
+  const pauseMutation = usePauseCampaign();
+
+  const campaign = useMemo(
+    () => (rawCampaign ? mapCampaignView(rawCampaign as Record<string, unknown>, (stats as Record<string, unknown>) || {}) : null),
+    [rawCampaign, stats]
+  );
+
+  const leads: Lead[] = useMemo(() => {
+    const list = Array.isArray(emailsData) ? emailsData : [];
+    return list.map((e: Record<string, unknown>) => mapEmailRow(e));
+  }, [emailsData]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showABTest, setShowABTest] = useState(false);
+
+  if (isLoading && !campaign) {
+    return <PageLoading label="Loading campaign..." />;
+  }
+
+  if (isError || !campaign) {
+    return (
+      <PageError
+        message={(error as any)?.response?.data?.detail || "Campaign not found."}
+        onRetry={() => refetch()}
+      />
+    );
+  }
+
+  const handleToggleRun = async () => {
+    try {
+      if (campaign.status === "running" || campaign.status === "active") {
+        await pauseMutation.mutateAsync(campaignId);
+        toast.success("Campaign paused");
+      } else {
+        await launchMutation.mutateAsync(campaignId);
+        toast.success("Campaign launched");
+      }
+      refetch();
+    } catch (e: any) {
+      toast.error("Action failed", e?.response?.data?.detail || e?.message);
+    }
+  };
 
   const filteredLeads = leads.filter((lead) => {
     const matchesSearch =
@@ -151,15 +207,15 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
           <p className="text-gray-400">{campaign.description}</p>
         </div>
         <div className="flex items-center gap-2">
-          {campaign.status === "active" ? (
-            <Button variant="outline" className="gap-2">
+          {campaign.status === "running" || campaign.status === "active" ? (
+            <Button variant="outline" className="gap-2" onClick={handleToggleRun} disabled={pauseMutation.isPending}>
               <Pause className="w-4 h-4" />
               Pause Campaign
             </Button>
           ) : (
-            <Button className="gap-2">
+            <Button className="gap-2" onClick={handleToggleRun} disabled={launchMutation.isPending}>
               <Play className="w-4 h-4" />
-              Resume Campaign
+              Launch Campaign
             </Button>
           )}
           <Button variant="ghost" size="icon">
@@ -340,69 +396,11 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
           animate={{ opacity: 1, y: 0 }}
           className="p-6 rounded-2xl border border-white/10 bg-gradient-to-b from-purple-500/5 to-transparent"
         >
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <FlaskConical className="w-6 h-6 text-purple-400" />
-              <h3 className="text-xl font-bold">A/B Test Results</h3>
-              <Badge className="bg-green-500/10 text-green-400 border-green-500/20">
-                Winner: Variant A
-              </Badge>
-            </div>
+          <div className="flex items-center gap-3 mb-4">
+            <FlaskConical className="w-6 h-6 text-purple-400" />
+            <h3 className="text-xl font-bold">A/B Test Results</h3>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-4 rounded-xl border border-white/5 bg-white/5">
-              <div className="flex items-center justify-between mb-4">
-                <span className="font-semibold">{abTestResults.variantA.name}</span>
-                <Badge className="bg-green-500/10 text-green-400 border-green-500/20">
-                  +{Math.round((abTestResults.variantA.replyRate - abTestResults.variantB.replyRate) / abTestResults.variantB.replyRate * 100)}%
-                </Badge>
-              </div>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <div className="text-gray-400">Sent</div>
-                  <div className="font-semibold">{abTestResults.variantA.sent.toLocaleString()}</div>
-                </div>
-                <div>
-                  <div className="text-gray-400">Open Rate</div>
-                  <div className="font-semibold">{abTestResults.variantA.openRate}%</div>
-                </div>
-                <div>
-                  <div className="text-gray-400">Click Rate</div>
-                  <div className="font-semibold">{abTestResults.variantA.clickRate}%</div>
-                </div>
-                <div>
-                  <div className="text-gray-400">Reply Rate</div>
-                  <div className="font-semibold text-green-400">{abTestResults.variantA.replyRate}%</div>
-                </div>
-              </div>
-            </div>
-            <div className="p-4 rounded-xl border border-white/5 bg-white/5">
-              <div className="flex items-center justify-between mb-4">
-                <span className="font-semibold">{abTestResults.variantB.name}</span>
-                <Badge className="bg-gray-500/10 text-gray-400 border-gray-500/20">
-                  Control
-                </Badge>
-              </div>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <div className="text-gray-400">Sent</div>
-                  <div className="font-semibold">{abTestResults.variantB.sent.toLocaleString()}</div>
-                </div>
-                <div>
-                  <div className="text-gray-400">Open Rate</div>
-                  <div className="font-semibold">{abTestResults.variantB.openRate}%</div>
-                </div>
-                <div>
-                  <div className="text-gray-400">Click Rate</div>
-                  <div className="font-semibold">{abTestResults.variantB.clickRate}%</div>
-                </div>
-                <div>
-                  <div className="text-gray-400">Reply Rate</div>
-                  <div className="font-semibold text-gray-300">{abTestResults.variantB.replyRate}%</div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <p className="text-sm text-gray-400">A/B test metrics are not configured for this campaign yet.</p>
         </motion.div>
       )}
 
@@ -455,7 +453,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
             </thead>
             <tbody>
               {filteredLeads.map((lead) => {
-                const StatusIcon = statusIcons[lead.status];
+                const StatusIcon = statusIcons[lead.status] || Mail;
                 return (
                   <tr
                     key={lead.id}

@@ -98,17 +98,15 @@ class BaseRepository:
         except InvalidId:
             return False
         
+        filter_dict = self._get_tenant_filter({"_id": doc_id})
         if hard:
-            filter_dict = self._get_tenant_filter({"_id": doc_id})
             result = await self._collection.delete_one(filter_dict)
-        else:
-            filter_dict = self._get_tenant_filter({"_id": doc_id})
-            result = await self._collection.update_one(
-                filter_dict,
-                {"$set": {"deleted_at": datetime.utcnow()}}
-            )
-        
-        return result.deleted_count > 0 or result.modified_count > 0
+            return result.deleted_count > 0
+        result = await self._collection.update_one(
+            filter_dict,
+            {"$set": {"deleted_at": datetime.utcnow()}},
+        )
+        return result.modified_count > 0
 
     async def count(self, filters: Optional[Dict[str, Any]] = None) -> int:
         """Count records with optional filters."""

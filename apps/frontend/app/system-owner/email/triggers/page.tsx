@@ -8,10 +8,7 @@ import {
   Zap, Plus, Search, Edit, Trash2, RefreshCw, Play, Pause,
   Clock, AlertCircle, ArrowRight
 } from "lucide-react";
-
-function authHeaders() {
-  return { Authorization: `Bearer ${localStorage.getItem("system_owner_token")}` };
-}
+import { getAuthHeaders } from "@/app/lib/auth";
 
 const EVENT_TYPES = [
   { value: "welcome", label: "Welcome", category: "Auth" },
@@ -56,11 +53,11 @@ export default function EmailTriggersPage() {
     try {
       const [triggersRes, templatesRes] = await Promise.all([
         api.get("/api/v1/email-engine/triggers", {
-          headers: authHeaders(),
+          headers: getAuthHeaders(),
           params: { status: filter === "all" ? undefined : filter, page_size: 50 }
         }),
         api.get("/api/v1/email-engine/templates", {
-          headers: authHeaders(),
+          headers: getAuthHeaders(),
           params: { status: "active", page_size: 50 }
         }),
       ]);
@@ -82,7 +79,7 @@ export default function EmailTriggersPage() {
     
     try {
       await api.delete(`/api/v1/email-engine/triggers/${triggerId}`, {
-        headers: authHeaders()
+        headers: getAuthHeaders()
       });
       toast.success("Trigger deleted");
       loadData();
@@ -96,7 +93,7 @@ export default function EmailTriggersPage() {
     try {
       await api.put(`/api/v1/email-engine/triggers/${trigger._id}`, 
         { status: newStatus },
-        { headers: authHeaders() }
+        { headers: getAuthHeaders() }
       );
       toast.success(`Trigger ${newStatus === "active" ? "activated" : "paused"}`);
       loadData();
@@ -276,7 +273,7 @@ function CreateTriggerModal({ templates, onClose, onSuccess }: { templates: any[
     setSaving(true);
     try {
       await api.post("/api/v1/email-engine/triggers", form, {
-        headers: authHeaders()
+        headers: getAuthHeaders()
       });
       toast.success("Trigger created");
       onSuccess();
@@ -423,7 +420,7 @@ function EditTriggerModal({ trigger, templates, onClose, onSuccess }: { trigger:
     setSaving(true);
     try {
       await api.put(`/api/v1/email-engine/triggers/${trigger._id}`, form, {
-        headers: authHeaders()
+        headers: getAuthHeaders()
       });
       toast.success("Trigger updated");
       onSuccess();

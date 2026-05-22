@@ -21,6 +21,15 @@ class Colors:
     BOLD = '\033[1m'
     END = '\033[0m'
 
+    if sys.platform == "win32":
+        GREEN = RED = YELLOW = BLUE = MAGENTA = CYAN = BOLD = END = ""
+
+
+def _sym(kind: str) -> str:
+    if sys.platform == "win32":
+        return {"ok": "[OK]", "warn": "[!]", "err": "[X]"}.get(kind, "[OK]")
+    return {"ok": "\u2713", "warn": "\u26a0", "err": "\u2717"}.get(kind, "\u2713")
+
 class PlatformValidator:
     def __init__(self, root_path: str):
         self.root = Path(root_path)
@@ -43,15 +52,15 @@ class PlatformValidator:
         print(f"\n{Colors.BLUE}{Colors.BOLD}{text}{Colors.END}")
 
     def print_success(self, text: str):
-        print(f"{Colors.GREEN}✓{Colors.END} {text}")
+        print(f"{Colors.GREEN}{_sym('ok')}{Colors.END} {text}")
         self.successes.append(text)
 
     def print_warning(self, text: str):
-        print(f"{Colors.YELLOW}⚠{Colors.END} {text}")
+        print(f"{Colors.YELLOW}{_sym('warn')}{Colors.END} {text}")
         self.warnings.append(text)
 
     def print_error(self, text: str):
-        print(f"{Colors.RED}✗{Colors.END} {text}")
+        print(f"{Colors.RED}{_sym('err')}{Colors.END} {text}")
         self.issues.append(text)
 
     def check_frontend_structure(self):
@@ -70,13 +79,22 @@ class PlatformValidator:
             else:
                 self.print_error(f"Missing: /{dir_name}")
 
-        pages = ["login", "register", "dashboard", "campaigns", "leads", "settings"]
-        for page in pages:
-            page_path = frontend / "app" / page
+        app_pages = frontend / "app"
+        pages = [
+            ("dashboard", app_pages / "dashboard"),
+            ("leads", app_pages / "leads"),
+            ("campaigns", app_pages / "campaigns"),
+            ("scraping", app_pages / "scraping"),
+            ("analytics", app_pages / "analytics"),
+            ("login", frontend / "login"),
+            ("register", frontend / "register"),
+            ("landing", frontend / "landing"),
+        ]
+        for name, page_path in pages:
             if page_path.exists():
-                self.print_success(f"Found page: /{page}")
+                self.print_success(f"Found page: /{name}")
             else:
-                self.print_warning(f"Page not found: /{page}")
+                self.print_warning(f"Page not found: /{name}")
 
         component_dirs = ["ui", "premium", "cms", "landing"]
         for comp_dir in component_dirs:
@@ -200,7 +218,9 @@ class PlatformValidator:
     def check_permissions_rbac(self):
         self.print_header("PERMISSIONS & RBAC VALIDATION")
         
-        rbac_model = self.root / "apps" / "backend" / "app" / "models" / "rbac_models.py"
+        rbac_model = self.root / "apps" / "backend" / "app" / "core" / "role_permissions.py"
+        if not rbac_model.exists():
+            rbac_model = self.root / "apps" / "backend" / "app" / "models" / "rbac_models.py"
         if rbac_model.exists():
             content = rbac_model.read_text()
             
@@ -242,11 +262,11 @@ class PlatformValidator:
 
         critical_hooks = [
             "useAuth.tsx",
-            "usePermission.ts", 
-            "useLeads.ts",
-            "useCampaigns.ts",
-            "useAnalytics.ts",
-            "useScraping.ts"
+            "usePermission.ts",
+            "use-leads.ts",
+            "use-campaigns.ts",
+            "use-analytics.ts",
+            "use-scraping.ts",
         ]
 
         for hook in critical_hooks:
@@ -314,6 +334,7 @@ class PlatformValidator:
                 if "ChartContainer" in content:
                     self.print_success("Charts integrated")
         
+        backend = self.root / "apps" / "backend" / "app"
         backend_so_service = backend / "services" / "analytics" / "system_owner_dashboard.py"
         if backend_so_service.exists():
             self.print_success("System Owner dashboard service found")
@@ -387,7 +408,7 @@ class PlatformValidator:
         return len(self.issues) == 0
 
 def main():
-    root = Path(__file__).parent.parent.parent
+    root = Path(__file__).resolve().parent
     validator = PlatformValidator(str(root))
     
     print(f"{Colors.CYAN}{Colors.BOLD}")

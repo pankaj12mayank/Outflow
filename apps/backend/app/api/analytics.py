@@ -112,10 +112,22 @@ async def get_lead_analytics(
     
     leads_coll = MongoDB.get_collection("leads")
     total = await leads_coll.count_documents({"organization_id": org_id})
-    
+
+    source_counts: dict = {}
+    cursor = leads_coll.find({"organization_id": org_id}, {"source": 1})
+    async for doc in cursor:
+        key = doc.get("source") or "Unknown"
+        source_counts[key] = source_counts.get(key, 0) + 1
+
+    sources = [
+        {"name": name, "value": count}
+        for name, count in sorted(source_counts.items(), key=lambda x: -x[1])[:8]
+    ]
+
     return {
         "total": total,
-        "period": period
+        "period": period,
+        "sources": sources,
     }
 
 
@@ -191,3 +203,187 @@ async def get_roi_metrics(
         "conversion_value": 0,
         "roi_percentage": 0
     }
+
+
+@router.get("/campaigns")
+async def get_campaigns_analytics(
+    preset: str = "",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    campaign_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """List campaign metrics, or single campaign when campaign_id query param is set."""
+    if campaign_id:
+        return await get_campaign_analytics(campaign_id, current_user)
+
+    org_id = current_user.get("organization_id")
+    campaigns_coll = MongoDB.get_collection("campaigns")
+    total = await campaigns_coll.count_documents({"organization_id": org_id})
+    active = await campaigns_coll.count_documents({"organization_id": org_id, "status": "running"})
+    campaigns = []
+    cursor = campaigns_coll.find({"organization_id": org_id}).sort("created_at", -1).limit(12)
+    async for doc in cursor:
+        sent = doc.get("emails_sent", 0) or 0
+        opened = doc.get("emails_opened", 0) or 0
+        open_rate = round((opened / sent) * 100, 1) if sent else 0
+        campaigns.append({
+            "id": str(doc.get("_id")),
+            "name": doc.get("name", "Campaign"),
+            "sent": sent,
+            "replied": doc.get("emails_replied", 0) or 0,
+            "open_rate": open_rate,
+            "openRate": open_rate,
+        })
+    return {
+        "total": total,
+        "active": active,
+        "draft": max(0, total - active),
+        "campaigns": campaigns,
+    }
+
+
+@router.get("/sales")
+async def get_sales_analytics(
+    preset: str = "",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = current_user.get("organization_id")
+    deals_coll = MongoDB.get_collection("deals")
+    total = await deals_coll.count_documents({"organization_id": org_id})
+    won = await deals_coll.count_documents({"organization_id": org_id, "stage": "won"})
+    return {"total_deals": total, "won": won, "value": 0}
+
+
+@router.get("/ai")
+async def get_ai_analytics(
+    preset: str = "",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    return {"total_generations": 0, "total_enrichments": 0}
+
+
+@router.get("/system")
+async def get_system_analytics(
+    preset: str = "",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    return {"uptime": 0, "active_users": 0, "error_rate": 0.0}
+
+
+@router.get("/executive-summary")
+async def get_executive_summary(
+    preset: str = "",
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = current_user.get("organization_id")
+    leads_coll = MongoDB.get_collection("leads")
+    campaigns_coll = MongoDB.get_collection("campaigns")
+    total_leads = await leads_coll.count_documents({"organization_id": org_id})
+    total_campaigns = await campaigns_coll.count_documents({"organization_id": org_id})
+    return {
+        "summary": f"{total_leads} leads, {total_campaigns} campaigns",
+        "total_leads": total_leads,
+        "total_campaigns": total_campaigns,
+    }
+
+
+@router.get("/activity-feed")
+async def get_activity_feed(
+    limit: int = 20,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = current_user.get("organization_id")
+    coll = MongoDB.get_collection("activity_logs")
+    cursor = coll.find({"organization_id": org_id}).sort("created_at", -1).limit(limit)
+    activities = []
+    async for doc in cursor:
+        activities.append({
+            "id": str(doc.get("_id")),
+            "type": doc.get("activity_type", "unknown"),
+            "description": doc.get("description", ""),
+            "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
+        })
+    return activities
+
+
+@router.get("/quick-stats")
+async def get_quick_stats(
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = current_user.get("organization_id")
+    leads_coll = MongoDB.get_collection("leads")
+    campaigns_coll = MongoDB.get_collection("campaigns")
+    total_leads = await leads_coll.count_documents({"organization_id": org_id})
+    active_campaigns = await campaigns_coll.count_documents({"organization_id": org_id, "status": "running"})
+    return {
+        "total_leads": total_leads,
+        "active_campaigns": active_campaigns,
+        "emails_sent_today": 0,
+    }
+
+
+@router.get("/dashboard")
+async def get_dashboard_data(
+    dashboard_type: str = "default",
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = current_user.get("organization_id")
+    leads_coll = MongoDB.get_collection("leads")
+    campaigns_coll = MongoDB.get_collection("campaigns")
+    total_leads = await leads_coll.count_documents({"organization_id": org_id})
+    total_campaigns = await campaigns_coll.count_documents({"organization_id": org_id})
+    return {
+        "type": dashboard_type,
+        "leads": total_leads,
+        "campaigns": total_campaigns,
+    }
+
+
+@router.post("/export")
+async def export_analytics(
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    return {"message": "Export started", "format": data.get("format", "csv")}
+
+
+@router.get("/saved-reports")
+async def list_saved_reports(
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = current_user.get("organization_id")
+    coll = MongoDB.get_collection("saved_reports")
+    cursor = coll.find({"organization_id": org_id}).sort("created_at", -1)
+    reports = []
+    async for doc in cursor:
+        reports.append({
+            "id": str(doc.get("_id")),
+            "name": doc.get("name"),
+            "report_type": doc.get("report_type"),
+        })
+    return reports
+
+
+@router.post("/saved-reports")
+async def save_report(
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = current_user.get("organization_id")
+    coll = MongoDB.get_collection("saved_reports")
+    doc = {
+        "organization_id": org_id,
+        "name": data.get("name"),
+        "report_type": data.get("report_type"),
+        "filters": data.get("filters", {}),
+        "created_at": datetime.utcnow(),
+    }
+    result = await coll.insert_one(doc)
+    return {"id": str(result.inserted_id), "name": data.get("name")}

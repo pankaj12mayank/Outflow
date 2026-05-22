@@ -8,10 +8,7 @@ import {
   Clock, RefreshCw, Play, AlertCircle, CheckCircle, XCircle,
   Send, ArrowRight
 } from "lucide-react";
-
-function authHeaders() {
-  return { Authorization: `Bearer ${localStorage.getItem("system_owner_token")}` };
-}
+import { getAuthHeaders } from "@/app/lib/auth";
 
 export default function EmailQueuePage() {
   const [loading, setLoading] = useState(true);
@@ -23,8 +20,8 @@ export default function EmailQueuePage() {
     setLoading(true);
     try {
       const [pendingRes, failedRes] = await Promise.all([
-        api.get("/api/v1/email-engine/queue/pending", { headers: authHeaders() }),
-        api.get("/api/v1/email-engine/queue/failed", { headers: authHeaders() }),
+        api.get("/api/v1/email-engine/queue/pending", { headers: getAuthHeaders() }),
+        api.get("/api/v1/email-engine/queue/failed", { headers: getAuthHeaders() }),
       ]);
       setPending(pendingRes.data?.emails || []);
       setFailed(failedRes.data?.emails || []);
@@ -43,7 +40,7 @@ export default function EmailQueuePage() {
     setProcessing(true);
     try {
       const res = await api.post("/api/v1/email-engine/queue/process", {}, {
-        headers: authHeaders()
+        headers: getAuthHeaders()
       });
       toast.success(`Processed ${res.data?.processed || 0} emails`);
       loadData();
@@ -58,7 +55,7 @@ export default function EmailQueuePage() {
     setProcessing(true);
     try {
       const res = await api.post("/api/v1/email-engine/queue/retry-failed", {}, {
-        headers: authHeaders()
+        headers: getAuthHeaders()
       });
       toast.success(`Retried ${res.data?.retried || 0} emails`);
       loadData();

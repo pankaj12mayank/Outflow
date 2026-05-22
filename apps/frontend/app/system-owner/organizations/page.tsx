@@ -5,6 +5,7 @@ import api from "@/app/lib/api";
 import { SoPageLayout } from "@/app/system-owner/components/SoPageLayout";
 import { Building2, RefreshCw, UserCheck, UserX, Plus } from "lucide-react";
 import { SYSTEM_OWNER_EMAIL } from "@/app/lib/auth-constants";
+import { getAuthHeaders } from "@/app/lib/auth";
 
 type Org = {
   id: string;
@@ -27,9 +28,6 @@ type Org = {
 
 const SYSTEM_OWNER_EMAIL_LOWER = SYSTEM_OWNER_EMAIL.toLowerCase();
 
-function authHeaders() {
-  return { Authorization: `Bearer ${localStorage.getItem("system_owner_token")}` };
-}
 
 function isSystemOwnerEmail(email?: string): boolean {
   return email?.toLowerCase().trim() === SYSTEM_OWNER_EMAIL_LOWER;
@@ -45,7 +43,7 @@ export default function SystemOwnerOrganizationsPage() {
     setError(null);
     try {
       const res = await api.get("/api/v1/organizations", {
-        headers: authHeaders(),
+        headers: getAuthHeaders(),
         params: { page: 1, page_size: 100 },
       });
 
@@ -57,7 +55,7 @@ export default function SystemOwnerOrganizationsPage() {
           (m) => !isSystemOwnerEmail(m.email)
         );
         const regularAdmins = filteredMembers.filter(
-          (m) => m.role === "admin" || m.role === "owner"
+          (m) => m.role === "organization_admin"
         );
         return {
           ...org,

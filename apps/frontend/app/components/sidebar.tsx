@@ -55,14 +55,15 @@ const navigationCommon = [
 ];
 
 const systemOwnerNav = [
-  { name: "Organizations", href: "/app/admin/organizations", icon: Building2, permissions: ["organizations:read"] },
-  { name: "Plans & Pricing", href: "/app/admin/plans", icon: Layers, permissions: ["plans:read"] },
-  { name: "Features", href: "/app/admin/features", icon: Flag, permissions: ["features:read"] },
-  { name: "SMTP", href: "/app/admin/smtp", icon: Mail, permissions: ["smtp:read"] },
-  { name: "Billing", href: "/app/admin/billing", icon: CreditCard, permissions: ["billing:read"] },
-  { name: "Invoice Templates", href: "/app/admin/billing/templates", icon: FileText, permissions: ["billing:read"] },
-  { name: "Monitoring", href: "/app/admin/monitoring", icon: BarChart3, permissions: ["monitoring:read"] },
-  { name: "Notifications", href: "/app/admin/notifications", icon: Bell, permissions: ["notifications:read"] },
+  { name: "Organizations", href: "/system-owner/organizations", icon: Building2, permissions: ["organizations:read"] },
+  { name: "Plans & Pricing", href: "/system-owner/plans", icon: Layers, permissions: ["plans:read"] },
+  { name: "Features", href: "/system-owner/plans", icon: Flag, permissions: ["features:read"] },
+  { name: "SMTP", href: "/system-owner/smtp", icon: Mail, permissions: ["smtp:read"] },
+  { name: "Billing", href: "/system-owner/payments", icon: CreditCard, permissions: ["billing:read"] },
+  { name: "Email", href: "/system-owner/email", icon: Mail, permissions: ["cms:read"] },
+  { name: "Notifications", href: "/system-owner/notifications", icon: Bell, permissions: ["notifications:read"] },
+  { name: "Settings", href: "/system-owner/settings", icon: Settings, permissions: ["settings:read"] },
+  { name: "Dashboard", href: "/system-owner/dashboard", icon: BarChart3, permissions: ["analytics:read"] },
 ];
 
 const settingsNavCommon = [
@@ -82,7 +83,7 @@ interface NavItemProps {
 
 function NavItem({ href, icon: Icon, children, collapsed = false, badge, isActive = false }: NavItemProps) {
   return (
-    <Link href={href} className="block">
+    <Link href={href} className="block" aria-label={typeof children === "string" ? children : href.split("/").pop() || "nav item"}>
       <motion.div
         whileHover={{ x: 4 }}
         whileTap={{ scale: 0.98 }}
@@ -225,6 +226,7 @@ export function Sidebar() {
   const { isSystemOwner, hasAnyPermission, role } = usePermission();
   const [collapsed, setCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const handleLogoutClick = () => {
@@ -267,16 +269,40 @@ export function Sidebar() {
   if (!mounted) return null;
 
   return (
-    <motion.aside
-      initial={{ x: -100, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-      className={cn(
-        "fixed left-0 top-0 bottom-0 border-r border-[var(--color-border)] bg-[var(--color-bg-secondary)] flex flex-col z-40",
-        "transition-all duration-300 ease-out",
-        collapsed ? "w-20" : "w-64"
+    <>
+      {/* Mobile menu button */}
+      <button
+        onClick={() => setMobileOpen(!mobileOpen)}
+        className="fixed top-4 left-4 z-50 md:hidden p-2 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border)] text-[var(--color-text-primary)]"
+        aria-label={mobileOpen ? "Close sidebar" : "Open sidebar"}
+      >
+        <motion.div animate={{ rotate: mobileOpen ? 90 : 0 }} transition={{ duration: 0.2 }}>
+          <ChevronRight className="w-5 h-5" />
+        </motion.div>
+      </button>
+
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
       )}
-    >
+
+      <motion.aside
+        initial={false}
+        animate={{
+          x: 0,
+          opacity: 1,
+        }}
+        className={cn(
+          "fixed left-0 top-0 bottom-0 border-r border-[var(--color-border)] bg-[var(--color-bg-secondary)] flex flex-col z-40",
+          "transition-all duration-300 ease-out",
+          collapsed ? "w-20" : "w-64",
+          "md:translate-x-0",
+          mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        )}
+      >
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <div className="bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl">
@@ -461,6 +487,7 @@ export function Sidebar() {
         </motion.button>
       </div>
     </motion.aside>
+    </>
   );
 }
 
@@ -468,8 +495,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-[var(--color-bg-primary)]">
       <Sidebar />
-      <main className="pl-64">
-        <div className="p-8">{children}</div>
+      <main className="md:pl-64 pl-0">
+        <div className="p-4 sm:p-6 md:p-8 pt-16 md:pt-8 max-w-full overflow-x-hidden">{children}</div>
       </main>
     </div>
   );

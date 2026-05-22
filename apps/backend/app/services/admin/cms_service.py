@@ -1,355 +1,243 @@
 """
-Outflo - CMS Service
+Outflo - CMS Service (MongoDB)
 Content management for landing page, pricing, FAQs, etc.
 """
 
 from datetime import datetime
-from typing import Optional
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func, update
+from typing import Optional, List, Dict, Any
 
-from app.db import AsyncSessionLocal
+from bson import ObjectId
+
+from app.db.mongodb import MongoDB, serialize_doc
+
+
+def _oid(value) -> ObjectId:
+    return value if isinstance(value, ObjectId) else ObjectId(str(value))
 
 
 class CMSService:
     async def get_landing_page_content(self) -> dict:
-        async with AsyncSessionLocal() as db:
-            from app.models.cms_models import LandingPageSection
+        coll = MongoDB.get_collection("cms_landing_sections")
+        cursor = coll.find({"page": "landing"}).sort("sort_order", 1)
+        sections = await cursor.to_list(length=100)
+        return {
+            "sections": [
+                {
+                    "key": s.get("section_key"),
+                    "name": s.get("section_name"),
+                    "title": s.get("title"),
+                    "subtitle": s.get("subtitle"),
+                    "description": s.get("description"),
+                    "content": s.get("content"),
+                    "media": s.get("media"),
+                    "is_visible": s.get("is_visible", True),
+                    "sort_order": s.get("sort_order", 0),
+                }
+                for s in sections
+            ]
+        }
 
-            result = await db.execute(
-                select(LandingPageSection)
-                .where(LandingPageSection.page == "landing")
-                .order_by(LandingPageSection.sort_order)
-            )
-            sections = result.scalars().all()
-
-            return {
-                "sections": [
-                    {
-                        "key": s.section_key,
-                        "name": s.section_name,
-                        "title": s.title,
-                        "subtitle": s.subtitle,
-                        "description": s.description,
-                        "content": s.content,
-                        "media": s.media,
-                        "is_visible": s.is_visible,
-                        "sort_order": s.sort_order,
-                    }
-                    for s in sections
-                ]
-            }
-
-    async def update_landing_section(
-        self,
-        section_key: str,
-        data: dict,
-    ) -> bool:
-        async with AsyncSessionLocal() as db:
-            from app.models.cms_models import LandingPageSection
-
-            result = await db.execute(
-                select(LandingPageSection).where(
-                    and_(
-                        LandingPageSection.page == "landing",
-                        LandingPageSection.section_key == section_key,
-                    )
-                )
-            )
-            section = result.scalar_one_or_none()
-
-            if not section:
-                section = LandingPageSection(
-                    page="landing",
-                    section_key=section_key,
-                    section_name=data.get("name", section_key),
-                )
-                db.add(section)
-
-            if "title" in data:
-                section.title = data["title"]
-            if "subtitle" in data:
-                section.subtitle = data["subtitle"]
-            if "description" in data:
-                section.description = data["description"]
-            if "content" in data:
-                section.content = data["content"]
-            if "media" in data:
-                section.media = data["media"]
-            if "is_visible" in data:
-                section.is_visible = data["is_visible"]
-
-            await db.commit()
-            return True
+    async def update_landing_section(self, section_key: str, data: dict) -> bool:
+        coll = MongoDB.get_collection("cms_landing_sections")
+        existing = await coll.find_one({"page": "landing", "section_key": section_key})
+        update = {
+            "page": "landing",
+            "section_key": section_key,
+            "section_name": data.get("name", section_key),
+            "updated_at": datetime.utcnow(),
+        }
+        for field in ("title", "subtitle", "description", "content", "media", "is_visible", "sort_order"):
+            if field in data:
+                update[field] = data[field]
+        if existing:
+            await coll.update_one({"_id": existing["_id"]}, {"$set": update})
+        else:
+            update["created_at"] = datetime.utcnow()
+            await coll.insert_one(update)
+        return True
 
     async def get_pricing_plans(self) -> list[dict]:
-        async with AsyncSessionLocal() as db:
-            from app.models.cms_models import PricingPlan
+        coll = MongoDB.get_collection("plans")
+        cursor = coll.find({"is_active": True}).sort("sort_order", 1)
+        plans = await cursor.to_list(length=50)
+        if not plans:
+            cursor = coll.find().sort("monthly_price", 1)
+            plans = await cursor.to_list(length=50)
+        return [
+            {
+                "key": p.get("slug") or p.get("plan_key") or str(p.get("_id")),
+                "name": p.get("name"),
+                "description": p.get("description"),
+                "monthly_price": p.get("monthly_price", 0),
+                "yearly_price": p.get("yearly_price", 0),
+                "features": p.get("features") or [],
+                "limitations": p.get("limitations") or {},
+                "is_highlighted": p.get("is_featured", p.get("is_highlighted", False)),
+                "highlight_label": p.get("highlight_label"),
+                "cta_text": p.get("cta_text"),
+            }
+            for p in plans
+        ]
 
-            result = await db.execute(
-                select(PricingPlan)
-                .where(PricingPlan.is_active == True)
-                .order_by(PricingPlan.sort_order)
-            )
-            plans = result.scalars().all()
-
-            return [
-                {
-                    "key": p.plan_key,
-                    "name": p.name,
-                    "description": p.description,
-                    "monthly_price": p.monthly_price,
-                    "yearly_price": p.yearly_price,
-                    "features": p.features,
-                    "limitations": p.limitations,
-                    "is_highlighted": p.is_highlighted,
-                    "highlight_label": p.highlight_label,
-                    "cta_text": p.cta_text,
-                }
-                for p in plans
-            ]
-
-    async def update_pricing_plan(
-        self,
-        plan_key: str,
-        data: dict,
-    ) -> bool:
-        async with AsyncSessionLocal() as db:
-            from app.models.cms_models import PricingPlan
-
-            result = await db.execute(
-                select(PricingPlan).where(PricingPlan.plan_key == plan_key)
-            )
-            plan = result.scalar_one_or_none()
-
-            if not plan:
-                plan = PricingPlan(plan_key=plan_key, name=data.get("name", plan_key))
-                db.add(plan)
-
-            for field in ["name", "description", "monthly_price", "yearly_price",
-                           "features", "limitations", "is_highlighted", "highlight_label",
-                           "cta_text", "is_active", "sort_order"]:
-                if field in data:
-                    setattr(plan, field, data[field])
-
-            await db.commit()
-            return True
+    async def update_pricing_plan(self, plan_key: str, data: dict) -> bool:
+        coll = MongoDB.get_collection("plans")
+        existing = await coll.find_one({"$or": [{"slug": plan_key}, {"plan_key": plan_key}]})
+        update = {**data, "updated_at": datetime.utcnow()}
+        if existing:
+            await coll.update_one({"_id": existing["_id"]}, {"$set": update})
+        else:
+            update.update({
+                "slug": plan_key,
+                "plan_key": plan_key,
+                "name": data.get("name", plan_key),
+                "is_active": data.get("is_active", True),
+                "created_at": datetime.utcnow(),
+            })
+            await coll.insert_one(update)
+        return True
 
     async def get_faqs(self, category: str = None) -> list[dict]:
-        async with AsyncSessionLocal() as db:
-            from app.models.cms_models import FAQ
+        coll = MongoDB.get_collection("cms_faqs")
+        query: Dict[str, Any] = {"is_visible": True}
+        if category:
+            query["category"] = category
+        cursor = coll.find(query).sort("sort_order", 1)
+        faqs = await cursor.to_list(length=200)
+        return [
+            {
+                "id": str(f["_id"]),
+                "category": f.get("category", "general"),
+                "question": f.get("question"),
+                "answer": f.get("answer"),
+                "sort_order": f.get("sort_order", 0),
+            }
+            for f in faqs
+        ]
 
-            query = select(FAQ).where(FAQ.is_visible == True)
-            if category:
-                query = query.where(FAQ.category == category)
-            query = query.order_by(FAQ.sort_order)
+    async def create_faq(self, data: dict) -> str:
+        coll = MongoDB.get_collection("cms_faqs")
+        doc = {
+            "category": data["category"],
+            "question": data["question"],
+            "answer": data["answer"],
+            "is_visible": data.get("is_visible", True),
+            "sort_order": data.get("sort_order", 0),
+            "created_at": datetime.utcnow(),
+        }
+        result = await coll.insert_one(doc)
+        return str(result.inserted_id)
 
-            result = await db.execute(query)
-            faqs = result.scalars().all()
+    async def update_faq(self, faq_id: str, data: dict) -> bool:
+        coll = MongoDB.get_collection("cms_faqs")
+        update = {k: v for k, v in data.items() if k in ("category", "question", "answer", "is_visible", "sort_order")}
+        result = await coll.update_one({"_id": _oid(faq_id)}, {"$set": update})
+        return result.matched_count > 0
 
-            return [
-                {
-                    "id": f.id,
-                    "category": f.category,
-                    "question": f.question,
-                    "answer": f.answer,
-                    "sort_order": f.sort_order,
-                }
-                for f in faqs
-            ]
-
-    async def create_faq(self, data: dict) -> int:
-        async with AsyncSessionLocal() as db:
-            from app.models.cms_models import FAQ
-
-            faq = FAQ(
-                category=data["category"],
-                question=data["question"],
-                answer=data["answer"],
-                is_visible=data.get("is_visible", True),
-                sort_order=data.get("sort_order", 0),
-            )
-            db.add(faq)
-            await db.commit()
-            await db.refresh(faq)
-            return faq.id
-
-    async def update_faq(self, faq_id: int, data: dict) -> bool:
-        async with AsyncSessionLocal() as db:
-            from app.models.cms_models import FAQ
-
-            result = await db.execute(
-                select(FAQ).where(FAQ.id == faq_id)
-            )
-            faq = result.scalar_one_or_none()
-            if not faq:
-                return False
-
-            for field in ["category", "question", "answer", "is_visible", "sort_order"]:
-                if field in data:
-                    setattr(faq, field, data[field])
-
-            await db.commit()
-            return True
-
-    async def delete_faq(self, faq_id: int) -> bool:
-        async with AsyncSessionLocal() as db:
-            from app.models.cms_models import FAQ
-
-            result = await db.execute(
-                select(FAQ).where(FAQ.id == faq_id)
-            )
-            faq = result.scalar_one_or_none()
-            if not faq:
-                return False
-
-            await db.delete(faq)
-            await db.commit()
-            return True
+    async def delete_faq(self, faq_id: str) -> bool:
+        coll = MongoDB.get_collection("cms_faqs")
+        result = await coll.delete_one({"_id": _oid(faq_id)})
+        return result.deleted_count > 0
 
     async def get_testimonials(self, featured: bool = False) -> list[dict]:
-        async with AsyncSessionLocal() as db:
-            from app.models.cms_models import Testimonial
+        coll = MongoDB.get_collection("cms_testimonials")
+        query: Dict[str, Any] = {"is_visible": True}
+        if featured:
+            query["is_featured"] = True
+        cursor = coll.find(query).sort("sort_order", 1)
+        items = await cursor.to_list(length=100)
+        return [
+            {
+                "id": str(t["_id"]),
+                "author_name": t.get("author_name"),
+                "author_title": t.get("author_title"),
+                "author_company": t.get("author_company"),
+                "author_avatar": t.get("author_avatar"),
+                "quote": t.get("quote"),
+                "rating": t.get("rating", 5),
+                "is_featured": t.get("is_featured", False),
+            }
+            for t in items
+        ]
 
-            query = select(Testimonial).where(Testimonial.is_visible == True)
-            if featured:
-                query = query.where(Testimonial.is_featured == True)
-            query = query.order_by(Testimonial.sort_order)
-
-            result = await db.execute(query)
-            testimonials = result.scalars().all()
-
-            return [
-                {
-                    "id": t.id,
-                    "author_name": t.author_name,
-                    "author_title": t.author_title,
-                    "author_company": t.author_company,
-                    "author_avatar": t.author_avatar,
-                    "quote": t.quote,
-                    "rating": t.rating,
-                    "is_featured": t.is_featured,
-                }
-                for t in testimonials
-            ]
-
-    async def create_testimonial(self, data: dict) -> int:
-        async with AsyncSessionLocal() as db:
-            from app.models.cms_models import Testimonial
-
-            testimonial = Testimonial(
-                author_name=data["author_name"],
-                author_title=data.get("author_title"),
-                author_company=data.get("author_company"),
-                author_avatar=data.get("author_avatar"),
-                quote=data["quote"],
-                rating=data.get("rating", 5),
-                is_visible=data.get("is_visible", True),
-                is_featured=data.get("is_featured", False),
-                sort_order=data.get("sort_order", 0),
-            )
-            db.add(testimonial)
-            await db.commit()
-            await db.refresh(testimonial)
-            return testimonial.id
+    async def create_testimonial(self, data: dict) -> str:
+        coll = MongoDB.get_collection("cms_testimonials")
+        doc = {
+            "author_name": data["author_name"],
+            "author_title": data.get("author_title"),
+            "author_company": data.get("author_company"),
+            "author_avatar": data.get("author_avatar"),
+            "quote": data["quote"],
+            "rating": data.get("rating", 5),
+            "is_visible": data.get("is_visible", True),
+            "is_featured": data.get("is_featured", False),
+            "sort_order": data.get("sort_order", 0),
+            "created_at": datetime.utcnow(),
+        }
+        result = await coll.insert_one(doc)
+        return str(result.inserted_id)
 
     async def get_seo_config(self, page: str) -> Optional[dict]:
-        async with AsyncSessionLocal() as db:
-            from app.models.cms_models import SEOConfig
-
-            result = await db.execute(
-                select(SEOConfig).where(SEOConfig.page == page)
-            )
-            config = result.scalar_one_or_none()
-
-            if not config:
-                return None
-
-            return {
-                "page": config.page,
-                "title": config.title,
-                "description": config.description,
-                "keywords": config.keywords,
-                "og_title": config.og_title,
-                "og_description": config.og_description,
-                "og_image": config.og_image,
-                "canonical_url": config.canonical_url,
-                "robots": config.robots,
-            }
+        coll = MongoDB.get_collection("cms_seo")
+        doc = await coll.find_one({"page": page})
+        if not doc:
+            return None
+        cfg = doc.get("config") or doc
+        return {
+            "page": page,
+            "title": cfg.get("title") or cfg.get("page_title", ""),
+            "description": cfg.get("description") or cfg.get("meta_description", ""),
+            "keywords": cfg.get("keywords", ""),
+            "og_title": cfg.get("og_title", ""),
+            "og_description": cfg.get("og_description", ""),
+            "og_image": cfg.get("og_image", ""),
+            "canonical_url": cfg.get("canonical_url", ""),
+            "robots": cfg.get("robots", ""),
+        }
 
     async def update_seo_config(self, page: str, data: dict) -> bool:
-        async with AsyncSessionLocal() as db:
-            from app.models.cms_models import SEOConfig
-
-            result = await db.execute(
-                select(SEOConfig).where(SEOConfig.page == page)
-            )
-            config = result.scalar_one_or_none()
-
-            if not config:
-                config = SEOConfig(page=page)
-                db.add(config)
-
-            for field in ["title", "description", "keywords", "og_title",
-                          "og_description", "og_image", "canonical_url", "robots"]:
-                if field in data:
-                    setattr(config, field, data[field])
-
-            await db.commit()
-            return True
+        coll = MongoDB.get_collection("cms_seo")
+        await coll.update_one(
+            {"page": page},
+            {"$set": {"page": page, "config": data, "updated_at": datetime.utcnow()}},
+            upsert=True,
+        )
+        return True
 
     async def get_navigation(self, location: str = "header") -> list[dict]:
-        async with AsyncSessionLocal() as db:
-            from app.models.cms_models import NavigationItem
-
-            result = await db.execute(
-                select(NavigationItem)
-                .where(
-                    and_(
-                        NavigationItem.location == location,
-                        NavigationItem.is_visible == True,
-                    )
-                )
-                .order_by(NavigationItem.sort_order)
-            )
-            items = result.scalars().all()
-
-            return [
-                {
-                    "id": i.id,
-                    "label": i.label,
-                    "url": i.url,
-                    "target": i.target,
-                    "icon": i.icon,
-                    "badge": i.badge,
-                    "sort_order": i.sort_order,
-                }
-                for i in items
-            ]
+        coll = MongoDB.get_collection("cms_navigation")
+        cursor = coll.find({"location": location, "is_visible": True}).sort("sort_order", 1)
+        items = await cursor.to_list(length=100)
+        return [
+            {
+                "id": str(i["_id"]),
+                "label": i.get("label"),
+                "url": i.get("url"),
+                "target": i.get("target"),
+                "icon": i.get("icon"),
+                "badge": i.get("badge"),
+                "sort_order": i.get("sort_order", 0),
+            }
+            for i in items
+        ]
 
     async def get_integrations(self, category: str = None) -> list[dict]:
-        async with AsyncSessionLocal() as db:
-            from app.models.cms_models import Integration
-
-            query = select(Integration).where(Integration.is_active == True)
-            if category:
-                query = query.where(Integration.category == category)
-            query = query.order_by(Integration.is_featured.desc(), Integration.name)
-
-            result = await db.execute(query)
-            integrations = result.scalars().all()
-
-            return [
-                {
-                    "key": i.integration_key,
-                    "name": i.name,
-                    "description": i.description,
-                    "category": i.category,
-                    "features": i.features,
-                    "is_featured": i.is_featured,
-                }
-                for i in integrations
-            ]
+        coll = MongoDB.get_collection("cms_integrations")
+        query: Dict[str, Any] = {"is_active": True}
+        if category:
+            query["category"] = category
+        cursor = coll.find(query).sort([("is_featured", -1), ("name", 1)])
+        items = await cursor.to_list(length=100)
+        return [
+            {
+                "key": i.get("integration_key"),
+                "name": i.get("name"),
+                "description": i.get("description"),
+                "category": i.get("category"),
+                "features": i.get("features") or [],
+                "is_featured": i.get("is_featured", False),
+            }
+            for i in items
+        ]
 
 
 _cms_service: Optional[CMSService] = None

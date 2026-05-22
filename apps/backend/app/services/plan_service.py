@@ -4,7 +4,7 @@ from bson import ObjectId
 from app.db.mongodb import MongoDB, serialize_doc
 from app.models.plan_models import (
     Plan, PlanFeature, PlanLimit, PlanStatus, BillingCycle,
-    Feature, FeatureFlag, OrganizationLimit, Subscription, UsageRecord
+    Feature, FeatureFlag, OrganizationLimit, UsageRecord,
 )
 
 

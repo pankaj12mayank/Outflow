@@ -4,25 +4,13 @@ from enum import Enum
 from pydantic import BaseModel, Field, EmailStr
 from bson import ObjectId
 
+from app.models.models import Organization
+from app.models.plan_models import Plan
+from app.models.billing_models import Subscription, Invoice
+
 
 class PyEnum(str, Enum):
     pass
-
-
-class Organization(BaseModel):
-    id: Optional[str] = Field(default=None, alias="_id")
-    name: str
-    slug: str
-    plan: str = "free"
-    is_active: bool = True
-    settings: Dict[str, Any] = {}
-    metadata_json: Dict[str, Any] = {}
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-    class Config:
-        populate_by_name = True
-        json_encoders = {datetime: lambda v: v.isoformat()}
 
 
 class User(BaseModel):
@@ -205,7 +193,8 @@ class EmailMessage(BaseModel):
         populate_by_name = True
 
 
-class EmailTemplate(BaseModel):
+class OrganizationEmailTemplate(BaseModel):
+    """Org-scoped outreach templates (not system notification templates)."""
     id: Optional[str] = Field(default=None, alias="_id")
     organization_id: str
     name: str
@@ -448,6 +437,7 @@ class AIModel(BaseModel):
 
     class Config:
         populate_by_name = True
+        protected_namespaces = ()
 
 
 class AISettings(BaseModel):
@@ -461,58 +451,6 @@ class AISettings(BaseModel):
     settings: Dict[str, Any] = {}
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-    class Config:
-        populate_by_name = True
-
-
-class Plan(BaseModel):
-    id: Optional[str] = Field(default=None, alias="_id")
-    name: str
-    slug: str
-    description: Optional[str] = None
-    price_monthly: float = 0.0
-    price_yearly: float = 0.0
-    currency: str = "USD"
-    features: List[str] = []
-    limits: Dict[str, int] = {}
-    is_active: bool = True
-    is_public: bool = True
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-    class Config:
-        populate_by_name = True
-
-
-class Subscription(BaseModel):
-    id: Optional[str] = Field(default=None, alias="_id")
-    organization_id: str
-    plan_id: str
-    status: str = "active"
-    billing_cycle: str = "monthly"
-    current_period_start: datetime
-    current_period_end: datetime
-    cancelled_at: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-    class Config:
-        populate_by_name = True
-
-
-class Invoice(BaseModel):
-    id: Optional[str] = Field(default=None, alias="_id")
-    organization_id: str
-    subscription_id: Optional[str] = None
-    amount: float
-    currency: str = "USD"
-    status: str = "pending"
-    paid_at: Optional[datetime] = None
-    due_date: datetime
-    invoice_number: Optional[str] = None
-    metadata_json: Dict[str, Any] = {}
-    created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:
         populate_by_name = True

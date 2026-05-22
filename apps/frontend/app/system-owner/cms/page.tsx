@@ -3,20 +3,17 @@
 import { useState, useEffect } from "react";
 import api from "@/app/lib/api";
 import { toast } from "@/app/components/toast";
+import { getAuthHeaders } from "@/app/lib/auth";
 import { Save, ExternalLink, Eye, Globe, Upload, X, Check, ChevronRight, AlertCircle, Monitor, Tablet, Smartphone, CheckCircle } from "lucide-react";
 import Link from "next/link";
 
-type LandingContent = {
+interface LandingContent {
   branding?: { site_name: string; logo_url: string; favicon_url: string; tagline: string };
-  hero: Record<string, string>;
-  features: { icon: string; title: string; description: string; active: boolean }[];
-  stats: { value: string; label: string }[];
-  faqs: { question: string; answer: string; active: boolean }[];
-  footer: { company: string; email: string; copyright: string };
-};
-
-function authHeaders() {
-  return { Authorization: `Bearer ${localStorage.getItem("system_owner_token")}` };
+  hero?: Record<string, string>;
+  features?: { icon: string; title: string; description: string; active: boolean }[];
+  stats?: { value: string; label: string }[];
+  faqs?: { question: string; answer: string; active: boolean }[];
+  footer?: Partial<{ company: string; email: string; copyright: string }>;
 }
 
 const SECTIONS = [
@@ -37,7 +34,7 @@ export default function LandingCmsPage() {
 
   useEffect(() => {
     api
-      .get("/api/v1/cms/landing/content", { headers: authHeaders() })
+      .get("/api/v1/cms/landing/content", { headers: getAuthHeaders() })
       .then((r) => {
         const c = r.data?.content || {};
         if (!c.branding) {
@@ -72,7 +69,7 @@ export default function LandingCmsPage() {
       await api.put(
         `/api/v1/cms/landing/content?section=${tab}`,
         sectionData,
-        { headers: authHeaders() }
+        { headers: getAuthHeaders() }
       );
       toast.success("Saved", `${tab} section updated successfully`);
     } catch (err: any) {
@@ -235,8 +232,13 @@ export default function LandingCmsPage() {
                       <Field
                         key={field.key}
                         label={field.label}
-                        value={content.hero?.[field.key] || ""}
-                        onChange={(v) => setContent({ ...content, hero: { ...content.hero, [field.key]: v } })}
+                        value={content.hero?.[field.key] ?? ""}
+                        onChange={(v) =>
+                          setContent({
+                            ...content,
+                            hero: { ...(content.hero ?? {}), [field.key]: v },
+                          })
+                        }
                         placeholder={field.placeholder}
                       />
                     ))}
@@ -262,7 +264,7 @@ export default function LandingCmsPage() {
                             type="checkbox"
                             checked={f.active}
                             onChange={(e) => {
-                              const features = [...content.features];
+                              const features = [...(content.features ?? [])];
                               features[i] = { ...f, active: e.target.checked };
                               setContent({ ...content, features });
                             }}
@@ -273,19 +275,19 @@ export default function LandingCmsPage() {
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Field label="Icon Name" value={f.icon} onChange={(v) => {
-                          const features = [...content.features];
+                          const features = [...(content.features ?? [])];
                           features[i] = { ...f, icon: v };
                           setContent({ ...content, features });
                         }} placeholder="Bot, Target, TrendingUp..." />
                         <Field label="Title" value={f.title} onChange={(v) => {
-                          const features = [...content.features];
+                          const features = [...(content.features ?? [])];
                           features[i] = { ...f, title: v };
                           setContent({ ...content, features });
                         }} />
                       </div>
                       <div className="mt-4">
                         <Field label="Description" value={f.description} onChange={(v) => {
-                          const features = [...content.features];
+                          const features = [...(content.features ?? [])];
                           features[i] = { ...f, description: v };
                           setContent({ ...content, features });
                         }} />
@@ -310,12 +312,12 @@ export default function LandingCmsPage() {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <Field label="Value" value={s.value} onChange={(v) => {
-                            const stats = [...content.stats];
+                            const stats = [...(content.stats ?? [])];
                             stats[i] = { ...s, value: v };
                             setContent({ ...content, stats });
                           }} placeholder="10M+" />
                           <Field label="Label" value={s.label} onChange={(v) => {
-                            const stats = [...content.stats];
+                            const stats = [...(content.stats ?? [])];
                             stats[i] = { ...s, label: v };
                             setContent({ ...content, stats });
                           }} placeholder="Emails Sent" />
@@ -344,7 +346,7 @@ export default function LandingCmsPage() {
                             type="checkbox"
                             checked={f.active}
                             onChange={(e) => {
-                              const faqs = [...content.faqs];
+                              const faqs = [...(content.faqs ?? [])];
                               faqs[i] = { ...f, active: e.target.checked };
                               setContent({ ...content, faqs });
                             }}
@@ -355,12 +357,12 @@ export default function LandingCmsPage() {
                       </div>
                       <div className="space-y-4">
                         <Field label="Question" value={f.question} onChange={(v) => {
-                          const faqs = [...content.faqs];
+                          const faqs = [...(content.faqs ?? [])];
                           faqs[i] = { ...f, question: v };
                           setContent({ ...content, faqs });
                         }} />
                         <Field label="Answer" value={f.answer} onChange={(v) => {
-                          const faqs = [...content.faqs];
+                          const faqs = [...(content.faqs ?? [])];
                           faqs[i] = { ...f, answer: v };
                           setContent({ ...content, faqs });
                         }} />
@@ -446,7 +448,7 @@ function BrandingUpload({
         fd,
         {
           headers: {
-            ...authHeaders(),
+            ...getAuthHeaders(),
             "Content-Type": "multipart/form-data",
           },
         }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import api from "@/app/lib/api";
 import { toast } from "@/app/components/toast";
+import { getAuthHeaders } from "@/app/lib/auth";
 import { Save, Mail, Send, CheckCircle, AlertCircle, Eye, EyeOff, Loader2 } from "lucide-react";
 
 type SmtpConfig = {
@@ -18,10 +19,6 @@ type SmtpConfig = {
   is_default: boolean;
   is_active: boolean;
 };
-
-function authHeaders() {
-  return { Authorization: `Bearer ${localStorage.getItem("system_owner_token")}` };
-}
 
 export default function SystemOwnerSmtpPage() {
   const [loading, setLoading] = useState(true);
@@ -47,7 +44,7 @@ export default function SystemOwnerSmtpPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/api/v1/smtp/configs", { headers: authHeaders() });
+      const res = await api.get("/api/v1/smtp/configs", { headers: getAuthHeaders() });
       setConfigs(res.data || []);
       const def = (res.data as SmtpConfig[])?.find((c) => c.is_default);
       if (def) {
@@ -81,11 +78,11 @@ export default function SystemOwnerSmtpPage() {
     try {
       const payload = { ...form, is_active: true };
       if (editingId) {
-        await api.put(`/api/v1/smtp/configs/${editingId}`, payload, { headers: authHeaders() });
+        await api.put(`/api/v1/smtp/configs/${editingId}`, payload, { headers: getAuthHeaders() });
         toast.success("SMTP configuration saved");
         setConnectionStatus("connected");
       } else {
-        const res = await api.post("/api/v1/smtp/configs", payload, { headers: authHeaders() });
+        const res = await api.post("/api/v1/smtp/configs", payload, { headers: getAuthHeaders() });
         setEditingId(res.data.id);
         toast.success("SMTP configuration created");
         setConnectionStatus("connected");
@@ -110,7 +107,7 @@ export default function SystemOwnerSmtpPage() {
       await api.post(
         "/api/v1/system-owner/platform/test-email",
         { recipient: testTo, subject: "Outflo SMTP test", body: "SMTP is working." },
-        { headers: authHeaders() }
+        { headers: getAuthHeaders() }
       );
       toast.success("Test email sent successfully!", `Delivered to ${testTo}`);
     } catch (e: unknown) {

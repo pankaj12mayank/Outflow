@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-from app.middleware import get_current_user, require_super_admin
+from app.middleware import get_current_user, require_system_owner
 
 router = APIRouter(prefix="/cms", tags=["CMS"])
 
@@ -59,7 +59,7 @@ async def update_landing_page(
     current_user: dict = Depends(get_current_user),
 ):
     """Update landing page content"""
-    require_super_admin(current_user)
+    require_system_owner(current_user)
     try:
         from app.db.mongodb import get_database
         db = await get_database()
@@ -88,25 +88,20 @@ async def get_pricing(
             return doc.get("content", {})
     except Exception:
         pass
-    
-    from app.db import AsyncSessionLocal
-    from sqlalchemy import select
-    from app.models.admin_models import Plan
-    
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(select(Plan).where(Plan.is_active == True).order_by(Plan.monthly_price.asc()))
-        plans = result.scalars().all()
-    
+
+    from app.services.admin.cms_service import get_cms_service
+
+    plans = await get_cms_service().get_pricing_plans()
     return {
         "plans": [
             {
-                "key": p.slug,
-                "name": p.name,
-                "monthly_price": p.monthly_price,
-                "yearly_price": p.yearly_price,
-                "description": p.description,
-                "features": list(p.features.keys()) if p.features else [],
-                "is_highlighted": p.is_featured,
+                "key": p["key"],
+                "name": p["name"],
+                "monthly_price": p["monthly_price"],
+                "yearly_price": p["yearly_price"],
+                "description": p.get("description"),
+                "features": p.get("features") if isinstance(p.get("features"), list) else list((p.get("features") or {}).keys()),
+                "is_highlighted": p.get("is_highlighted", False),
             }
             for p in plans
         ]
@@ -142,7 +137,7 @@ async def create_faq(
     current_user: dict = Depends(get_current_user),
 ):
     """Create a new FAQ"""
-    require_super_admin(current_user)
+    require_system_owner(current_user)
     try:
         from app.db.mongodb import get_database
         db = await get_database()
@@ -165,7 +160,7 @@ async def update_faq(
     current_user: dict = Depends(get_current_user),
 ):
     """Update an FAQ"""
-    require_super_admin(current_user)
+    require_system_owner(current_user)
     try:
         from app.db.mongodb import get_database
         from bson import ObjectId
@@ -185,7 +180,7 @@ async def delete_faq(
     current_user: dict = Depends(get_current_user),
 ):
     """Delete an FAQ"""
-    require_super_admin(current_user)
+    require_system_owner(current_user)
     try:
         from app.db.mongodb import get_database
         from bson import ObjectId
@@ -227,7 +222,7 @@ async def create_testimonial(
     current_user: dict = Depends(get_current_user),
 ):
     """Create a new testimonial"""
-    require_super_admin(current_user)
+    require_system_owner(current_user)
     try:
         from app.db.mongodb import get_database
         db = await get_database()
@@ -251,7 +246,7 @@ async def delete_testimonial(
     current_user: dict = Depends(get_current_user),
 ):
     """Delete a testimonial"""
-    require_super_admin(current_user)
+    require_system_owner(current_user)
     try:
         from app.db.mongodb import get_database
         from bson import ObjectId
@@ -302,7 +297,7 @@ async def update_seo(
     current_user: dict = Depends(get_current_user),
 ):
     """Update SEO config for a page"""
-    require_super_admin(current_user)
+    require_system_owner(current_user)
     try:
         from app.db.mongodb import get_database
         db = await get_database()
@@ -346,7 +341,7 @@ async def update_features(
     current_user: dict = Depends(get_current_user),
 ):
     """Update feature toggles"""
-    require_super_admin(current_user)
+    require_system_owner(current_user)
     try:
         from app.db.mongodb import get_database
         db = await get_database()

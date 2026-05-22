@@ -9,7 +9,7 @@ from pydantic import BaseModel, EmailStr, Field, validator
 from typing import Optional, List
 from datetime import datetime
 
-from app.services.auth_service import AuthService, AUTH_CONFIG
+from app.services.auth_service import AuthService, AUTH_CONFIG, PermissionChecker
 from app.middleware.auth import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -51,6 +51,7 @@ class UserResponse(BaseModel):
     email: str
     full_name: str
     role: str
+    organization_id: Optional[str] = None
     is_email_verified: bool
     is_super_admin: bool
     organization: Optional[dict] = None
@@ -111,8 +112,9 @@ async def register(data: RegisterRequest, request: Request):
     """Register new user with organization."""
     import logging
     logger = logging.getLogger(__name__)
-
-    if data.email.lower().strip() == "admin@outflo.com":
+    from app.core.config import settings
+    reserved_email = getattr(settings, "system_owner_email", None)
+    if reserved_email and data.email.lower().strip() == reserved_email.lower():
         logger.warning(f"Registration attempt with reserved email: {data.email}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -142,7 +144,7 @@ async def login(data: LoginRequest, request: Request):
 
     logger.info(f"Login attempt for: {data.email}")
 
-    if data.email.lower().strip() == "admin@outflo.com":
+    if data.email.lower().strip() == getattr(settings, "system_owner_email", "admin@outflo.com").lower():
         from app.services.system_owner_auth_service import SystemOwnerAuthService
         user_agent = request.headers.get("user-agent", "unknown") if request else "unknown"
         ip_address = request.client.host if request and request.client else "127.0.0.1"
@@ -156,8 +158,9 @@ async def login(data: LoginRequest, request: Request):
             )
             result["user"]["is_email_verified"] = True
             result["user"]["is_super_admin"] = True
+            result["user"]["role"] = "system_owner"
             result["user"]["organization"] = None
-            result["user"]["permissions"] = []
+            result["user"]["permissions"] = PermissionChecker.get_user_permissions("system_owner")
             result["user"]["created_at"] = None
             logger.info(f"System owner login successful: {data.email}")
             return result

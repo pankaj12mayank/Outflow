@@ -21,9 +21,11 @@ api.interceptors.request.use(
       requestUrl.includes("/system-owner/") ||
       requestUrl.includes("/system-owner-dashboard") ||
       requestUrl.includes("/system-owner/platform");
+    const accessToken = localStorage.getItem("access_token");
+    const systemOwnerToken = localStorage.getItem("system_owner_token");
     const token = isSystemOwnerRoute
-      ? localStorage.getItem("system_owner_token")
-      : localStorage.getItem("access_token");
+      ? systemOwnerToken || accessToken
+      : accessToken || systemOwnerToken;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -183,6 +185,10 @@ export const leadsAPI = {
   create: (data: any) => api.post("/api/v1/leads/", data),
   update: (id: string, data: any) => api.patch(`/api/v1/leads/${id}`, data),
   delete: (id: string) => api.delete(`/api/v1/leads/${id}`),
+  stats: () => api.get("/api/v1/leads/stats"),
+  verify: (id: string) => api.post(`/api/v1/leads/${id}/verify`),
+  deduplicate: (ids?: string[]) => api.post("/api/v1/leads/deduplicate", { ids: ids ?? [] }),
+  bulkDelete: (ids: string[]) => api.post("/api/v1/leads/bulk-delete", { ids }),
   enrich: (id: string) => api.post(`/api/v1/leads/${id}/enrich`),
   bulkEnrich: (ids: string[]) => api.post("/api/v1/leads/bulk-enrich", { ids }),
   export: (params?: { format?: string }) =>
@@ -224,16 +230,16 @@ export const emailsAPI = {
 };
 
 export const teamAPI = {
-  list: () => api.get("/api/v1/team/"),
+  list: () => api.get("/api/v1/team/members"),
   invite: (email: string, role: string) =>
-    api.post("/api/v1/team/invite", { email, role }),
+    api.post("/api/v1/team/invitations", { email, role }),
   updateMember: (id: string, data: { role?: string; status?: string }) =>
-    api.patch(`/api/v1/team/${id}`, data),
-  removeMember: (id: string) => api.delete(`/api/v1/team/${id}`),
+    api.patch(`/api/v1/team/members/${id}`, data),
+  removeMember: (id: string) => api.delete(`/api/v1/team/members/${id}`),
   resendInvite: (inviteId: string) =>
-    api.post(`/api/v1/team/invite/${inviteId}/resend`),
+    api.post(`/api/v1/team/invitations/${inviteId}/resend`),
   cancelInvite: (inviteId: string) =>
-    api.delete(`/api/v1/team/invite/${inviteId}`),
+    api.delete(`/api/v1/team/invitations/${inviteId}`),
 };
 
 export const analyticsAPI = {
@@ -241,7 +247,7 @@ export const analyticsAPI = {
     api.get("/api/v1/analytics/overview", { params }),
   getLeads: (params?: { preset?: string; start_date?: string; end_date?: string; source?: string }) =>
     api.get("/api/v1/analytics/leads", { params }),
-  getCampaigns: (params?: { preset?: string; start_date?: string; end_date?: string; campaign_id?: number }) =>
+  getCampaigns: (params?: { preset?: string; start_date?: string; end_date?: string; campaign_id?: string | number }) =>
     api.get("/api/v1/analytics/campaigns", { params }),
   getSales: (params?: { preset?: string; start_date?: string; end_date?: string }) =>
     api.get("/api/v1/analytics/sales", { params }),
@@ -267,16 +273,18 @@ export const analyticsAPI = {
 
 export const notificationsAPI = {
   list: (params?: { is_read?: boolean; type?: string; page?: number; limit?: number }) =>
-    api.get("/api/v1/notifications/", { params }),
+    api.get("/api/v1/notifications/", { params }).then((r) => r.data),
   getCounts: () =>
     api.get("/api/v1/notifications/counts").then((r) => r.data),
   create: (data: any) =>
     api.post("/api/v1/notifications/", data).then((r) => r.data),
-  update: (id: number, data: any) =>
+  update: (id: string, data: any) =>
     api.patch(`/api/v1/notifications/${id}`, data).then((r) => r.data),
+  markRead: (id: string) =>
+    api.post(`/api/v1/notifications/${id}/read`).then((r) => r.data),
   markAllRead: () =>
-    api.post("/api/v1/notifications/mark-all-read").then((r) => r.data),
-  delete: (id: number) =>
+    api.post("/api/v1/notifications/read-all").then((r) => r.data),
+  delete: (id: string) =>
     api.delete(`/api/v1/notifications/${id}`).then((r) => r.data),
   getPreferences: () =>
     api.get("/api/v1/notifications/preferences").then((r) => r.data),
@@ -290,6 +298,10 @@ export const notificationsAPI = {
     api.get("/api/v1/notifications/polling/campaigns", { params }).then((r) => r.data),
   pollJobs: (params?: { since?: string }) =>
     api.get("/api/v1/notifications/polling/jobs", { params }).then((r) => r.data),
+  listEmailLogs: (params?: { limit?: number }) =>
+    api.get("/api/v1/notifications/email-logs", { params }).then((r) => r.data),
+  retryEmailLog: (logId: string) =>
+    api.post(`/api/v1/notifications/email-logs/${logId}/retry`).then((r) => r.data),
 };
 
 export const emailTemplatesAPI = {
@@ -297,11 +309,11 @@ export const emailTemplatesAPI = {
     api.get("/api/v1/email-templates/", { params }).then((r) => r.data),
   create: (data: any) =>
     api.post("/api/v1/email-templates/", data).then((r) => r.data),
-  get: (id: number) =>
+  get: (id: string) =>
     api.get(`/api/v1/email-templates/${id}`).then((r) => r.data),
-  update: (id: number, data: any) =>
+  update: (id: string, data: any) =>
     api.patch(`/api/v1/email-templates/${id}`, data).then((r) => r.data),
-  delete: (id: number) =>
+  delete: (id: string) =>
     api.delete(`/api/v1/email-templates/${id}`).then((r) => r.data),
 };
 

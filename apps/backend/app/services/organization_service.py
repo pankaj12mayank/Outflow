@@ -4,9 +4,7 @@ from bson import ObjectId
 import secrets
 
 from app.db.mongodb import MongoDB, serialize_doc
-from app.models.organization_models import (
-    OrganizationStatus, MembershipRole, OrganizationSearchQuery
-)
+from app.models.models import OrganizationSearchQuery
 from app.services.plan_service import PlanService, SubscriptionService
 
 

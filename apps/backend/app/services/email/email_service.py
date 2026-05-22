@@ -22,9 +22,6 @@ from enum import Enum
 import aiosmtplib
 from aiosmtplib import SMTP, SMTPException
 import httpx
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, and_
-from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.logging import email_logger
@@ -35,7 +32,7 @@ from app.schemas.email import (
     SendEmailRequest, SendEmailResponse, BatchSendResponse,
     BounceRecord, SMTPHealthCheck, DailySendingStats,
 )
-from app.db import AsyncSessionLocal
+from app.db.mongodb import MongoDB
 
 logger = logging.getLogger(__name__)
 
@@ -207,23 +204,17 @@ class EmailSafetyManager:
             logger.info(f"Account {account_id} warmup complete")
 
     async def check_bounce(self, email: str, account_id: int) -> tuple[bool, str]:
-        async with AsyncSessionLocal() as db:
-            from app.models.models import BouncedEmail, Lead
-
-            result = await db.execute(
-                select(BouncedEmail).where(
-                    and_(BouncedEmail.email == email, BouncedEmail.account_id == account_id)
-                )
-            )
-            bounce = result.scalar_one_or_none()
-
-            if bounce:
-                if bounce.bounce_type == "hard":
-                    return True, "Hard bounce - email permanently rejected"
-                elif bounce.bounce_count >= self.bounce.hard_bounce_threshold:
-                    return True, f"Hard bounce threshold reached ({bounce.bounce_count})"
-
-            return False, ""
+        coll = MongoDB.get_collection("bounced_emails")
+        bounce = await coll.find_one({
+            "email": email,
+            "account_id": str(account_id),
+        })
+        if bounce:
+            if bounce.get("bounce_type") == "hard":
+                return True, "Hard bounce - email permanently rejected"
+            if bounce.get("bounce_count", 0) >= self.bounce.hard_bounce_threshold:
+                return True, f"Hard bounce threshold reached ({bounce.get('bounce_count')})"
+        return False, ""
 
 
 class RateLimiter:

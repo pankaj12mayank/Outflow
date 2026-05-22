@@ -4,11 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import api from "@/app/lib/api";
 import { toast } from "@/app/components/toast";
 import { SoPageLayout } from "@/app/system-owner/components/SoPageLayout";
+import { getAuthHeaders } from "@/app/lib/auth";
 import { RefreshCw, CreditCard, History, Check, AlertCircle } from "lucide-react";
-
-function authHeaders() {
-  return { Authorization: `Bearer ${localStorage.getItem("system_owner_token")}` };
-}
 
 interface GatewaySettings {
   stripe?: { enabled?: boolean; publishable_key?: string; secret_key?: string };
@@ -48,8 +45,8 @@ export default function PaymentsPage() {
     
     try {
       const results = await Promise.allSettled([
-        api.get("/api/v1/system-owner/payments/settings", { headers: authHeaders() }),
-        api.get("/api/v1/system-owner/billing/history", { headers: authHeaders(), params: { limit: 100 } }),
+        api.get("/api/v1/system-owner/payments/settings", { headers: getAuthHeaders() }),
+        api.get("/api/v1/system-owner/billing/history", { headers: getAuthHeaders(), params: { limit: 100 } }),
       ]);
 
       // Handle gateway settings
@@ -107,7 +104,7 @@ export default function PaymentsPage() {
             key_secret: razorpaySecret,
           },
         },
-        { headers: authHeaders() }
+        { headers: getAuthHeaders() }
       );
       toast.success("Settings saved");
     } catch (err: any) {
@@ -125,14 +122,14 @@ export default function PaymentsPage() {
         await api.put(
           "/api/v1/system-owner/payments/settings",
           { stripe: { enabled } },
-          { headers: authHeaders() }
+          { headers: getAuthHeaders() }
         );
       } else {
         setRazorpayEnabled(enabled);
         await api.put(
           "/api/v1/system-owner/payments/settings",
           { razorpay: { enabled } },
-          { headers: authHeaders() }
+          { headers: getAuthHeaders() }
         );
       }
       toast.success(`${provider} ${enabled ? "enabled" : "disabled"}`);

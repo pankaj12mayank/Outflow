@@ -15,6 +15,7 @@ from app.core.security import (
     create_access_token, create_refresh_token, verify_token
 )
 from app.db.mongodb import MongoDB, serialize_doc
+from app.core.role_permissions import ROLE_PERMISSIONS_BY_NAME
 
 
 AUTH_CONFIG = {
@@ -30,11 +31,23 @@ AUTH_CONFIG = {
     "RATE_LIMIT_MAX_REQUESTS": 100,
 }
 
-PERMISSIONS = {
-    "super_admin": ["*"],
-    "admin": ["org:read", "org:update", "users:read", "users:create", "users:update", "users:delete", "billing:read", "billing:manage", "leads:*", "campaigns:*", "emails:*", "ai:*", "crm:*", "analytics:*"],
-    "team_member": ["leads:read", "leads:create", "leads:update", "campaigns:read", "emails:read", "crm:read", "crm:create", "crm:update"],
+CANONICAL_ROLES = ("system_owner", "organization_admin", "team_member")
+
+ROLE_ALIASES = {
+    "admin": "organization_admin",
+    "org_admin": "organization_admin",
+    "super_admin": "system_owner",
+    "member": "team_member",
 }
+
+PERMISSIONS = ROLE_PERMISSIONS_BY_NAME
+
+
+def normalize_role(role: Optional[str]) -> str:
+    """Map legacy role strings to canonical roles."""
+    if not role:
+        return "team_member"
+    return ROLE_ALIASES.get(role, role if role in CANONICAL_ROLES else "team_member")
 
 
 def generate_token(length: int = 32) -> str:
@@ -276,7 +289,7 @@ class AuthService:
             "email": email_normalized,
             "password_hash": password_hash,
             "full_name": data["full_name"],
-            "role": "admin",
+            "role": "organization_admin",
             "is_active": True,
             "is_email_verified": False,
             "created_at": now,
@@ -284,7 +297,7 @@ class AuthService:
         }
 
         membership = {
-            "role": "admin",
+            "role": "organization_admin",
             "status": "active",
             "accepted_at": now,
             "created_at": now,
@@ -458,7 +471,7 @@ class AuthService:
         token_data = {
             "sub": user.get("id"),
             "email": user.get("email"),
-            "role": user.get("role"),
+            "role": normalize_role(user.get("role")),
             "organization_id": organization_id,
         }
         access_token = create_access_token(token_data)
@@ -618,14 +631,16 @@ class AuthService:
         created = user.get("created_at")
         if isinstance(created, datetime):
             created = created.isoformat()
-        role = user.get("role", "team_member")
+        role = normalize_role(user.get("role", "team_member"))
+        org_id = org.get("id") if org else user.get("organization_id")
         return {
             "id": user.get("id"),
             "email": user.get("email"),
             "full_name": user.get("full_name"),
             "role": role,
+            "organization_id": str(org_id) if org_id else None,
             "is_email_verified": user.get("is_email_verified", False),
-            "is_super_admin": role in ("super_admin", "admin"),
+            "is_super_admin": role == "system_owner",
             "permissions": PermissionChecker.get_user_permissions(role),
             "organization": {
                 "id": org.get("id") if org else None,
@@ -639,7 +654,7 @@ class AuthService:
 class PermissionChecker:
     @staticmethod
     def has_permission(user_role: str, resource: str, action: str) -> bool:
-        permissions = PERMISSIONS.get(user_role, [])
+        permissions = PERMISSIONS.get(normalize_role(user_role), [])
         if "*" in permissions:
             return True
         specific = f"{resource}:{action}"
@@ -648,4 +663,4 @@ class PermissionChecker:
 
     @staticmethod
     def get_user_permissions(user_role: str) -> List[str]:
-        return PERMISSIONS.get(user_role, [])
+        return PERMISSIONS.get(normalize_role(user_role), [])

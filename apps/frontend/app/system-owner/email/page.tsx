@@ -4,11 +4,9 @@ import { useState, useEffect } from "react";
 import api from "@/app/lib/api";
 import { toast } from "@/app/components/toast";
 import { SoPageLayout } from "@/app/system-owner/components/SoPageLayout";
-import { Plus, RefreshCw, FileText, Zap, Check, X, Link as LinkIcon } from "lucide-react";
-
-function authHeaders() {
-  return { Authorization: `Bearer ${localStorage.getItem("system_owner_token")}` };
-}
+import { getAuthHeaders } from "@/app/lib/auth";
+import Link from "next/link";
+import { Plus, RefreshCw, FileText, Zap, Check, X, Link as LinkIcon, AlertTriangle } from "lucide-react";
 
 const EVENT_TYPES = [
   { value: "welcome", label: "Welcome" },
@@ -51,8 +49,8 @@ export default function EmailAutomationPage() {
     setLoading(true);
     try {
       const [tRes, trigRes] = await Promise.allSettled([
-        api.get("/api/v1/email-engine/templates", { headers: authHeaders() }),
-        api.get("/api/v1/email-engine/triggers", { headers: authHeaders() }),
+        api.get("/api/v1/email-engine/templates", { headers: getAuthHeaders() }),
+        api.get("/api/v1/email-engine/triggers", { headers: getAuthHeaders() }),
       ]);
       
       if (tRes.status === "fulfilled") {
@@ -80,7 +78,7 @@ export default function EmailAutomationPage() {
     }
     setSavingTemplate(true);
     try {
-      await api.post("/api/v1/email-engine/templates", newTemplate, { headers: authHeaders() });
+      await api.post("/api/v1/email-engine/templates", newTemplate, { headers: getAuthHeaders() });
       toast.success("Template created");
       setShowCreateTemplate(false);
       setNewTemplate({ name: "", subject: "", body: "", category: "General" });
@@ -95,7 +93,7 @@ export default function EmailAutomationPage() {
   const deleteTemplate = async (id: string) => {
     if (!confirm("Delete this template?")) return;
     try {
-      await api.delete(`/api/v1/email-engine/templates/${id}`, { headers: authHeaders() });
+      await api.delete(`/api/v1/email-engine/templates/${id}`, { headers: getAuthHeaders() });
       toast.success("Template deleted");
       loadData();
     } catch {
@@ -111,7 +109,7 @@ export default function EmailAutomationPage() {
     }
     setSavingTrigger(true);
     try {
-      await api.post("/api/v1/email-engine/triggers", newTrigger, { headers: authHeaders() });
+      await api.post("/api/v1/email-engine/triggers", newTrigger, { headers: getAuthHeaders() });
       toast.success("Trigger created");
       setShowCreateTrigger(false);
       setNewTrigger({ name: "", event_type: "welcome", template_id: "", delay_seconds: 0 });
@@ -126,7 +124,7 @@ export default function EmailAutomationPage() {
   const deleteTrigger = async (id: string) => {
     if (!confirm("Delete this trigger?")) return;
     try {
-      await api.delete(`/api/v1/email-engine/triggers/${id}`, { headers: authHeaders() });
+      await api.delete(`/api/v1/email-engine/triggers/${id}`, { headers: getAuthHeaders() });
       toast.success("Trigger deleted");
       loadData();
     } catch {
@@ -151,9 +149,16 @@ export default function EmailAutomationPage() {
   return (
     <SoPageLayout
       title="Email Automation"
-      description="Manage email templates and triggers for automated emails"
+      description="Manage email templates, triggers, and delivery health"
       actions={
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/system-owner/email/bounces"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg border border-white/10 text-gray-400 hover:text-white"
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Bounces
+          </Link>
           <button
             onClick={loadData}
             className="p-2 rounded-lg border border-white/10 text-gray-400 hover:text-white"

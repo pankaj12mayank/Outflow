@@ -70,3 +70,71 @@ class LeadService:
 
     async def count_leads(self) -> int:
         return await self.repo.count()
+
+    async def get_stats(self) -> dict:
+        coll = self.repo._collection
+        org_filter = {"organization_id": self.repo.organization_id, "deleted_at": None}
+        total = await coll.count_documents(org_filter)
+        pipeline = [
+            {"$match": org_filter},
+            {"$group": {"_id": "$status", "count": {"$sum": 1}}},
+        ]
+        by_status: dict = {}
+        async for doc in coll.aggregate(pipeline):
+            by_status[doc["_id"] or "unknown"] = doc["count"]
+        verified = await coll.count_documents({**org_filter, "email_verified": True})
+        enriched = await coll.count_documents({**org_filter, "enriched_data": {"$exists": True, "$ne": {}}})
+        return {
+            "total": total,
+            "by_status": by_status,
+            "verified": verified,
+            "enriched": enriched,
+            "new": by_status.get("new", 0),
+        }
+
+    async def verify_lead_email(self, lead_id: str) -> Optional[dict]:
+        lead = await self.repo.get_by_id(lead_id)
+        if not lead:
+            return None
+        return await self.repo.update(
+            lead_id,
+            {"email_verified": True, "email_verified_at": datetime.utcnow()},
+        )
+
+    async def bulk_delete_leads(self, ids: List[str]) -> dict:
+        deleted = 0
+        for lid in ids:
+            if await self.repo.delete(lid):
+                deleted += 1
+        return {"deleted": deleted, "requested": len(ids)}
+
+    async def deduplicate_leads(self, ids: Optional[List[str]] = None) -> dict:
+        """Keep oldest lead per email; soft-delete newer duplicates."""
+        coll = self.repo._collection
+        match = {"organization_id": self.repo.organization_id, "deleted_at": None}
+        if ids:
+            oids = []
+            for lid in ids:
+                try:
+                    oids.append(ObjectId(lid))
+                except Exception:
+                    continue
+            if oids:
+                match["_id"] = {"$in": oids}
+
+        cursor = coll.find(match, {"email": 1, "created_at": 1}).sort("created_at", 1)
+        seen: dict[str, ObjectId] = {}
+        removed = 0
+        async for doc in cursor:
+            email = (doc.get("email") or "").strip().lower()
+            if not email:
+                continue
+            if email in seen:
+                await coll.update_one(
+                    {"_id": doc["_id"]},
+                    {"$set": {"deleted_at": datetime.utcnow(), "duplicate_of": str(seen[email])}},
+                )
+                removed += 1
+            else:
+                seen[email] = doc["_id"]
+        return {"removed": removed, "unique_emails": len(seen)}

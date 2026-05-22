@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
+import { useState, useEffect, useCallback } from 'react';
+import { Card, CardContent } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
@@ -9,6 +9,7 @@ import { Badge } from '@/app/components/ui/badge';
 import { Tabs, TabList, TabTrigger, TabContent, Modal, ModalHeader, ModalContent, ModalFooter, ModalTitle } from '@/app/components/premium';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table';
 import { useSystemOwnerAuth } from "@/app/hooks/useSystemOwnerAuth";
+import { notificationsAPI, emailTemplatesAPI } from '@/app/lib/api';
 
 interface Notification {
   _id: string;
@@ -59,41 +60,36 @@ export default function NotificationsPage() {
     body_html: ''
   });
 
-  const getToken = () => localStorage.getItem('system_owner_getToken()');
-
-  const fetchData = async () => {
-    const headers = { 'Authorization': `Bearer ${getToken()}` };
-    const [notifRes, templateRes, logRes] = await Promise.all([
-      fetch('/api/v1/notifications?limit=50', { headers }),
-      fetch('/api/v1/notifications/email-templates', { headers }),
-      fetch('/api/v1/notifications/email-logs?limit=50', { headers })
+  const fetchData = useCallback(async () => {
+    const [notifData, templateData, logData] = await Promise.all([
+      notificationsAPI.list({ limit: 50 }),
+      emailTemplatesAPI.list(undefined),
+      notificationsAPI.listEmailLogs({ limit: 50 }),
     ]);
-    setNotifications(await notifRes.json());
-    setTemplates(await templateRes.json());
-    setEmailLogs(await logRes.json());
-  };
-
-  useEffect(() => {
-    if (getToken()) fetchData().finally(() => setLoading(false));
+    setNotifications(Array.isArray(notifData) ? notifData : notifData?.items || []);
+    setTemplates(Array.isArray(templateData) ? templateData : templateData?.items || []);
+    setEmailLogs(Array.isArray(logData) ? logData : logData?.items || []);
   }, []);
 
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('system_owner_token') : null;
+    if (token) {
+      fetchData().finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
+  }, [fetchData]);
+
   const handleCreateTemplate = async () => {
-    await fetch('/api/v1/notifications/email-templates', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
-      body: JSON.stringify(templateForm)
-    });
+    await emailTemplatesAPI.create(templateForm);
     setShowTemplateDialog(false);
     setTemplateForm({ name: '', subject: '', type: 'system_alert', is_active: true, is_default: false, body_html: '' });
     fetchData();
   };
 
   const handleUpdateTemplate = async () => {
-    await fetch(`/api/v1/notifications/email-templates/${selectedTemplate?._id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
-      body: JSON.stringify(templateForm)
-    });
+    if (!selectedTemplate?._id) return;
+    await emailTemplatesAPI.update(selectedTemplate._id, templateForm);
     setShowTemplateDialog(false);
     setSelectedTemplate(null);
     fetchData();
@@ -101,7 +97,7 @@ export default function NotificationsPage() {
 
   const handleDeleteTemplate = async (id: string) => {
     if (!confirm('Delete this template?')) return;
-    await fetch(`/api/v1/notifications/email-templates/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${getToken()}` } });
+    await emailTemplatesAPI.delete(id);
     fetchData();
   };
 
@@ -119,17 +115,17 @@ export default function NotificationsPage() {
   };
 
   const handleRetryEmail = async (logId: string) => {
-    await fetch(`/api/v1/notifications/email-logs/${logId}/retry`, { method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` } });
+    await notificationsAPI.retryEmailLog(logId);
     fetchData();
   };
 
   const handleMarkAsRead = async (id: string) => {
-    await fetch(`/api/v1/notifications/${id}/read`, { method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` } });
+    await notificationsAPI.markRead(id);
     fetchData();
   };
 
   const handleMarkAllAsRead = async () => {
-    await fetch('/api/v1/notifications/read-all', { method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` } });
+    await notificationsAPI.markAllRead();
     fetchData();
   };
 

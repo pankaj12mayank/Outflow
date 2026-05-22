@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   BarChart3,
@@ -34,53 +35,24 @@ import { toast } from "@/app/components/toast";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Card } from "@/app/components/ui/card";
-
-const chartData = {
-  emailTrend: [
-    { day: "Mon", sent: 120, opened: 48, replied: 12 },
-    { day: "Tue", sent: 145, opened: 62, replied: 15 },
-    { day: "Wed", sent: 98, opened: 41, replied: 8 },
-    { day: "Thu", sent: 167, opened: 72, replied: 18 },
-    { day: "Fri", sent: 134, opened: 58, replied: 14 },
-    { day: "Sat", sent: 89, opened: 35, replied: 7 },
-    { day: "Sun", sent: 76, opened: 29, replied: 5 },
-  ],
-  funnel: [
-    { name: "Sent", value: 829, percentage: 100, color: "#8B5CF6" },
-    { name: "Delivered", value: 813, percentage: 98, color: "#06B6D4" },
-    { name: "Opened", value: 345, percentage: 42, color: "#10B981" },
-    { name: "Clicked", value: 156, percentage: 19, color: "#F59E0B" },
-    { name: "Replied", value: 79, percentage: 10, color: "#EF4444" },
-  ],
-  sources: [
-    { name: "Google Maps", value: 35, color: "#8B5CF6" },
-    { name: "CSV Import", value: 28, color: "#06B6D4" },
-    { name: "Website Crawl", value: 22, color: "#10B981" },
-    { name: "LinkedIn", value: 10, color: "#F59E0B" },
-    { name: "API", value: 5, color: "#EF4444" },
-  ],
-  campaignPerformance: [
-    { name: "Q1 Launch", sent: 1250, replied: 125, openRate: 42 },
-    { name: "Follow-up", sent: 890, replied: 107, openRate: 38 },
-    { name: "Re-engage", sent: 650, replied: 52, openRate: 28 },
-    { name: "Product", sent: 420, replied: 38, openRate: 31 },
-  ],
-  aiUsage: [
-    { feature: "Personalization", tokens: 45000, generations: 890 },
-    { feature: "Subject Lines", tokens: 12000, generations: 456 },
-    { feature: "CTAs", tokens: 8000, generations: 312 },
-    { feature: "Reply Class.", tokens: 15000, generations: 567 },
-    { feature: "Optimization", tokens: 22000, generations: 234 },
-  ],
-  dailyActivity: [
-    { hour: "6AM", emails: 2, ai: 1 },
-    { hour: "9AM", emails: 24, ai: 8 },
-    { hour: "12PM", emails: 18, ai: 12 },
-    { hour: "3PM", emails: 31, ai: 15 },
-    { hour: "6PM", emails: 12, ai: 6 },
-    { hour: "9PM", emails: 5, ai: 3 },
-  ],
-};
+import {
+  useAnalyticsOverview,
+  useLeadAnalytics,
+  useCampaignAnalytics,
+  useAIAnalytics,
+  useSalesAnalytics,
+  useActivityFeed,
+  useQuickStats,
+} from "@/app/hooks/use-analytics";
+import { useScrapingStats } from "@/app/hooks/use-scraping";
+import { PageError, PageLoading } from "@/app/components/page-state";
+import {
+  buildEmailTrendFromOverview,
+  buildFunnelFromOverview,
+  buildSourcesFromLeadAnalytics,
+  buildCampaignPerformance,
+  buildAiUsage,
+} from "@/app/lib/analytics-charts";
 
 function StatCard({ label, value, change, changeType, icon: Icon, color, subValue }: any) {
   const isPositive = changeType === "up" || changeType === "positive";
@@ -308,7 +280,51 @@ function ActivityItem({ activity }: { activity: any }) {
 }
 
 export default function AnalyticsPage() {
+  const queryClient = useQueryClient();
   const [datePreset, setDatePreset] = useState("last_30_days");
+  const dateParams = { preset: datePreset };
+  const { data: overview, isLoading: overviewLoading, isError: overviewError, error: overviewErr, refetch: refetchOverview } =
+    useAnalyticsOverview(dateParams);
+  const { data: leadAnalytics } = useLeadAnalytics(dateParams);
+  const { data: campaignAnalytics } = useCampaignAnalytics(dateParams);
+  const { data: aiAnalytics } = useAIAnalytics(dateParams);
+  const { data: salesAnalytics } = useSalesAnalytics(dateParams);
+  const { data: activityFeed } = useActivityFeed(8);
+  const { data: quickStats } = useQuickStats();
+  const { data: scrapingStats } = useScrapingStats();
+
+  const chartData = useMemo(
+    () => ({
+      emailTrend: buildEmailTrendFromOverview(overview),
+      funnel: buildFunnelFromOverview(overview),
+      sources: buildSourcesFromLeadAnalytics(leadAnalytics),
+      campaignPerformance: buildCampaignPerformance(campaignAnalytics),
+      aiUsage: buildAiUsage(aiAnalytics),
+    }),
+    [overview, leadAnalytics, campaignAnalytics, aiAnalytics]
+  );
+
+  const emails = (overview as Record<string, unknown>)?.emails as Record<string, number> | undefined;
+  const sent = emails?.sent ?? 0;
+  const openRate = sent ? `${Math.round(((emails?.opened ?? 0) / sent) * 1000) / 10}%` : "0%";
+  const replyRate = sent ? `${Math.round(((emails?.replied ?? 0) / sent) * 1000) / 10}%` : "0%";
+  const clickRate = sent ? `${Math.round(((emails?.clicked ?? 0) / sent) * 1000) / 10}%` : "0%";
+
+  const totalLeads = (overview as any)?.leads?.total ?? (leadAnalytics as any)?.total ?? quickStats?.total_leads ?? 0;
+  const sourceCount = ((leadAnalytics as any)?.sources as unknown[])?.length ?? 0;
+  const salesOverview = (overview as any)?.sales as Record<string, number> | undefined;
+  const meetingsBooked = salesOverview?.meetings_booked ?? 0;
+  const positiveReplies = salesOverview?.positive_replies ?? 0;
+  const dealsWon = (salesAnalytics as any)?.won ?? 0;
+  const dealsTotal = (salesAnalytics as any)?.total_deals ?? 0;
+  const aiGenerations = (aiAnalytics as any)?.total_generations ?? 0;
+  const aiEnrichments = (aiAnalytics as any)?.total_enrichments ?? 0;
+  const scrapingJobs = (scrapingStats as any)?.total_jobs ?? 0;
+  const scrapingCompleted = (scrapingStats as any)?.completed ?? 0;
+  const scrapingFailed = (scrapingStats as any)?.failed ?? 0;
+  const scrapingSuccessRate =
+    scrapingJobs > 0 ? `${Math.round((scrapingCompleted / scrapingJobs) * 1000) / 10}%` : "0%";
+
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
 
@@ -330,9 +346,14 @@ export default function AnalyticsPage() {
     { id: "this_quarter", label: "This Quarter" },
   ];
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 1500);
+    try {
+      await queryClient.invalidateQueries({ queryKey: ["analytics"] });
+      await refetchOverview();
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleExport = (format: string = "csv") => {
@@ -340,13 +361,20 @@ export default function AnalyticsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 max-w-full overflow-x-hidden">
+      {overviewError && (
+        <PageError
+          message={(overviewErr as any)?.response?.data?.detail || "Could not load analytics overview."}
+          onRetry={() => refetchOverview()}
+        />
+      )}
+      {overviewLoading && !overview && <PageLoading label="Loading analytics..." />}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold mb-2">Analytics</h1>
           <p className="text-gray-400">Track performance across all campaigns and activities</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button variant="outline" size="sm" className="gap-1" onClick={handleRefresh} disabled={isLoading}>
             <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
             {isLoading ? "Loading..." : "Refresh"}
@@ -403,10 +431,10 @@ export default function AnalyticsPage() {
           {(activeTab === "overview" || activeTab === "campaigns") && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard label="Emails Sent" value="2,847" change="+12%" changeType="up" icon={Mail} color="purple" subValue="vs last period" />
-                <StatCard label="Open Rate" value="42.3%" change="+3.2%" changeType="up" icon={Eye} color="blue" subValue="avg 38%" />
-                <StatCard label="Reply Rate" value="9.5%" change="+1.8%" changeType="up" icon={MessageSquare} color="green" subValue="avg 7.2%" />
-                <StatCard label="Click Rate" value="18.8%" change="-0.5%" changeType="down" icon={MousePointerClick} color="yellow" subValue="avg 20%" />
+                <StatCard label="Emails Sent" value={sent.toLocaleString()} icon={Mail} color="purple" subValue="from API overview" />
+                <StatCard label="Open Rate" value={openRate} icon={Eye} color="blue" subValue={`${emails?.opened ?? 0} opened`} />
+                <StatCard label="Reply Rate" value={replyRate} icon={MessageSquare} color="green" subValue={`${emails?.replied ?? 0} replied`} />
+                <StatCard label="Click Rate" value={clickRate} icon={MousePointerClick} color="yellow" subValue={`${emails?.clicked ?? 0} clicked`} />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -422,7 +450,11 @@ export default function AnalyticsPage() {
                       <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-green-400" />Replied</span>
                     </div>
                   </div>
-                  <SimpleBarChart data={chartData.emailTrend} height={220} />
+                  {chartData.emailTrend.length > 0 ? (
+                    <SimpleBarChart data={chartData.emailTrend} height={220} />
+                  ) : (
+                    <p className="text-sm text-gray-500 py-16 text-center">No email activity in this period yet.</p>
+                  )}
                 </div>
 
                 <div className="p-5 rounded-2xl border border-white/5 bg-gradient-to-b from-white/5 to-transparent">
@@ -430,7 +462,11 @@ export default function AnalyticsPage() {
                     <Target className="w-5 h-5 text-purple-400" />
                     Conversion Funnel
                   </h3>
-                  <FunnelChart data={chartData.funnel} />
+                  {chartData.funnel.length > 0 ? (
+                    <FunnelChart data={chartData.funnel} />
+                  ) : (
+                    <p className="text-sm text-gray-500 py-16 text-center">No funnel data yet.</p>
+                  )}
                 </div>
               </div>
 
@@ -440,7 +476,11 @@ export default function AnalyticsPage() {
                     <BarChart3 className="w-5 h-5 text-purple-400" />
                     Campaign Performance
                   </h3>
-                  <SimpleBarChart data={chartData.campaignPerformance} height={200} />
+                  {chartData.campaignPerformance.length > 0 ? (
+                    <SimpleBarChart data={chartData.campaignPerformance} height={200} />
+                  ) : (
+                    <p className="text-sm text-gray-500 py-16 text-center">No campaigns yet.</p>
+                  )}
                 </div>
 
                 <div className="p-5 rounded-2xl border border-white/5 bg-gradient-to-b from-white/5 to-transparent">
@@ -448,7 +488,11 @@ export default function AnalyticsPage() {
                     <Globe className="w-5 h-5 text-purple-400" />
                     Lead Sources
                   </h3>
-                  <DonutChart data={chartData.sources} size={180} />
+                  {chartData.sources.length > 0 ? (
+                    <DonutChart data={chartData.sources} size={180} />
+                  ) : (
+                    <p className="text-sm text-gray-500 py-16 text-center">No lead sources yet.</p>
+                  )}
                 </div>
               </div>
             </>
@@ -457,10 +501,10 @@ export default function AnalyticsPage() {
           {(activeTab === "overview" || activeTab === "leads") && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <StatCard label="Total Leads" value="12,847" change="+847" changeType="up" icon={Users} color="purple" />
-                <StatCard label="Valid Emails" value="94.2%" change="+1.2%" changeType="up" icon={CheckCircle} color="green" />
-                <StatCard label="Enriched" value="8,234" change="+234" changeType="up" icon={Zap} color="yellow" />
-                <StatCard label="Avg Score" value="72" change="+5" changeType="up" icon={Target} color="blue" />
+                <StatCard label="Total Leads" value={Number(totalLeads).toLocaleString()} icon={Users} color="purple" subValue="from API" />
+                <StatCard label="Lead Sources" value={String(sourceCount)} icon={Globe} color="green" subValue="distinct sources" />
+                <StatCard label="Active Campaigns" value={String((overview as any)?.campaigns?.active ?? quickStats?.active_campaigns ?? 0)} icon={Target} color="yellow" />
+                <StatCard label="Emails Sent Today" value={String((quickStats as any)?.emails_sent_today ?? 0)} icon={Mail} color="blue" />
               </div>
             </>
           )}
@@ -468,10 +512,10 @@ export default function AnalyticsPage() {
           {(activeTab === "overview" || activeTab === "sales") && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <StatCard label="Meetings Booked" value="156" change="+23" changeType="up" icon={Calendar} color="purple" />
-                <StatCard label="Completed" value="134" change="+18" changeType="up" icon={CheckCircle} color="green" />
-                <StatCard label="Conversions" value="47" change="+8" changeType="up" icon={Target} color="yellow" />
-                <StatCard label="Revenue" value="$34.5K" change="+12%" changeType="up" icon={DollarSign} color="cyan" />
+                <StatCard label="Meetings Booked" value={String(meetingsBooked)} icon={Calendar} color="purple" subValue="from overview" />
+                <StatCard label="Positive Replies" value={String(positiveReplies)} icon={MessageSquare} color="green" />
+                <StatCard label="Deals Won" value={String(dealsWon)} icon={CheckCircle} color="yellow" subValue={`${dealsTotal} total deals`} />
+                <StatCard label="Pipeline Value" value={`$${((salesAnalytics as any)?.value ?? 0).toLocaleString()}`} icon={DollarSign} color="cyan" />
               </div>
 
               <div className="p-5 rounded-2xl border border-white/5 bg-gradient-to-b from-white/5 to-transparent">
@@ -479,12 +523,16 @@ export default function AnalyticsPage() {
                   <DollarSign className="w-5 h-5 text-purple-400" />
                   Sales Funnel
                 </h3>
-                <FunnelChart data={[
-                  { name: "Leads", value: 2847, percentage: 100, color: "#8B5CF6" },
-                  { name: "Meetings", value: 156, percentage: 5.5, color: "#06B6D4" },
-                  { name: "Qualified", value: 89, percentage: 3.1, color: "#10B981" },
-                  { name: "Conversions", value: 47, percentage: 1.6, color: "#F59E0B" },
-                ]} />
+                {Number(totalLeads) > 0 ? (
+                  <FunnelChart data={[
+                    { name: "Leads", value: Number(totalLeads), percentage: 100, color: "#8B5CF6" },
+                    { name: "Meetings", value: meetingsBooked, percentage: Math.round((meetingsBooked / Number(totalLeads)) * 1000) / 10, color: "#06B6D4" },
+                    { name: "Positive Replies", value: positiveReplies, percentage: Math.round((positiveReplies / Number(totalLeads)) * 1000) / 10, color: "#10B981" },
+                    { name: "Deals Won", value: dealsWon, percentage: Math.round((dealsWon / Number(totalLeads)) * 1000) / 10, color: "#F59E0B" },
+                  ]} />
+                ) : (
+                  <p className="text-sm text-gray-500 py-16 text-center">No sales funnel data yet.</p>
+                )}
               </div>
             </>
           )}
@@ -492,10 +540,10 @@ export default function AnalyticsPage() {
           {(activeTab === "overview" || activeTab === "ai") && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <StatCard label="AI Generations" value="2,459" change="+345" changeType="up" icon={Sparkles} color="purple" />
-                <StatCard label="Tokens Used" value="102K" change="+12K" changeType="up" icon={Zap} color="cyan" />
-                <StatCard label="Avg Latency" value="1.2s" change="-0.3s" changeType="positive" icon={Clock} color="green" />
-                <StatCard label="Success Rate" value="98.5%" change="+0.5%" changeType="up" icon={CheckCircle} color="yellow" />
+                <StatCard label="AI Generations" value={aiGenerations.toLocaleString()} icon={Sparkles} color="purple" />
+                <StatCard label="Enrichments" value={aiEnrichments.toLocaleString()} icon={Zap} color="cyan" />
+                <StatCard label="Combined Usage" value={(aiGenerations + aiEnrichments).toLocaleString()} icon={Bot} color="green" />
+                <StatCard label="Period" value={datePreset.replace(/_/g, " ")} icon={Clock} color="yellow" />
               </div>
 
               <div className="p-5 rounded-2xl border border-white/5 bg-gradient-to-b from-white/5 to-transparent">
@@ -503,7 +551,11 @@ export default function AnalyticsPage() {
                   <Bot className="w-5 h-5 text-purple-400" />
                   AI Usage by Feature
                 </h3>
-                <SimpleBarChart data={chartData.aiUsage} height={220} />
+                {chartData.aiUsage.length > 0 ? (
+                  <SimpleBarChart data={chartData.aiUsage} height={220} />
+                ) : (
+                  <p className="text-sm text-gray-500 py-16 text-center">No AI usage recorded yet.</p>
+                )}
               </div>
             </>
           )}
@@ -511,10 +563,10 @@ export default function AnalyticsPage() {
           {(activeTab === "overview" || activeTab === "system") && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <StatCard label="Scraping Jobs" value="234" change="+45" changeType="up" icon={Globe} color="purple" />
-                <StatCard label="Success Rate" value="94.2%" change="+2.1%" changeType="up" icon={CheckCircle} color="green" />
-                <StatCard label="Items Extracted" value="28.4K" change="+4.2K" changeType="up" icon={Target} color="yellow" />
-                <StatCard label="Error Rate" value="0.8%" change="-0.2%" changeType="positive" icon={AlertTriangle} color="red" />
+                <StatCard label="Scraping Jobs" value={scrapingJobs.toLocaleString()} icon={Globe} color="purple" />
+                <StatCard label="Completed" value={scrapingCompleted.toLocaleString()} icon={CheckCircle} color="green" />
+                <StatCard label="Success Rate" value={scrapingSuccessRate} icon={Target} color="yellow" />
+                <StatCard label="Failed Jobs" value={scrapingFailed.toLocaleString()} icon={AlertTriangle} color="red" />
               </div>
             </>
           )}
@@ -528,15 +580,21 @@ export default function AnalyticsPage() {
             Recent Activity
           </h3>
           <div className="space-y-1">
-            {[
-              { id: "1", type: "campaign_created", title: "Q2 Outreach Campaign", description: "Created and launched", timestamp: "2 min ago" },
-              { id: "2", type: "email_sent", title: "500 emails sent", description: "Via Follow-up sequence", timestamp: "15 min ago" },
-              { id: "3", type: "lead_added", title: "47 new leads", description: "From Google Maps scrape", timestamp: "1 hour ago" },
-              { id: "4", type: "ai_generated", title: "100 personalized emails", description: "Using llama3.2", timestamp: "2 hours ago" },
-              { id: "5", type: "meeting_booked", title: "3 meetings booked", description: "via calendar links", timestamp: "3 hours ago" },
-            ].map((activity) => (
+            {(Array.isArray(activityFeed) && activityFeed.length > 0
+              ? activityFeed.map((a: Record<string, unknown>) => ({
+                  id: String(a.id),
+                  type: String(a.type || "info"),
+                  title: String(a.type || "Activity"),
+                  description: String(a.description || ""),
+                  timestamp: a.created_at ? new Date(String(a.created_at)).toLocaleString() : "",
+                }))
+              : []
+            ).map((activity) => (
               <ActivityItem key={activity.id} activity={activity} />
             ))}
+            {(!activityFeed || (Array.isArray(activityFeed) && activityFeed.length === 0)) && (
+              <p className="text-sm text-gray-500 text-center py-6">No recent activity.</p>
+            )}
           </div>
         </div>
 
@@ -545,29 +603,9 @@ export default function AnalyticsPage() {
             <AlertTriangle className="w-5 h-5 text-yellow-400" />
             Alerts & Insights
           </h3>
-          <div className="space-y-3">
-            {[
-              { type: "warning", title: "High bounce rate detected", description: "Campaign 'Re-engage' has 8.2% bounce rate", time: "2 hours ago" },
-              { type: "success", title: "Open rate improved", description: "Campaign 'Q1 Launch' increased open rate by 15%", time: "5 hours ago" },
-              { type: "info", title: "AI quota at 75%", description: "You've used 75% of your monthly AI generation quota", time: "1 day ago" },
-              { type: "warning", title: "Email account warmup", description: "sales@acme.com needs 10 more days of warmup", time: "2 days ago" },
-            ].map((alert, i) => (
-              <div key={i} className={cn(
-                "p-4 rounded-xl border",
-                alert.type === "warning" && "border-yellow-500/20 bg-yellow-500/5",
-                alert.type === "success" && "border-green-500/20 bg-green-500/5",
-                alert.type === "info" && "border-blue-500/20 bg-blue-500/5",
-              )}>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="font-medium text-sm mb-1">{alert.title}</div>
-                    <div className="text-xs text-gray-400">{alert.description}</div>
-                  </div>
-                  <span className="text-xs text-gray-500">{alert.time}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+          <p className="text-sm text-gray-500 py-6 text-center">
+            Automated alerts will appear here when monitoring rules are configured.
+          </p>
         </div>
       </div>
     </div>

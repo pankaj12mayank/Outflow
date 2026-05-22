@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import api from "@/app/lib/api";
+import api, { aiAPI } from "@/app/lib/api";
 import { motion } from "framer-motion";
 import {
   Brain,
@@ -257,10 +257,8 @@ export default function AISettingsPage() {
     setTestResult(null);
     
     try {
-      const response = await fetch("http://localhost:8000/api/v1/ai/status", {
-        headers: { "Authorization": "Bearer test" }
-      });
-      const data = await response.json();
+      const response = await aiAPI.getStatus();
+      const data = response.data;
       
       if (data.status === "available" || data.status === "offline") {
         setOllamaConnected(data.status === "available");

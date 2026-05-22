@@ -32,10 +32,9 @@ async def list_campaigns(
 
 
 @router.post("", response_model=CampaignResponse, status_code=status.HTTP_201_CREATED)
-@require_permissions(["campaigns:create"])
 async def create_campaign(
     campaign_in: dict,
-    current_user: dict = Depends(get_current_user_with_role),
+    current_user: dict = Depends(require_permissions(["campaigns:create"])),
 ):
     from app.services.campaign_service import CampaignService
     org_id = current_user.get("organization_id")
@@ -45,10 +44,9 @@ async def create_campaign(
 
 
 @router.get("/{campaign_id}", response_model=CampaignResponse)
-@require_permissions(["campaigns:read"])
 async def get_campaign(
     campaign_id: str,
-    current_user: dict = Depends(get_current_user_with_role),
+    current_user: dict = Depends(require_permissions(["campaigns:read"])),
 ):
     from app.services.campaign_service import CampaignService
     org_id = current_user.get("organization_id")
@@ -59,12 +57,11 @@ async def get_campaign(
     return campaign
 
 
-@router.put("/{campaign_id}", response_model=CampaignResponse)
-@require_permissions(["campaigns:update"])
+@router.patch("/{campaign_id}", response_model=CampaignResponse)
 async def update_campaign(
     campaign_id: str,
     campaign_in: dict,
-    current_user: dict = Depends(get_current_user_with_role),
+    current_user: dict = Depends(require_permissions(["campaigns:update"])),
 ):
     from app.services.campaign_service import CampaignService
     org_id = current_user.get("organization_id")
@@ -76,10 +73,9 @@ async def update_campaign(
 
 
 @router.delete("/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT)
-@require_permissions(["campaigns:delete"])
 async def delete_campaign(
     campaign_id: str,
-    current_user: dict = Depends(get_current_user_with_role),
+    current_user: dict = Depends(require_permissions(["campaigns:delete"])),
 ):
     from app.services.campaign_service import CampaignService
     org_id = current_user.get("organization_id")
@@ -91,10 +87,10 @@ async def delete_campaign(
 
 
 @router.post("/{campaign_id}/start", response_model=CampaignResponse)
-@require_permissions(["campaigns:start"])
+@router.post("/{campaign_id}/launch", response_model=CampaignResponse)
 async def start_campaign(
     campaign_id: str,
-    current_user: dict = Depends(get_current_user_with_role),
+    current_user: dict = Depends(require_permissions(["campaigns:start"])),
 ):
     from app.services.campaign_service import CampaignService
     org_id = current_user.get("organization_id")
@@ -106,10 +102,9 @@ async def start_campaign(
 
 
 @router.post("/{campaign_id}/pause", response_model=CampaignResponse)
-@require_permissions(["campaigns:pause"])
 async def pause_campaign(
     campaign_id: str,
-    current_user: dict = Depends(get_current_user_with_role),
+    current_user: dict = Depends(require_permissions(["campaigns:pause"])),
 ):
     from app.services.campaign_service import CampaignService
     org_id = current_user.get("organization_id")
@@ -118,3 +113,25 @@ async def pause_campaign(
     if not campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
     return campaign
+
+
+@router.get("/{campaign_id}/stats")
+async def get_campaign_stats(
+    campaign_id: str,
+    current_user: dict = Depends(require_permissions(["campaigns:read"])),
+):
+    from app.services.campaign_service import CampaignService
+    org_id = current_user.get("organization_id")
+    campaign_service = CampaignService(org_id)
+    stats = await campaign_service.get_campaign_stats(campaign_id)
+    return stats or {
+        "total_sent": 0,
+        "total_opened": 0,
+        "total_clicked": 0,
+        "total_replied": 0,
+        "total_bounced": 0,
+        "open_rate": 0.0,
+        "click_rate": 0.0,
+        "reply_rate": 0.0,
+        "bounce_rate": 0.0,
+    }
