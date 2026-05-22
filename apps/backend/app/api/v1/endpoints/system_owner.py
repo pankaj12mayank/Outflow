@@ -1,5 +1,12 @@
 """
-System Owner API Endpoints
+Legacy System Owner API (RBAC/plan helpers).
+
+DEPRECATED for new features (L18): use canonical routes instead:
+- Auth: ``/api/v1/system-owner-auth/*``
+- Dashboard: ``/api/v1/system-owner-dashboard/*``
+- Orgs/plans: ``/api/v1/organizations/*``, ``/api/v1/plans/*``
+
+Kept for backward compatibility; do not add new endpoints here.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status

@@ -30,13 +30,25 @@ class TeamInvitationResponse(BaseModel):
     created_at: str
 
 
+def _normalize_team_role(role: Optional[str]) -> str:
+    if role in ("member", "admin"):
+        return "team_member" if role == "member" else "organization_admin"
+    return role or "team_member"
+
+
 @router.get("/members", response_model=List[TeamMemberResponse])
 async def list_team_members(
     current_user: dict = Depends(require_permissions(["teams:read"])),
 ):
+    from app.db.mongodb import MongoDB
+
+    await MongoDB.connect()
     org_id = current_user.get("organization_id")
     member_repo = TeamMemberRepository(org_id)
     members = await member_repo.get_active_members()
+    for m in members:
+        if m.get("role"):
+            m["role"] = _normalize_team_role(m["role"])
     return members
 
 
@@ -67,6 +79,8 @@ async def update_team_member(
     org_id = current_user.get("organization_id")
     member_repo = TeamMemberRepository(org_id)
     update_data = {k: v for k, v in member_in.items() if v is not None}
+    if "role" in update_data and update_data["role"] == "team_member":
+        update_data["role"] = "member"
     member = await member_repo.update(member_id, update_data)
     if not member:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
@@ -90,9 +104,15 @@ async def remove_team_member(
 async def list_pending_invitations(
     current_user: dict = Depends(require_permissions(["teams:read"])),
 ):
+    from app.db.mongodb import MongoDB
+
+    await MongoDB.connect()
     org_id = current_user.get("organization_id")
     invite_repo = TeamInvitationRepository(org_id)
     invitations = await invite_repo.get_pending_invitations()
+    for inv in invitations:
+        if inv.get("role"):
+            inv["role"] = _normalize_team_role(inv["role"])
     return invitations
 
 
@@ -123,14 +143,19 @@ async def invite_team_member(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Team member limit reached ({team_limit}) for your current plan. Upgrade to add more.",
         )
+    invite_role = invitation_in.get("role", "member")
+    if invite_role == "team_member":
+        invite_role = "member"
     invitation_data = {
         "email": invitation_in.get("email"),
-        "role": invitation_in.get("role", "member"),
+        "role": invite_role,
         "status": "pending",
         "invited_by": current_user.get("email"),
         "organization_id": org_id,
     }
     invitation = await invite_repo.create(invitation_data)
+    if invitation.get("role"):
+        invitation["role"] = _normalize_team_role(invitation["role"])
     return invitation
 
 

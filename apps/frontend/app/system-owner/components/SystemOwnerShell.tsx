@@ -15,19 +15,46 @@ import {
   Wallet,
   Menu,
   X,
+  Wrench,
+  Bell,
+  ChevronDown,
+  ListOrdered,
+  BarChart3,
+  AlertTriangle,
+  FileCode,
+  Radio,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { useSystemOwnerAuth } from "@/app/hooks/useSystemOwnerAuth";
 
-const NAV = [
+type NavItem = {
+  href?: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  children?: { href: string; label: string; icon: React.ComponentType<{ className?: string }> }[];
+};
+
+const NAV: NavItem[] = [
   { href: "/system-owner/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/system-owner/setup", label: "Setup", icon: Wrench },
+  { href: "/system-owner/notifications", label: "Notifications", icon: Bell },
   { href: "/system-owner/plans", label: "Pricing Plans", icon: CreditCard },
   { href: "/system-owner/cms", label: "Landing Page", icon: FileText },
   { href: "/system-owner/payments", label: "Billing", icon: Wallet },
   { href: "/system-owner/smtp", label: "SMTP", icon: Mail },
+  {
+    label: "Email",
+    icon: Zap,
+    children: [
+      { href: "/system-owner/email/queue", label: "Queue", icon: ListOrdered },
+      { href: "/system-owner/email/analytics", label: "Analytics", icon: BarChart3 },
+      { href: "/system-owner/email/bounces", label: "Bounces", icon: AlertTriangle },
+      { href: "/system-owner/email/templates", label: "Templates", icon: FileCode },
+      { href: "/system-owner/email/triggers", label: "Triggers", icon: Radio },
+    ],
+  },
   { href: "/system-owner/settings", label: "AI & API", icon: Cpu },
   { href: "/system-owner/organizations", label: "Organizations", icon: Building2 },
-  { href: "/system-owner/email", label: "Email Automation", icon: Zap },
 ];
 
 function NavLinks({
@@ -37,16 +64,71 @@ function NavLinks({
   pathname: string;
   onNavigate?: () => void;
 }) {
+  const [emailOpen, setEmailOpen] = useState(
+    () => pathname?.startsWith("/system-owner/email") ?? false
+  );
+
   return (
     <>
       {NAV.map((item) => {
-        const active =
-          pathname === item.href || pathname?.startsWith(item.href + "/");
         const Icon = item.icon;
+
+        if (item.children) {
+          const groupActive = pathname?.startsWith("/system-owner/email");
+          return (
+            <div key={item.label} className="space-y-1">
+              <button
+                type="button"
+                onClick={() => setEmailOpen((o) => !o)}
+                className={cn(
+                  "w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                  groupActive
+                    ? "bg-purple-500/15 text-purple-300 border border-purple-500/30"
+                    : "text-gray-400 hover:text-white hover:bg-white/5 border border-transparent"
+                )}
+              >
+                <span className="flex items-center gap-3">
+                  <Icon className="w-4 h-4 shrink-0" />
+                  {item.label}
+                </span>
+                <ChevronDown
+                  className={cn("w-4 h-4 shrink-0 transition-transform", emailOpen && "rotate-180")}
+                />
+              </button>
+              {emailOpen && (
+                <div className="ml-3 pl-3 border-l border-white/10 space-y-0.5">
+                  {item.children.map((child) => {
+                    const ChildIcon = child.icon;
+                    const active = pathname === child.href;
+                    return (
+                      <Link
+                        key={child.href}
+                        href={child.href}
+                        onClick={onNavigate}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors",
+                          active
+                            ? "text-purple-300 bg-purple-500/10"
+                            : "text-gray-500 hover:text-white hover:bg-white/5"
+                        )}
+                      >
+                        <ChildIcon className="w-3.5 h-3.5 shrink-0" />
+                        {child.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        const active =
+          pathname === item.href || pathname?.startsWith((item.href || "") + "/");
         return (
           <Link
             key={item.href}
-            href={item.href}
+            href={item.href!}
             onClick={onNavigate}
             className={cn(
               "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
@@ -118,7 +200,6 @@ export function SystemOwnerShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       )}
-      {/* Mobile top bar */}
       <header className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#0c0c14] shrink-0">
         <Link href="/system-owner/dashboard" className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center">
@@ -136,7 +217,6 @@ export function SystemOwnerShell({ children }: { children: React.ReactNode }) {
         </button>
       </header>
 
-      {/* Left sidebar */}
       <aside
         className={cn(
           "fixed lg:sticky top-0 left-0 z-40 h-full lg:h-screen w-64 shrink-0 border-r border-white/10 bg-[#0c0c14] flex flex-col transition-transform duration-200",

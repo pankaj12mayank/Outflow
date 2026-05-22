@@ -72,7 +72,13 @@ export interface AuthState {
 
 export interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, fullName: string, orgName: string) => Promise<void>;
+  register: (
+    email: string,
+    password: string,
+    fullName: string,
+    orgName: string,
+    onboarding?: Record<string, string | undefined>
+  ) => Promise<void>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<boolean>;
   requestMagicLink: (email: string) => Promise<void>;
@@ -95,6 +101,15 @@ const ROLE_ALIASES: Record<string, string> = {
 export function normalizeRole(role?: string): string {
   if (!role) return "team_member";
   return ROLE_ALIASES[role] || role;
+}
+
+function syncAccessTokenCookie(accessToken: string | null) {
+  if (typeof document === "undefined") return;
+  if (accessToken) {
+    document.cookie = `access_token=${encodeURIComponent(accessToken)}; path=/; max-age=604800; SameSite=Lax`;
+  } else {
+    document.cookie = "access_token=; path=/; max-age=0; SameSite=Lax";
+  }
 }
 
 export function addPermissionsToUser(user: User): User {
@@ -122,12 +137,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("access_token", accessToken);
     localStorage.setItem("refresh_token", refreshToken);
     api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+    syncAccessTokenCookie(accessToken);
   }, []);
 
   const clearAuth = useCallback(() => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     delete api.defaults.headers.common["Authorization"];
+    syncAccessTokenCookie(null);
     setState({ user: null, isAuthenticated: false, isLoading: false });
   }, []);
 
@@ -151,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading: false,
       });
       api.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
+      syncAccessTokenCookie(accessToken);
       return true;
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -240,7 +258,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const register = async (email: string, password: string, fullName: string, orgName: string) => {
+  const register = async (
+    email: string,
+    password: string,
+    fullName: string,
+    orgName: string,
+    onboarding?: Record<string, string | undefined>
+  ) => {
     try {
       const response = await api.post("/api/v1/auth/register", {
         email,
@@ -254,7 +278,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setTokens(tokens.access_token, tokens.refresh_token);
 
       setState({ user, isAuthenticated: true, isLoading: false });
-      router.push("/app/dashboard");
+
+      if (onboarding && Object.values(onboarding).some(Boolean)) {
+        try {
+          await api.patch("/api/v1/auth/onboarding", onboarding);
+        } catch (onboardingErr) {
+          console.warn("Onboarding save failed:", onboardingErr);
+        }
+      }
+
+      router.push("/app/dashboard?onboarding=complete");
     } catch (error: any) {
       console.error("Registration failed:", error.response?.data || error.message);
       throw error;
@@ -292,10 +325,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { user: rawUser, tokens } = response.data;
     const user = addPermissionsToUser(rawUser);
 
-    localStorage.setItem("access_token", tokens.access_token);
-    localStorage.setItem("refresh_token", tokens.refresh_token);
-
-    api.defaults.headers.common["Authorization"] = `Bearer ${tokens.access_token}`;
+    setTokens(tokens.access_token, tokens.refresh_token);
 
     setState({ user, isAuthenticated: true, isLoading: false });
     router.push("/app/dashboard");

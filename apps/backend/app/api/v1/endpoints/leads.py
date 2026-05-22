@@ -14,6 +14,8 @@ from app.db.mongodb import MongoDB, serialize_doc
 
 router = APIRouter(prefix="/leads", tags=["Leads"])
 
+_DEFAULT_ENRICH_FIELDS = ["company_info", "job_title"]
+
 
 class LeadResponse(BaseModel):
     id: str
@@ -104,7 +106,7 @@ async def bulk_enrich_leads(
     lead_service = _lead_service(org_id)
     results = []
     for lid in data.ids:
-        result = await lead_service.enrich_lead(lid)
+        result = await lead_service.enrich_lead(lid, _DEFAULT_ENRICH_FIELDS)
         if result:
             results.append(result)
     return {"enriched": len(results), "leads": results}
@@ -212,7 +214,7 @@ async def enrich_lead(
     current_user: dict = Depends(require_permissions(["leads:enrich"])),
 ):
     org_id = current_user.get("organization_id")
-    result = await _lead_service(org_id).enrich_lead(lead_id)
+    result = await _lead_service(org_id).enrich_lead(lead_id, _DEFAULT_ENRICH_FIELDS)
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lead not found")
     return result

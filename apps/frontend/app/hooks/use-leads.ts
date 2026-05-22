@@ -95,6 +95,17 @@ export function useEnrichLead() {
   });
 }
 
+export function useBulkEnrichLeads() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      api.post("/api/v1/leads/bulk-enrich", { ids }).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+    },
+  });
+}
+
 export function useVerifyLeadEmail() {
   const queryClient = useQueryClient();
   return useMutation({

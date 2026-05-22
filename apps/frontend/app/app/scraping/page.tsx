@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import {
@@ -121,7 +122,14 @@ function formatJob(job: Record<string, unknown>): ScrapingJobRow {
 }
 
 export default function ScrapingPage() {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<"tools" | "jobs">("tools");
+
+  useEffect(() => {
+    if (searchParams.get("tab") === "jobs") {
+      setActiveTab("jobs");
+    }
+  }, [searchParams]);
   const { data: stats, isLoading: statsLoading, isError: statsError, refetch: refetchStats } = useScrapingStats();
   const { data: jobsData, isLoading: jobsLoading, isError: jobsError, refetch: refetchJobs } = useScrapingJobs({ limit: 100 });
 

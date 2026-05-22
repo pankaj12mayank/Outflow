@@ -37,7 +37,7 @@ export default function LandingPage() {
 
   const fetchPage = async () => {
     try {
-      const response = await api.get(`/api/v1/cms/landing/pages/slug/${slug}`);
+      const response = await api.get(`/api/v1/cms/landing/pages/slug/${slug}/public`);
       setPage(response.data);
     } catch (err: any) {
       setError(err.response?.status === 404 ? "Page not found" : "Failed to load page");

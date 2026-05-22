@@ -233,7 +233,41 @@ export default function AISettingsPage() {
 
   useEffect(() => {
     fetchAIStats();
+    loadAISettings();
+    loadPromptsFromApi();
   }, []);
+
+  const loadAISettings = async () => {
+    try {
+      const res = await aiAPI.getSettings();
+      const data = res.data;
+      if (data.model) setSelectedModel(data.model);
+      if (typeof data.temperature === "number") setTemperature(data.temperature);
+      if (typeof data.max_tokens === "number") setMaxTokens(data.max_tokens);
+    } catch {
+      /* defaults */
+    }
+  };
+
+  const loadPromptsFromApi = async () => {
+    try {
+      const res = await aiAPI.listPrompts();
+      const rows = Array.isArray(res.data) ? res.data : [];
+      if (rows.length === 0) return;
+      setPrompts(
+        defaultPrompts.map((dp) => {
+          const saved = rows.find(
+            (r: { name?: string }) => r.name === dp.name || r.name === dp.key
+          );
+          return saved
+            ? { ...dp, dbId: saved.id, description: saved.content || dp.description }
+            : dp;
+        })
+      );
+    } catch {
+      /* keep defaults */
+    }
+  };
 
   const fetchAIStats = async () => {
     try {
@@ -282,10 +316,20 @@ export default function AISettingsPage() {
 
   const handleSaveSettings = async () => {
     setIsSaving(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setIsSaving(false);
-    setSaveMessage("Settings saved successfully!");
-    setTimeout(() => setSaveMessage(""), 3000);
+    try {
+      await aiAPI.updateSettings({
+        model: selectedModel,
+        temperature,
+        max_tokens: maxTokens,
+      });
+      setSaveMessage("Settings saved successfully!");
+      toast.save();
+      setTimeout(() => setSaveMessage(""), 3000);
+    } catch {
+      toast.error("Failed to save AI settings");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleEditPrompt = (prompt: any) => {
@@ -298,10 +342,26 @@ export default function AISettingsPage() {
     toast.copy();
   };
 
-  const handleSavePrompt = () => {
-    setShowPromptEditor(false);
-    setEditingPrompt(null);
-    toast.save();
+  const handleSavePrompt = async () => {
+    if (!editingPrompt) return;
+    try {
+      const payload = {
+        name: editingPrompt.name,
+        content: editingPrompt.content || editingPrompt.description,
+        category: editingPrompt.category,
+      };
+      if (editingPrompt.dbId) {
+        await aiAPI.updatePrompt(editingPrompt.dbId, payload);
+      } else {
+        await aiAPI.createPrompt(payload);
+      }
+      await loadPromptsFromApi();
+      setShowPromptEditor(false);
+      setEditingPrompt(null);
+      toast.save();
+    } catch {
+      toast.error("Failed to save prompt");
+    }
   };
 
   return (

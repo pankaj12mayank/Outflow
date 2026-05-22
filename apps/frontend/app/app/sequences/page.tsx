@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
@@ -28,6 +28,15 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
 import { toast } from "@/app/components/toast";
+import { Can } from "@/app/components/Can";
+import { PageError, PageLoading } from "@/app/components/page-state";
+import {
+  useSequences,
+  useCreateSequence,
+  useUpdateSequence,
+  useDeleteSequence,
+  useDuplicateSequence,
+} from "@/app/hooks/use-sequences";
 
 interface SequenceStep {
   id: string;
@@ -38,7 +47,7 @@ interface SequenceStep {
 }
 
 interface Sequence {
-  id: number;
+  id: string;
   name: string;
   description: string;
   steps: SequenceStep[];
@@ -96,86 +105,26 @@ const defaultSteps: SequenceStep[] = [
   },
 ];
 
-const sequences: Sequence[] = [
-  {
-    id: 1,
-    name: "Initial Outreach",
-    description: "First contact sequence with discovery questions",
-    steps: defaultSteps,
-    active: 1247,
-    completed: 3420,
-    avgResponseRate: 34.2,
-    avgTimeToResponse: "2.4 days",
-    status: "active",
-    lastUsed: "2026-05-13",
-    channels: ["email"],
-  },
-  {
-    id: 2,
-    name: "Demo Follow-up",
-    description: "Post-demo nurturing sequence",
-    steps: [
-      { id: "s1", type: "email", title: "Thank You Email", description: "Thank them for their time" },
-      { id: "s2", type: "delay", title: "Wait 1 Day", description: "Delay before resources" },
-      { id: "s3", type: "email", title: "Send Resources", description: "Share relevant case studies" },
-    ],
-    active: 423,
-    completed: 1876,
-    avgResponseRate: 52.8,
-    avgTimeToResponse: "1.8 days",
-    status: "active",
-    lastUsed: "2026-05-12",
-    channels: ["email", "linkedin"],
-  },
-  {
-    id: 3,
-    name: "Re-engagement",
-    description: "Win back unresponsive leads",
-    steps: [
-      { id: "s1", type: "email", title: "Check-in", description: "Simple check-in email" },
-      { id: "s2", type: "delay", title: "Wait 4 Days", description: "Wait for response" },
-      { id: "s3", type: "condition", title: "If No Reply", description: "Check reply status" },
-    ],
-    active: 892,
-    completed: 1245,
-    avgResponseRate: 18.5,
-    avgTimeToResponse: "4.2 days",
-    status: "active",
-    lastUsed: "2026-05-11",
-    channels: ["email"],
-  },
-  {
-    id: 4,
-    name: "Cold to Warm",
-    description: "Convert cold leads to warm prospects",
-    steps: [
-      { id: "s1", type: "email", title: "Cold Outreach", description: "Initial cold email" },
-    ],
-    active: 234,
-    completed: 567,
-    avgResponseRate: 28.9,
-    avgTimeToResponse: "3.1 days",
-    status: "draft",
-    lastUsed: "2026-05-10",
-    channels: ["email", "linkedin", "sms"],
-  },
-  {
-    id: 5,
-    name: "Champion Building",
-    description: "Help champions within accounts",
-    steps: [
-      { id: "s1", type: "email", title: "Value Add", description: "Share relevant content" },
-      { id: "s2", type: "delay", title: "Wait 1 Week", description: "Weekly check-in" },
-    ],
-    active: 156,
-    completed: 423,
-    avgResponseRate: 67.4,
-    avgTimeToResponse: "1.2 days",
-    status: "active",
-    lastUsed: "2026-05-13",
-    channels: ["email", "linkedin"],
-  },
-];
+function mapApiSequence(row: Record<string, unknown>): Sequence {
+  const status =
+    (row.status as Sequence["status"]) ||
+    (row.is_active ? "active" : "paused");
+  return {
+    id: String(row.id),
+    name: String(row.name || "Untitled"),
+    description: String(row.description || ""),
+    steps: (row.steps as SequenceStep[]) || [],
+    active: Number(row.active_enrolled ?? row.total_enrolled ?? 0),
+    completed: Number(row.completed ?? 0),
+    avgResponseRate: Number(row.avg_response_rate ?? 0),
+    avgTimeToResponse: String(row.avg_time_to_response || "-"),
+    status,
+    lastUsed: row.updated_at
+      ? String(row.updated_at).slice(0, 10)
+      : "Never",
+    channels: (row.channels as string[]) || ["email"],
+  };
+}
 
 const statusColors = {
   active: "bg-green-500/10 text-green-400 border-green-500/20",
@@ -196,13 +145,31 @@ const stepTypeColors = {
 };
 
 export default function SequencesPage() {
+  const { data, isLoading, isError, error, refetch } = useSequences();
+  const createSequence = useCreateSequence();
+  const updateSequence = useUpdateSequence();
+  const deleteSequence = useDeleteSequence();
+  const duplicateSequence = useDuplicateSequence();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showStepModal, setShowStepModal] = useState(false);
   const [showNewSequenceModal, setShowNewSequenceModal] = useState(false);
   const [selectedStepType, setSelectedStepType] = useState<string>("email");
-  const [sequenceList, setSequenceList] = useState(sequences);
   const [newSequenceName, setNewSequenceName] = useState("");
+  const [editingSequenceId, setEditingSequenceId] = useState<string | null>(null);
+  const [stepTitle, setStepTitle] = useState("");
+  const [stepDescription, setStepDescription] = useState("");
+  const [stepConfig, setStepConfig] = useState<Record<string, unknown>>({});
+
+  const sequenceList = useMemo(() => {
+    const rows = Array.isArray(data) ? data : [];
+    return rows.map((row) => mapApiSequence(row as Record<string, unknown>));
+  }, [data]);
+
+  if (isLoading && sequenceList.length === 0) {
+    return <PageLoading label="Loading sequences..." />;
+  }
 
   const filteredSequences = sequenceList.filter((seq) => {
     const matchesSearch = 
@@ -212,34 +179,29 @@ export default function SequencesPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const toggleSequenceStatus = (id: number) => {
-    setSequenceList((prev) =>
-      prev.map((s) => {
-        if (s.id === id) {
-          return { ...s, status: s.status === "active" ? "paused" as const : "active" as const };
-        }
-        return s;
-      })
+  const toggleSequenceStatus = (seq: Sequence) => {
+    const nextStatus = seq.status === "active" ? "paused" : "active";
+    updateSequence.mutate(
+      { id: seq.id, status: nextStatus, is_active: nextStatus === "active" },
+      {
+        onError: () => toast.error("Failed to update sequence status"),
+      }
     );
   };
 
-  const handleDeleteSequence = (id: number) => {
-    if (confirm("Are you sure you want to delete this sequence?")) {
-      setSequenceList((prev) => prev.filter((s) => s.id !== id));
-    }
+  const handleDeleteSequence = (id: string) => {
+    if (!confirm("Are you sure you want to delete this sequence?")) return;
+    deleteSequence.mutate(id, {
+      onSuccess: () => toast.delete("Sequence"),
+      onError: () => toast.error("Failed to delete sequence"),
+    });
   };
 
   const handleDuplicateSequence = (seq: Sequence) => {
-    const newSeq: Sequence = {
-      ...seq,
-      id: Date.now(),
-      name: `${seq.name} (Copy)`,
-      status: "draft",
-      active: 0,
-      completed: 0,
-    };
-    setSequenceList([...sequenceList, newSeq]);
-    toast.duplicate(seq.name);
+    duplicateSequence.mutate(seq.id, {
+      onSuccess: () => toast.duplicate(seq.name),
+      onError: () => toast.error("Failed to duplicate sequence"),
+    });
   };
 
   const handleCreateSequence = () => {
@@ -247,26 +209,77 @@ export default function SequencesPage() {
       toast.required("sequence name");
       return;
     }
-    const newSeq: Sequence = {
-      id: Date.now(),
-      name: newSequenceName,
-      description: "New sequence",
-      steps: [],
-      active: 0,
-      completed: 0,
-      avgResponseRate: 0,
-      avgTimeToResponse: "-",
-      status: "draft",
-      lastUsed: "Never",
-      channels: ["email"],
-    };
-    setSequenceList([...sequenceList, newSeq]);
-    setNewSequenceName("");
-    setShowNewSequenceModal(false);
+    createSequence.mutate(
+      {
+        name: newSequenceName.trim(),
+        description: "New sequence",
+        steps: defaultSteps,
+        status: "draft",
+        is_active: false,
+        channels: ["email"],
+      },
+      {
+        onSuccess: () => {
+          setNewSequenceName("");
+          setShowNewSequenceModal(false);
+          toast.success("Sequence created");
+        },
+        onError: () => toast.error("Failed to create sequence"),
+      }
+    );
   };
+
+  const openStepModal = (sequenceId: string) => {
+    setEditingSequenceId(sequenceId);
+    setSelectedStepType("email");
+    setStepTitle("");
+    setStepDescription("");
+    setStepConfig({});
+    setShowStepModal(true);
+  };
+
+  const handleAddStep = () => {
+    if (!editingSequenceId || !stepTitle.trim()) {
+      toast.required("step name");
+      return;
+    }
+    const seq = sequenceList.find((s) => s.id === editingSequenceId);
+    if (!seq) return;
+    const newStep: SequenceStep = {
+      id: `step-${Date.now()}`,
+      type: selectedStepType as SequenceStep["type"],
+      title: stepTitle.trim(),
+      description: stepDescription.trim() || stepTitle.trim(),
+      config: stepConfig,
+    };
+    updateSequence.mutate(
+      { id: editingSequenceId, steps: [...seq.steps, newStep] },
+      {
+        onSuccess: () => {
+          setShowStepModal(false);
+          setEditingSequenceId(null);
+          toast.success("Step saved");
+        },
+        onError: () => toast.error("Failed to save step"),
+      }
+    );
+  };
+
+  const avgResponseRate =
+    sequenceList.length > 0
+      ? (
+          sequenceList.reduce((sum, s) => sum + s.avgResponseRate, 0) / sequenceList.length
+        ).toFixed(1)
+      : "0";
 
   return (
     <div className="space-y-6">
+      {isError && (
+        <PageError
+          message={(error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Could not load sequences."}
+          onRetry={() => refetch()}
+        />
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold mb-2">Email Sequences</h1>
@@ -274,10 +287,12 @@ export default function SequencesPage() {
             Create multi-step outreach sequences for your campaigns
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setShowNewSequenceModal(true)}>
-          <Plus className="w-4 h-4" />
-          New Sequence
-        </Button>
+        <Can permission="sequences:create">
+          <Button className="gap-2" onClick={() => setShowNewSequenceModal(true)}>
+            <Plus className="w-4 h-4" />
+            New Sequence
+          </Button>
+        </Can>
       </div>
 
       {/* New Sequence Modal */}
@@ -358,7 +373,7 @@ export default function SequencesPage() {
             <div className="w-12 h-12 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center">
               <Clock className="w-6 h-6 text-yellow-400" />
             </div>
-            <div className="text-3xl font-bold">38.4%</div>
+            <div className="text-3xl font-bold">{avgResponseRate}%</div>
           </div>
           <div className="text-gray-400 text-sm">Avg Response Rate</div>
         </motion.div>
@@ -435,30 +450,36 @@ export default function SequencesPage() {
                     <p className="text-gray-400">{sequence.description}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant={sequence.status === "active" ? "outline" : "default"}
-                      className="gap-2"
-                      onClick={() => toggleSequenceStatus(sequence.id)}
-                    >
-                      {sequence.status === "active" ? (
-                        <>
-                          <Pause className="w-4 h-4" />
-                          Pause
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-4 h-4" />
-                          Activate
-                        </>
-                      )}
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDuplicateSequence(sequence)}>
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="text-red-400" onClick={() => handleDeleteSequence(sequence.id)}>
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <Can permission="sequences:update">
+                      <Button
+                        size="sm"
+                        variant={sequence.status === "active" ? "outline" : "default"}
+                        className="gap-2"
+                        onClick={() => toggleSequenceStatus(sequence)}
+                      >
+                        {sequence.status === "active" ? (
+                          <>
+                            <Pause className="w-4 h-4" />
+                            Pause
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-4 h-4" />
+                            Activate
+                          </>
+                        )}
+                      </Button>
+                    </Can>
+                    <Can permission="sequences:create">
+                      <Button variant="ghost" size="icon" onClick={() => handleDuplicateSequence(sequence)}>
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </Can>
+                    <Can permission="sequences:delete">
+                      <Button variant="ghost" size="icon" className="text-red-400" onClick={() => handleDeleteSequence(sequence.id)}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </Can>
                   </div>
                 </div>
 
@@ -523,14 +544,16 @@ export default function SequencesPage() {
                         );
                       })}
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="ml-2 text-gray-400 hover:text-white"
-                      onClick={() => setShowStepModal(true)}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
+                    <Can permission="sequences:update">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="ml-2 text-gray-400 hover:text-white"
+                        onClick={() => openStepModal(sequence.id)}
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </Can>
                   </div>
                   <div className="flex items-center gap-2 mt-3 text-xs text-gray-500">
                     <span>Last used: {sequence.lastUsed}</span>
@@ -547,10 +570,12 @@ export default function SequencesPage() {
           <Zap className="w-16 h-16 text-gray-600 mx-auto mb-4" />
           <h3 className="text-xl font-bold mb-2">No sequences found</h3>
           <p className="text-gray-400 mb-6">Create your first email sequence to get started</p>
-          <Button className="gap-2">
-            <Plus className="w-4 h-4" />
-            Create Sequence
-          </Button>
+          <Can permission="sequences:create">
+            <Button className="gap-2" onClick={() => setShowNewSequenceModal(true)}>
+              <Plus className="w-4 h-4" />
+              Create Sequence
+            </Button>
+          </Can>
         </div>
       )}
 
@@ -602,6 +627,8 @@ export default function SequencesPage() {
                 <div>
                   <label className="block text-sm text-gray-400 mb-2">Step Name</label>
                   <Input
+                    value={stepTitle}
+                    onChange={(e) => setStepTitle(e.target.value)}
                     placeholder="e.g., Follow-up Email"
                     className="bg-white/5 border-white/10"
                   />
@@ -609,6 +636,8 @@ export default function SequencesPage() {
                 <div>
                   <label className="block text-sm text-gray-400 mb-2">Description</label>
                   <Input
+                    value={stepDescription}
+                    onChange={(e) => setStepDescription(e.target.value)}
                     placeholder="Brief description"
                     className="bg-white/5 border-white/10"
                   />
@@ -618,6 +647,8 @@ export default function SequencesPage() {
                     <div>
                       <label className="block text-sm text-gray-400 mb-2">Subject Line</label>
                       <Input
+                        value={String(stepConfig.subject || "")}
+                        onChange={(e) => setStepConfig({ ...stepConfig, subject: e.target.value })}
                         placeholder="e.g., Quick question about {{company}}"
                         className="bg-white/5 border-white/10"
                       />
@@ -629,6 +660,8 @@ export default function SequencesPage() {
                     <label className="block text-sm text-gray-400 mb-2">Delay (days)</label>
                     <Input
                       type="number"
+                      value={String(stepConfig.days ?? "")}
+                      onChange={(e) => setStepConfig({ ...stepConfig, days: Number(e.target.value) || 0 })}
                       placeholder="2"
                       className="bg-white/5 border-white/10"
                     />
@@ -651,7 +684,7 @@ export default function SequencesPage() {
                 <Button variant="outline" onClick={() => setShowStepModal(false)}>
                   Cancel
                 </Button>
-                <Button className="gap-2">
+                <Button className="gap-2" onClick={handleAddStep} disabled={updateSequence.isPending}>
                   <Plus className="w-4 h-4" />
                   Add Step
                 </Button>

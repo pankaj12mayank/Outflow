@@ -24,9 +24,18 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(target, request.url));
   }
 
+  if (pathname.startsWith("/app") && !pathname.startsWith("/app/super-admin")) {
+    const token = request.cookies.get("access_token")?.value;
+    if (!token) {
+      const login = new URL("/login", request.url);
+      login.searchParams.set("redirect", pathname);
+      return NextResponse.redirect(login);
+    }
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/", "/app/super-admin", "/app/super-admin/:path*"],
+  matcher: ["/", "/app/:path*", "/app/super-admin", "/app/super-admin/:path*"],
 };

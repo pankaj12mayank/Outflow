@@ -67,23 +67,41 @@ async def get_page(
     return page
 
 
+@router.get("/pages/slug/{slug}/public")
+async def get_page_by_slug_public(slug: str):
+    """Public published landing page by slug (no auth)."""
+    from app.db.mongodb import MongoDB
+    await MongoDB.connect()
+    page = await LandingPageService.get_page_by_slug(slug, preview=False)
+    if not page:
+        raise HTTPException(status_code=404, detail="Page not found")
+
+    blocks = await LandingBlockService.get_blocks(page.get("_id"))
+    page["blocks"] = blocks
+
+    seo = await SeoService.get_seo(page.get("_id"))
+    page["seo"] = seo
+
+    return page
+
+
 @router.get("/pages/slug/{slug}")
 async def get_page_by_slug(
     slug: str,
     preview: bool = False,
-    current_user: dict = Depends(get_current_system_owner)
+    current_user: dict = Depends(get_current_system_owner),
 ):
-    """Get landing page by slug."""
+    """Get landing page by slug (system owner; preview includes drafts)."""
     page = await LandingPageService.get_page_by_slug(slug, preview)
     if not page:
         raise HTTPException(status_code=404, detail="Page not found")
-    
+
     blocks = await LandingBlockService.get_blocks(page.get("_id"))
     page["blocks"] = blocks
-    
+
     seo = await SeoService.get_seo(page.get("_id"))
     page["seo"] = seo
-    
+
     return page
 
 

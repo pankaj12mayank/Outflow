@@ -8,10 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from typing import List, Optional
 from pydantic import BaseModel
 
-from app.middleware import get_current_user
+from app.middleware.auth import require_permission
 from app.db.mongodb import MongoDB
 
 router = APIRouter(prefix="/scraping", tags=["Scraping"])
+
+_scraping_read = require_permission("scraping", "read")
+_scraping_create = require_permission("scraping", "create")
+_scraping_update = require_permission("scraping", "update")
 
 
 class ScrapingJobResponse(BaseModel):
@@ -26,7 +30,7 @@ class ScrapingJobResponse(BaseModel):
 @router.post("/google-maps/search")
 async def google_maps_search(
     data: dict,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_scraping_create),
 ):
     org_id = current_user.get("organization_id")
     coll = MongoDB.get_collection("scraping_jobs")
@@ -44,7 +48,7 @@ async def google_maps_search(
 @router.post("/google-maps/crawl")
 async def google_maps_crawl(
     data: dict,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_scraping_create),
 ):
     org_id = current_user.get("organization_id")
     coll = MongoDB.get_collection("scraping_jobs")
@@ -64,7 +68,7 @@ async def google_maps_crawl(
 @router.post("/website/crawl")
 async def website_crawl(
     data: dict,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_scraping_create),
 ):
     org_id = current_user.get("organization_id")
     coll = MongoDB.get_collection("scraping_jobs")
@@ -82,7 +86,7 @@ async def website_crawl(
 @router.post("/website/crawl/sync")
 async def website_crawl_sync(
     data: dict,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_scraping_create),
 ):
     url = data.get("url", "")
     emails = data.get("emails") or []
@@ -107,7 +111,7 @@ async def website_crawl_sync(
 @router.post("/linkedin/enrich")
 async def linkedin_enrich(
     data: dict,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_scraping_create),
 ):
     org_id = current_user.get("organization_id")
     coll = MongoDB.get_collection("scraping_jobs")
@@ -125,7 +129,7 @@ async def linkedin_enrich(
 @router.post("/linkedin/enrich/sync")
 async def linkedin_enrich_sync(
     data: dict,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_scraping_create),
 ):
     url = data.get("linkedin_url") or data.get("url", "")
     return {
@@ -145,7 +149,7 @@ async def linkedin_enrich_sync(
 @router.post("/csv/parse")
 async def csv_parse(
     file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_scraping_create),
 ):
     content = await file.read()
     import csv, io
@@ -158,7 +162,7 @@ async def csv_parse(
 @router.post("/csv/import")
 async def csv_import(
     file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_scraping_create),
 ):
     content = await file.read()
     import csv, io
@@ -181,7 +185,7 @@ async def csv_import(
 @router.get("/jobs")
 async def list_jobs(
     status: Optional[str] = None,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_scraping_read),
 ):
     org_id = current_user.get("organization_id")
     coll = MongoDB.get_collection("scraping_jobs")
@@ -204,7 +208,7 @@ async def list_jobs(
 @router.get("/jobs/{job_id}")
 async def get_job(
     job_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_scraping_read),
 ):
     from bson import ObjectId
     org_id = current_user.get("organization_id")
@@ -225,7 +229,7 @@ async def get_job(
 @router.post("/jobs/{job_id}/cancel")
 async def cancel_job(
     job_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_scraping_update),
 ):
     from bson import ObjectId
     org_id = current_user.get("organization_id")
@@ -242,7 +246,7 @@ async def cancel_job(
 @router.post("/jobs/{job_id}/retry")
 async def retry_job(
     job_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_scraping_update),
 ):
     from bson import ObjectId
     org_id = current_user.get("organization_id")
@@ -259,7 +263,7 @@ async def retry_job(
 @router.get("/jobs/{job_id}/results")
 async def get_job_results(
     job_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_scraping_read),
 ):
     from bson import ObjectId
     org_id = current_user.get("organization_id")
@@ -279,7 +283,7 @@ async def get_job_results(
 @router.post("/bulk/enrich")
 async def bulk_enrich(
     data: dict,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_scraping_create),
 ):
     org_id = current_user.get("organization_id")
     coll = MongoDB.get_collection("scraping_jobs")
@@ -298,7 +302,7 @@ async def bulk_enrich(
 
 @router.get("/stats")
 async def scraping_stats(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(_scraping_read),
 ):
     org_id = current_user.get("organization_id")
     coll = MongoDB.get_collection("scraping_jobs")

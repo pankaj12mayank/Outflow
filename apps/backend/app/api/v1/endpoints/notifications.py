@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from bson import ObjectId
 
-from app.middleware.auth import get_current_user
+from app.middleware.auth import get_current_user_or_system_owner
 from app.models.notification_models import (
     NotificationCreate, BulkNotificationCreate,
     EmailSendRequest,
@@ -19,13 +19,13 @@ router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
 
 @router.post("", response_model=dict)
-async def create_notification(notification: NotificationCreate, current_user: dict = Depends(get_current_user)):
+async def create_notification(notification: NotificationCreate, current_user: dict = Depends(get_current_user_or_system_owner)):
     notif_dict = notification.model_dump()
     return await NotificationService.create_notification(notif_dict)
 
 
 @router.post("/bulk", response_model=List[dict])
-async def create_bulk_notifications(notification: BulkNotificationCreate, current_user: dict = Depends(get_current_user)):
+async def create_bulk_notifications(notification: BulkNotificationCreate, current_user: dict = Depends(get_current_user_or_system_owner)):
     notif_dict = notification.model_dump()
     return await NotificationService.create_bulk_notifications(notif_dict)
 
@@ -38,7 +38,7 @@ async def get_notifications(
     type: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user_or_system_owner)
 ):
     return await NotificationService.get_notifications(user_id, organization_id, is_read, type, skip, limit)
 
@@ -47,14 +47,14 @@ async def get_notifications(
 async def get_unread_count(
     user_id: Optional[str] = Query(None),
     organization_id: Optional[str] = Query(None),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user_or_system_owner)
 ):
     count = await NotificationService.get_unread_count(user_id, organization_id)
     return {"unread_count": count}
 
 
 @router.patch("/{notification_id}")
-async def patch_notification(notification_id: str, data: dict, current_user: dict = Depends(get_current_user)):
+async def patch_notification(notification_id: str, data: dict, current_user: dict = Depends(get_current_user_or_system_owner)):
     from app.db.mongodb import MongoDB
     coll = MongoDB.get_collection("notifications")
     allowed = {k: v for k, v in data.items() if k in ("read", "archived")}
@@ -67,7 +67,7 @@ async def patch_notification(notification_id: str, data: dict, current_user: dic
 
 
 @router.post("/{notification_id}/read")
-async def mark_as_read(notification_id: str, current_user: dict = Depends(get_current_user)):
+async def mark_as_read(notification_id: str, current_user: dict = Depends(get_current_user_or_system_owner)):
     result = await NotificationService.mark_as_read(notification_id)
     if not result:
         raise HTTPException(status_code=404, detail="Notification not found")
@@ -78,7 +78,7 @@ async def mark_as_read(notification_id: str, current_user: dict = Depends(get_cu
 async def mark_all_as_read(
     user_id: Optional[str] = Query(None),
     organization_id: Optional[str] = Query(None),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user_or_system_owner)
 ):
     count = await NotificationService.mark_all_as_read(user_id, organization_id)
     return {"marked_as_read": count}
@@ -88,13 +88,13 @@ async def mark_all_as_read(
 async def mark_all_as_read_alias(
     user_id: Optional[str] = Query(None),
     organization_id: Optional[str] = Query(None),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user_or_system_owner)
 ):
     return await mark_all_as_read(user_id, organization_id, current_user)
 
 
 @router.delete("/{notification_id}")
-async def delete_notification(notification_id: str, current_user: dict = Depends(get_current_user)):
+async def delete_notification(notification_id: str, current_user: dict = Depends(get_current_user_or_system_owner)):
     deleted = await NotificationService.delete_notification(notification_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Notification not found")
@@ -102,7 +102,7 @@ async def delete_notification(notification_id: str, current_user: dict = Depends
 
 
 @router.post("/{notification_id}/archive")
-async def archive_notification(notification_id: str, current_user: dict = Depends(get_current_user)):
+async def archive_notification(notification_id: str, current_user: dict = Depends(get_current_user_or_system_owner)):
     result = await NotificationService.archive_notification(notification_id)
     if not result:
         raise HTTPException(status_code=404, detail="Notification not found")
@@ -110,7 +110,7 @@ async def archive_notification(notification_id: str, current_user: dict = Depend
 
 
 @router.post("/email", response_model=dict)
-async def send_email(email_request: EmailSendRequest, current_user: dict = Depends(get_current_user)):
+async def send_email(email_request: EmailSendRequest, current_user: dict = Depends(get_current_user_or_system_owner)):
     email_dict = email_request.model_dump()
     return await EmailNotificationService.send_email(email_dict)
 
@@ -122,39 +122,39 @@ async def get_email_logs(
     template_id: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user_or_system_owner)
 ):
     return await EmailLogService.get_logs(status, recipient_email, template_id, skip, limit)
 
 
 @router.post("/email-logs/{log_id}/retry")
-async def retry_failed_email(log_id: str, current_user: dict = Depends(get_current_user)):
+async def retry_failed_email(log_id: str, current_user: dict = Depends(get_current_user_or_system_owner)):
     result = await EmailLogService.retry_failed_email(log_id)
     return result
 
 
 @router.get("/preferences", response_model=dict)
-async def get_preferences(user_id: str = Query(...), current_user: dict = Depends(get_current_user)):
+async def get_preferences(user_id: str = Query(...), current_user: dict = Depends(get_current_user_or_system_owner)):
     return await NotificationPreferencesService.get_preferences(user_id)
 
 
 @router.api_route("/preferences", methods=["PUT", "POST"], response_model=dict)
-async def update_preferences(user_id: str = Query(...), current_user: dict = Depends(get_current_user), **prefs):
+async def update_preferences(user_id: str = Query(...), current_user: dict = Depends(get_current_user_or_system_owner), **prefs):
     return await NotificationPreferencesService.update_preferences(user_id, prefs)
 
 
 @router.get("/types")
-async def get_notification_types(current_user: dict = Depends(get_current_user)):
+async def get_notification_types(current_user: dict = Depends(get_current_user_or_system_owner)):
     return {"types": [e.value for e in NotificationType]}
 
 
 @router.get("/channels")
-async def get_notification_channels(current_user: dict = Depends(get_current_user)):
+async def get_notification_channels(current_user: dict = Depends(get_current_user_or_system_owner)):
     return {"channels": [e.value for e in NotificationChannel]}
 
 
 @router.get("/counts")
-async def get_notification_counts(current_user: dict = Depends(get_current_user)):
+async def get_notification_counts(current_user: dict = Depends(get_current_user_or_system_owner)):
     user_id = current_user.get("sub")
     org_id = current_user.get("organization_id")
     count = await NotificationService.get_unread_count(user_id, org_id)
@@ -164,7 +164,7 @@ async def get_notification_counts(current_user: dict = Depends(get_current_user)
 @router.post("/polling")
 async def polling_check(
     data: dict,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_or_system_owner),
 ):
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
 
@@ -172,7 +172,7 @@ async def polling_check(
 @router.get("/polling/notifications")
 async def poll_notifications(
     since: Optional[str] = Query(None),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_or_system_owner),
 ):
     user_id = current_user.get("sub")
     since_dt = datetime.fromisoformat(since) if since else datetime.utcnow()
@@ -183,7 +183,7 @@ async def poll_notifications(
 @router.get("/polling/campaigns")
 async def poll_campaigns(
     since: Optional[str] = Query(None),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_or_system_owner),
 ):
     org_id = current_user.get("organization_id")
     from app.db.mongodb import MongoDB
@@ -201,7 +201,7 @@ async def poll_campaigns(
 @router.get("/polling/jobs")
 async def poll_jobs(
     since: Optional[str] = Query(None),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_or_system_owner),
 ):
     org_id = current_user.get("organization_id")
     from app.db.mongodb import MongoDB

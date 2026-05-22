@@ -9,8 +9,44 @@ from typing import Optional, List
 
 from app.core.security import verify_token
 from app.services.auth_service import PermissionChecker, normalize_role
+from app.services.system_owner_auth_service import SystemOwnerAuthService
 
 security = HTTPBearer()
+
+
+async def get_current_user_or_system_owner(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> dict:
+    """
+    Accept organization JWT (type=access) or system-owner JWT (type=system_owner_access).
+    """
+    token = credentials.credentials
+
+    payload = verify_token(token)
+    if payload and payload.get("type") == "access":
+        return {
+            "sub": payload.get("sub"),
+            "email": payload.get("email"),
+            "role": normalize_role(payload.get("role")),
+            "organization_id": payload.get("organization_id"),
+            "auth_source": "organization",
+        }
+
+    so_user = await SystemOwnerAuthService.validate_token(token)
+    if so_user:
+        return {
+            "sub": so_user.get("user_id"),
+            "email": so_user.get("email"),
+            "role": "system_owner",
+            "organization_id": None,
+            "auth_source": "system_owner",
+        }
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 async def get_current_user(
@@ -116,11 +152,38 @@ def require_permission(resource: str, action: str):
 
 
 def require_system_owner(current_user: dict = Depends(get_current_user)) -> dict:
-    """Require system_owner role (platform admin)."""
+    """Require system_owner role on organization access JWT."""
     if normalize_role(current_user.get("role")) != "system_owner":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="System owner access required",
+        )
+    return current_user
+
+
+async def require_platform_system_owner(
+    current_user: dict = Depends(get_current_user_or_system_owner),
+) -> dict:
+    """Require platform admin via org JWT or dedicated system-owner token (L13)."""
+    if normalize_role(current_user.get("role")) != "system_owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="System owner access required",
+        )
+    return current_user
+
+
+async def require_billing_user(
+    current_user: dict = Depends(get_current_user_or_system_owner),
+) -> dict:
+    """Billing routes: system_owner or organization user with billing:read."""
+    role = normalize_role(current_user.get("role"))
+    if role == "system_owner":
+        return current_user
+    if not PermissionChecker.has_permission(role, "billing", "read"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission denied. Required: billing:read",
         )
     return current_user
 

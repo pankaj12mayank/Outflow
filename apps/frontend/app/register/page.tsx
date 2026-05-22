@@ -167,11 +167,18 @@ export default function RegisterPage() {
         data.email,
         data.password,
         data.fullName,
-        data.organizationName
+        data.organizationName,
+        {
+          organization_website: data.organizationWebsite || undefined,
+          industry: data.industry || undefined,
+          company_size: data.companySize || undefined,
+          primary_goal: data.primaryGoal || undefined,
+          target_audience: data.targetAudience || undefined,
+          monthly_leads: data.monthlyLeads || undefined,
+          email_provider: data.emailProvider || undefined,
+          timezone: data.timezone || undefined,
+        }
       );
-      
-      // After registration, redirect to dashboard
-      router.push("/app/dashboard?onboarding=complete");
     } catch (err: any) {
       console.error("Registration error:", err);
       const detail = err.response?.data?.detail;

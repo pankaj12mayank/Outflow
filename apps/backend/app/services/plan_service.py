@@ -93,8 +93,10 @@ class PlanService:
             if not feature_lines and p.get("description"):
                 feature_lines = [p["description"]]
             result.append({
+                "id": p.get("id"),
                 "name": p.get("name"),
                 "price": str(int(p.get("price_monthly", 0))),
+                "price_monthly": float(p.get("price_monthly", 0) or 0),
                 "features": feature_lines[:8] or ["Contact us for details"],
                 "popular": bool(p.get("is_popular")),
                 "active": True,

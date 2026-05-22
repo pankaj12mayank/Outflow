@@ -25,6 +25,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
+import { Can } from "@/app/components/Can";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
@@ -186,10 +187,12 @@ export default function CampaignsPage() {
             Create, manage, and track your outreach campaigns
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setShowModal(true)}>
-          <Plus className="w-4 h-4" />
-          New Campaign
-        </Button>
+        <Can permission="campaigns:create">
+          <Button className="gap-2" onClick={() => setShowModal(true)}>
+            <Plus className="w-4 h-4" />
+            New Campaign
+          </Button>
+        </Can>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -286,10 +289,12 @@ export default function CampaignsPage() {
           <Target className="w-16 h-16 text-gray-600 mx-auto mb-4" />
           <h3 className="text-xl font-bold mb-2">No campaigns found</h3>
           <p className="text-gray-400 mb-6">Try adjusting your search or filters</p>
-          <Button className="gap-2" onClick={() => setShowModal(true)}>
-            <Plus className="w-4 h-4" />
-            Create Campaign
-          </Button>
+          <Can permission="campaigns:create">
+            <Button className="gap-2" onClick={() => setShowModal(true)}>
+              <Plus className="w-4 h-4" />
+              Create Campaign
+            </Button>
+          </Can>
         </div>
       )}
 
@@ -342,31 +347,39 @@ export default function CampaignsPage() {
                   </div>
                   <div className="flex items-center gap-2 relative self-end sm:self-auto">
                     {campaign.status === "draft" && (
-                      <Button size="sm" className="gap-2" onClick={() => toggleCampaignStatus(campaign)} disabled={toggling === campaign.id}>
-                        {toggling === campaign.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                        Launch
-                      </Button>
+                      <Can permission="campaigns:start">
+                        <Button size="sm" className="gap-2" onClick={() => toggleCampaignStatus(campaign)} disabled={toggling === campaign.id}>
+                          {toggling === campaign.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                          Launch
+                        </Button>
+                      </Can>
                     )}
                     {campaign.status === "active" && (
-                      <Button size="sm" variant="outline" className="gap-2" onClick={() => toggleCampaignStatus(campaign)} disabled={toggling === campaign.id}>
-                        {toggling === campaign.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pause className="w-4 h-4" />}
-                        Pause
-                      </Button>
+                      <Can permission="campaigns:pause">
+                        <Button size="sm" variant="outline" className="gap-2" onClick={() => toggleCampaignStatus(campaign)} disabled={toggling === campaign.id}>
+                          {toggling === campaign.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pause className="w-4 h-4" />}
+                          Pause
+                        </Button>
+                      </Can>
                     )}
                     {campaign.status === "paused" && (
-                      <Button size="sm" className="gap-2" onClick={() => toggleCampaignStatus(campaign)} disabled={toggling === campaign.id}>
-                        {toggling === campaign.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                        Resume
-                      </Button>
+                      <Can permission="campaigns:start">
+                        <Button size="sm" className="gap-2" onClick={() => toggleCampaignStatus(campaign)} disabled={toggling === campaign.id}>
+                          {toggling === campaign.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                          Resume
+                        </Button>
+                      </Can>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                      onClick={() => deleteCampaign(campaign.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <Can permission="campaigns:delete">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                        onClick={() => deleteCampaign(campaign.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </Can>
                     <div className="relative">
                       <Button variant="ghost" size="icon" onClick={() => setActiveMenu(activeMenu === campaign.id ? null : campaign.id)}>
                         <MoreHorizontal className="w-4 h-4" />

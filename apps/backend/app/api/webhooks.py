@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta
-from app.middleware import get_current_user, require_system_owner
+from app.middleware import get_current_user, require_platform_system_owner
 from app.db.mongodb import MongoDB
 from bson import ObjectId
 
@@ -299,7 +299,7 @@ async def email_open_webhook(
 @router.get("/bounces/stats")
 async def bounce_stats(
     limit: int = 50,
-    current_user: dict = Depends(require_system_owner),
+    current_user: dict = Depends(require_platform_system_owner),
 ):
     """Bounce webhook records for system-owner ops."""
     await MongoDB.connect()

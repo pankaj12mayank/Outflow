@@ -144,6 +144,28 @@ class NotificationService:
             return serialize_doc(notification)
         return None
 
+    @staticmethod
+    async def create_notification_log(
+        notification_id: str,
+        channel: NotificationChannel,
+        status: NotificationStatus,
+        recipient: str = None,
+        error: str = None,
+    ) -> Dict:
+        log_doc = {
+            "notification_id": notification_id,
+            "channel": channel,
+            "status": status,
+            "recipient": recipient,
+            "error_message": error,
+            "retry_count": 0,
+            "sent_at": datetime.utcnow() if status == NotificationStatus.SENT else None,
+            "created_at": datetime.utcnow(),
+        }
+        result = await MongoDB.get_collection("notification_logs").insert_one(log_doc)
+        log_doc["_id"] = str(result.inserted_id)
+        return log_doc
+
 
 class EmailNotificationService:
     @staticmethod
@@ -250,32 +272,6 @@ class EmailNotificationService:
         if result.get("success"):
             return {"success": True, "log_id": str(log_result["_id"])}
         return {"success": False, "error": result.get("error")}
-
-
-class NotificationService:
-    @staticmethod
-    async def create_notification_log(
-        notification_id: str,
-        channel: NotificationChannel,
-        status: NotificationStatus,
-        recipient: str = None,
-        error: str = None
-    ) -> Dict:
-        
-        log_doc = {
-            "notification_id": notification_id,
-            "channel": channel,
-            "status": status,
-            "recipient": recipient,
-            "error_message": error,
-            "retry_count": 0,
-            "sent_at": datetime.utcnow() if status == NotificationStatus.SENT else None,
-            "created_at": datetime.utcnow()
-        }
-        
-        result = await MongoDB.get_collection("notification_logs").insert_one(log_doc)
-        log_doc["_id"] = str(result.inserted_id)
-        return log_doc
 
 
 class EmailLogService:

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   User,
@@ -21,6 +21,13 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { useAuth } from "@/app/hooks/useAuth";
 import { toast } from "@/app/components/toast";
+import { PageError, PageLoading } from "@/app/components/page-state";
+import {
+  useSettings,
+  useUpdateProfile,
+  useUpdateOrganizationSettings,
+  useUpdateNotificationPrefs,
+} from "@/app/hooks/use-settings";
 
 const tabs = [
   { id: "profile", label: "Profile", icon: User },
@@ -30,12 +37,52 @@ const tabs = [
   { id: "api", label: "API Keys", icon: Key },
 ];
 
+const NOTIFICATION_ITEMS = [
+  { key: "email_notifications", label: "Email notifications", description: "Receive email updates about your campaigns" },
+  { key: "reply_notifications", label: "Reply notifications", description: "Get notified when prospects reply" },
+  { key: "weekly_digest", label: "Weekly digest", description: "Receive weekly performance summary" },
+  { key: "team_updates", label: "Team updates", description: "Notifications about team activity" },
+  { key: "product_updates", label: "Product updates", description: "News about new features and improvements" },
+] as const;
+
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, changePassword } = useAuth();
+  const { data: settingsData, isLoading, isError, error, refetch } = useSettings();
+  const updateProfile = useUpdateProfile();
+  const updateOrganization = useUpdateOrganizationSettings();
+  const updateNotifications = useUpdateNotificationPrefs();
+
   const [activeTab, setActiveTab] = useState("profile");
-  const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
-  
+
+  const [profileForm, setProfileForm] = useState({
+    full_name: "",
+    email: "",
+    phone: "",
+    timezone: "America/New_York",
+    bio: "",
+  });
+  const [orgForm, setOrgForm] = useState({ name: "", website: "" });
+  const [notificationPrefs, setNotificationPrefs] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!settingsData) return;
+    const p = settingsData.profile || {};
+    const o = settingsData.organization || {};
+    setProfileForm({
+      full_name: p.full_name || user?.full_name || "",
+      email: p.email || user?.email || "",
+      phone: p.phone || "",
+      timezone: p.timezone || "America/New_York",
+      bio: p.bio || "",
+    });
+    setOrgForm({
+      name: o.name || user?.organization?.name || "",
+      website: o.website || "",
+    });
+    setNotificationPrefs(settingsData.notifications || {});
+  }, [settingsData, user]);
+
   const [passwordForm, setPasswordForm] = useState({ current: "", new: "", confirm: "" });
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [apiKeys, setApiKeys] = useState([
@@ -46,15 +93,45 @@ export default function SettingsPage() {
   const [newKeyName, setNewKeyName] = useState("");
   const [newKeyPurpose, setNewKeyPurpose] = useState("");
 
-  const handleSave = async (message: string = "Saved successfully!") => {
-    setIsSaving(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setIsSaving(false);
+  const showSaved = (message: string = "Saved successfully!") => {
     setSaveMessage(message);
     setTimeout(() => setSaveMessage(""), 3000);
+    toast.save();
   };
 
-  const handleChangePassword = () => {
+  const handleSaveProfile = () => {
+    updateProfile.mutate(
+      {
+        full_name: profileForm.full_name,
+        phone: profileForm.phone,
+        timezone: profileForm.timezone,
+        bio: profileForm.bio,
+      },
+      {
+        onSuccess: () => showSaved("Profile saved"),
+        onError: () => toast.error("Failed to save profile"),
+      }
+    );
+  };
+
+  const handleSaveOrganization = () => {
+    updateOrganization.mutate(
+      { name: orgForm.name, website: orgForm.website },
+      {
+        onSuccess: () => showSaved("Organization saved"),
+        onError: () => toast.error("Failed to save organization"),
+      }
+    );
+  };
+
+  const handleSaveNotifications = () => {
+    updateNotifications.mutate(notificationPrefs, {
+      onSuccess: () => showSaved("Notification preferences saved"),
+      onError: () => toast.error("Failed to save preferences"),
+    });
+  };
+
+  const handleChangePassword = async () => {
     if (passwordForm.new !== passwordForm.confirm) {
       toast.error("Password mismatch", "New passwords don't match");
       return;
@@ -63,14 +140,26 @@ export default function SettingsPage() {
       toast.error("Password too short", "Must be at least 6 characters");
       return;
     }
-    setPasswordForm({ current: "", new: "", confirm: "" });
-    handleSave("Password changed successfully!");
+    try {
+      await changePassword(passwordForm.current, passwordForm.new);
+      setPasswordForm({ current: "", new: "", confirm: "" });
+      showSaved("Password changed successfully!");
+    } catch {
+      toast.error("Failed to change password");
+    }
   };
 
   const handleToggle2FA = () => {
     setTwoFactorEnabled(!twoFactorEnabled);
-    handleSave(twoFactorEnabled ? "2FA disabled!" : "2FA enabled!");
+    toast.info("Two-factor authentication", "Contact support to enable 2FA on your account.");
   };
+
+  const isSaving =
+    updateProfile.isPending || updateOrganization.isPending || updateNotifications.isPending;
+
+  if (isLoading && !settingsData) {
+    return <PageLoading label="Loading settings..." />;
+  }
 
   const handleCreateAPIKey = () => {
     if (!newKeyName) {
@@ -94,14 +183,14 @@ export default function SettingsPage() {
   const handleRegenerateKey = (id: number) => {
     if (confirm("Are you sure you want to regenerate this key? The old key will stop working.")) {
       setApiKeys(apiKeys.map(k => k.id === id ? { ...k, key: `sk_${Math.random().toString(36).substring(2, 18)}` } : k));
-      handleSave("Key regenerated successfully!");
+      toast.success("Key regenerated", "Stored locally until API key management ships.");
     }
   };
 
   const handleDeleteKey = (id: number) => {
     if (confirm("Are you sure you want to delete this API key?")) {
       setApiKeys(apiKeys.filter(k => k.id !== id));
-      handleSave("Key deleted!");
+      toast.delete("API key");
     }
   };
 
@@ -112,6 +201,12 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
+      {isError && (
+        <PageError
+          message={(error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Could not load settings."}
+          onRetry={() => refetch()}
+        />
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold mb-2">Settings</h1>
@@ -176,7 +271,8 @@ export default function SettingsPage() {
                   <div>
                     <label className="block text-sm font-medium mb-2">Full Name</label>
                     <Input
-                      defaultValue={user?.full_name || ""}
+                      value={profileForm.full_name}
+                      onChange={(e) => setProfileForm({ ...profileForm, full_name: e.target.value })}
                       className="bg-white/5 border-white/10"
                     />
                   </div>
@@ -184,25 +280,32 @@ export default function SettingsPage() {
                     <label className="block text-sm font-medium mb-2">Email</label>
                     <Input
                       type="email"
-                      defaultValue={user?.email || ""}
-                      className="bg-white/5 border-white/10"
+                      value={profileForm.email}
+                      readOnly
+                      className="bg-white/5 border-white/10 opacity-70"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">Phone</label>
                     <Input
                       type="tel"
+                      value={profileForm.phone}
+                      onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
                       placeholder="+1 555 123 4567"
                       className="bg-white/5 border-white/10"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">Timezone</label>
-                    <select className="w-full px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-white">
-                      <option>America/New_York (EST)</option>
-                      <option>America/Los_Angeles (PST)</option>
-                      <option>Europe/London (GMT)</option>
-                      <option>Asia/Tokyo (JST)</option>
+                    <select
+                      value={profileForm.timezone}
+                      onChange={(e) => setProfileForm({ ...profileForm, timezone: e.target.value })}
+                      className="w-full px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-white"
+                    >
+                      <option value="America/New_York">America/New_York (EST)</option>
+                      <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
+                      <option value="Europe/London">Europe/London (GMT)</option>
+                      <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
                     </select>
                   </div>
                 </div>
@@ -211,13 +314,15 @@ export default function SettingsPage() {
                   <label className="block text-sm font-medium mb-2">Bio</label>
                   <textarea
                     rows={4}
+                    value={profileForm.bio}
+                    onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}
                     placeholder="Tell us about yourself..."
                     className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white resize-none focus:border-purple-500/50 transition-colors"
                   />
                 </div>
 
                 <div className="flex justify-end mt-6">
-                  <Button onClick={() => handleSave()} disabled={isSaving} className="gap-2">
+                  <Button onClick={handleSaveProfile} disabled={isSaving} className="gap-2">
                     {isSaving ? "Saving..." : "Save Changes"}
                     <Save className="w-4 h-4" />
                   </Button>
@@ -239,7 +344,8 @@ export default function SettingsPage() {
                   <div>
                     <label className="block text-sm font-medium mb-2">Organization Name</label>
                     <Input
-                      defaultValue={user?.organization?.name || "My Organization"}
+                      value={orgForm.name}
+                      onChange={(e) => setOrgForm({ ...orgForm, name: e.target.value })}
                       className="bg-white/5 border-white/10"
                     />
                   </div>
@@ -247,6 +353,8 @@ export default function SettingsPage() {
                     <label className="block text-sm font-medium mb-2">Website</label>
                     <Input
                       type="url"
+                      value={orgForm.website}
+                      onChange={(e) => setOrgForm({ ...orgForm, website: e.target.value })}
                       placeholder="https://example.com"
                       className="bg-white/5 border-white/10"
                     />
@@ -266,7 +374,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex justify-end mt-6">
-                  <Button onClick={() => handleSave()} className="gap-2">
+                  <Button onClick={handleSaveOrganization} disabled={isSaving} className="gap-2">
                     Save Changes
                     <Save className="w-4 h-4" />
                   </Button>
@@ -284,20 +392,21 @@ export default function SettingsPage() {
               <h2 className="text-xl font-bold mb-6">Notification Preferences</h2>
               
               <div className="space-y-6">
-                {[
-                  { label: "Email notifications", description: "Receive email updates about your campaigns" },
-                  { label: "Reply notifications", description: "Get notified when prospects reply" },
-                  { label: "Weekly digest", description: "Receive weekly performance summary" },
-                  { label: "Team updates", description: "Notifications about team activity" },
-                  { label: "Product updates", description: "News about new features and improvements" },
-                ].map((item, i) => (
-                  <div key={item.label} className="flex items-center justify-between p-4 rounded-xl bg-white/5">
+                {NOTIFICATION_ITEMS.map((item) => (
+                  <div key={item.key} className="flex items-center justify-between p-4 rounded-xl bg-white/5">
                     <div>
                       <div className="font-medium">{item.label}</div>
                       <div className="text-sm text-gray-400">{item.description}</div>
                     </div>
                     <label className="relative inline-flex cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" defaultChecked />
+                      <input
+                        type="checkbox"
+                        className="sr-only peer"
+                        checked={!!notificationPrefs[item.key]}
+                        onChange={(e) =>
+                          setNotificationPrefs({ ...notificationPrefs, [item.key]: e.target.checked })
+                        }
+                      />
                       <div className="w-11 h-6 bg-white/10 rounded-full peer peer-checked:bg-purple-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all" />
                     </label>
                   </div>
@@ -305,7 +414,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="flex justify-end mt-6">
-                <Button onClick={() => handleSave()} className="gap-2">
+                <Button onClick={handleSaveNotifications} disabled={isSaving} className="gap-2">
                   Save Preferences
                   <Save className="w-4 h-4" />
                 </Button>

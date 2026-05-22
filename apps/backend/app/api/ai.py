@@ -287,6 +287,7 @@ async def delete_prompt(
 
 @router.get("/settings")
 async def get_ai_settings(current_user: dict = Depends(get_current_user)):
+    await MongoDB.connect()
     org_id = current_user.get("organization_id")
     coll = MongoDB.get_collection("ai_settings")
     doc = await coll.find_one({"organization_id": org_id})
@@ -310,6 +311,7 @@ async def update_ai_settings(
     data: dict,
     current_user: dict = Depends(get_current_user),
 ):
+    await MongoDB.connect()
     org_id = current_user.get("organization_id")
     coll = MongoDB.get_collection("ai_settings")
     allowed = {"provider", "model", "temperature", "max_tokens"}

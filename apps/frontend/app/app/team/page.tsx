@@ -24,59 +24,68 @@ import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
 import { useAuth } from "@/app/hooks/useAuth";
 import { toast } from "@/app/components/toast";
+import { Can } from "@/app/components/Can";
+import { PageError, PageLoading } from "@/app/components/page-state";
+import {
+  useTeamMembers,
+  useTeamInvitations,
+  useInviteMember,
+  useUpdateMemberRole,
+  useRemoveMember,
+  useCancelInvitation,
+  useResendInvitation,
+} from "@/app/hooks/use-team";
 
-const teamMembers = [
-  {
-    id: 1,
-    name: "Sarah Chen",
-    email: "sarah@techscale.io",
-    role: "organization_admin",
-    status: "active",
-    avatar: "SC",
-    joinedAt: "2026-01-15",
-    lastActive: "2026-05-13",
-  },
-  {
-    id: 2,
-    name: "Michael Torres",
-    email: "michael@techscale.io",
-    role: "organization_admin",
-    status: "active",
-    avatar: "MT",
-    joinedAt: "2026-02-01",
-    lastActive: "2026-05-13",
-  },
-  {
-    id: 3,
-    name: "Emma Williams",
-    email: "emma@techscale.io",
-    role: "organization_admin",
-    status: "active",
-    avatar: "EW",
-    joinedAt: "2026-02-15",
-    lastActive: "2026-05-12",
-  },
-  {
-    id: 4,
-    name: "James Miller",
-    email: "james@techscale.io",
-    role: "team_member",
-    status: "active",
-    avatar: "JM",
-    joinedAt: "2026-03-01",
-    lastActive: "2026-05-11",
-  },
-  {
-    id: 5,
-    name: "Lisa Park",
-    email: "lisa@techscale.io",
-    role: "team_member",
-    status: "pending",
-    avatar: "LP",
-    joinedAt: "2026-05-10",
-    lastActive: null,
-  },
-];
+type TeamMemberRow = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  avatar: string;
+  joinedAt: string;
+  lastActive: string | null;
+};
+
+type InviteRow = {
+  id: string;
+  email: string;
+  role: string;
+  sentAt: string;
+};
+
+function normalizeTeamRole(role?: string): string {
+  if (role === "member" || role === "admin") {
+    return role === "member" ? "team_member" : "organization_admin";
+  }
+  return role || "team_member";
+}
+
+function mapMember(row: Record<string, unknown>): TeamMemberRow {
+  const email = String(row.email || "");
+  const name = String(row.full_name || email.split("@")[0] || "Unknown");
+  const parts = name.split(" ").filter(Boolean);
+  const avatar = parts.map((p) => p[0]).join("").slice(0, 2).toUpperCase() || "?";
+  return {
+    id: String(row.id),
+    name,
+    email,
+    role: normalizeTeamRole(String(row.role || "")),
+    status: row.is_active === false ? "inactive" : "active",
+    avatar,
+    joinedAt: String(row.created_at || "").slice(0, 10),
+    lastActive: row.updated_at ? String(row.updated_at).slice(0, 10) : null,
+  };
+}
+
+function mapInvite(row: Record<string, unknown>): InviteRow {
+  return {
+    id: String(row.id),
+    email: String(row.email || ""),
+    role: normalizeTeamRole(String(row.role || "")),
+    sentAt: String(row.created_at || "").slice(0, 10),
+  };
+}
 
 const roleLabels: Record<string, string> = {
   organization_admin: "Organization Admin",
@@ -93,22 +102,34 @@ const roleIcons: Record<string, any> = {
   team_member: Users,
 };
 
-const pendingInvites = [
-  { email: "david@techscale.io", role: "team_member", sentAt: "2026-05-12" },
-  { email: "rachel@techscale.io", role: "organization_admin", sentAt: "2026-05-13" },
-];
-
 export default function TeamPage() {
   const { user } = useAuth();
+  const { data: membersData, isLoading, isError, error, refetch } = useTeamMembers();
+  const { data: invitesData, refetch: refetchInvites } = useTeamInvitations();
+  const inviteMember = useInviteMember();
+  const updateMemberRole = useUpdateMemberRole();
+  const removeMember = useRemoveMember();
+  const cancelInvitation = useCancelInvitation();
+  const resendInvitation = useResendInvitation();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("team_member");
-  const [members, setMembers] = useState(teamMembers);
-  const [pendingInvitesList, setPendingInvitesList] = useState(pendingInvites);
-  const [activeMenu, setActiveMenu] = useState<number | null>(null);
-  const [showRemoveConfirm, setShowRemoveConfirm] = useState<number | null>(null);
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState<string | null>(null);
+
+  const members: TeamMemberRow[] = (Array.isArray(membersData) ? membersData : []).map((row) =>
+    mapMember(row as Record<string, unknown>)
+  );
+  const pendingInvitesList: InviteRow[] = (Array.isArray(invitesData) ? invitesData : []).map((row) =>
+    mapInvite(row as Record<string, unknown>)
+  );
+
+  if (isLoading && members.length === 0) {
+    return <PageLoading label="Loading team..." />;
+  }
 
   const filteredMembers = members.filter((member) => {
     const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -122,38 +143,74 @@ export default function TeamPage() {
       toast.error("Invalid email", "Please enter a valid email address");
       return;
     }
-    setPendingInvitesList([...pendingInvitesList, { email: inviteEmail, role: inviteRole, sentAt: "2026-05-16" }]);
-    setInviteEmail("");
-    setInviteRole("team_member");
-    setShowInviteModal(false);
-    toast.invite(inviteEmail);
+    inviteMember.mutate(
+      { email: inviteEmail.trim(), role: inviteRole },
+      {
+        onSuccess: () => {
+          setInviteEmail("");
+          setInviteRole("team_member");
+          setShowInviteModal(false);
+          toast.invite(inviteEmail);
+          refetchInvites();
+        },
+        onError: (err: unknown) => {
+          const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+          toast.error("Invite failed", detail || "Could not send invitation");
+        },
+      }
+    );
   };
 
-  const handleResendInvite = (email: string) => {
-    toast.invite(email);
+  const handleResendInvite = (inviteId: string, email: string) => {
+    resendInvitation.mutate(inviteId, {
+      onSuccess: () => toast.invite(email),
+      onError: () => toast.error("Resend failed"),
+    });
   };
 
-  const handleDeleteInvite = (email: string) => {
-    setPendingInvitesList(pendingInvitesList.filter(i => i.email !== email));
-    toast.success("Invitation removed", email);
+  const handleDeleteInvite = (inviteId: string, email: string) => {
+    cancelInvitation.mutate(inviteId, {
+      onSuccess: () => toast.success("Invitation removed", email),
+      onError: () => toast.error("Could not cancel invitation"),
+    });
   };
 
-  const handleRemoveMember = (id: number) => {
-    const member = members.find(m => m.id === id);
-    setMembers(members.filter(m => m.id !== id));
-    setShowRemoveConfirm(null);
-    setActiveMenu(null);
-    if (member) toast.delete(member.name);
+  const handleRemoveMember = (id: string) => {
+    const member = members.find((m) => m.id === id);
+    removeMember.mutate(id, {
+      onSuccess: () => {
+        setShowRemoveConfirm(null);
+        setActiveMenu(null);
+        if (member) toast.delete(member.name);
+        refetch();
+      },
+      onError: () => toast.error("Failed to remove member"),
+    });
   };
 
-  const handleUpdateRole = (id: number, newRole: string) => {
-    setMembers(members.map(m => m.id === id ? { ...m, role: newRole as any } : m));
-    setActiveMenu(null);
-    toast.update(`Role changed to ${roleLabels[newRole as keyof typeof roleLabels] || newRole}`);
+  const handleUpdateRole = (id: string, newRole: string) => {
+    updateMemberRole.mutate(
+      { id, role: newRole },
+      {
+        onSuccess: () => {
+          setActiveMenu(null);
+          toast.update(`Role changed to ${roleLabels[newRole as keyof typeof roleLabels] || newRole}`);
+        },
+        onError: () => toast.error("Failed to update role"),
+      }
+    );
   };
+
+  const activeCount = members.filter((m) => m.status === "active").length;
 
   return (
     <div className="space-y-6">
+      {isError && (
+        <PageError
+          message={(error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Could not load team."}
+          onRetry={() => refetch()}
+        />
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold mb-2">Team</h1>
@@ -161,10 +218,12 @@ export default function TeamPage() {
             Manage your team members and their permissions
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setShowInviteModal(true)}>
-          <Plus className="w-4 h-4" />
-          Invite Member
-        </Button>
+        <Can permission="teams:create">
+          <Button className="gap-2" onClick={() => setShowInviteModal(true)}>
+            <Plus className="w-4 h-4" />
+            Invite Member
+          </Button>
+        </Can>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -193,7 +252,7 @@ export default function TeamPage() {
               <Check className="w-6 h-6 text-green-400" />
             </div>
             <div className="text-3xl font-bold">
-              {teamMembers.filter((m) => m.status === "active").length}
+              {activeCount}
             </div>
           </div>
           <div className="text-gray-400 text-sm">Active Members</div>
@@ -228,7 +287,7 @@ export default function TeamPage() {
           <div className="space-y-3">
             {pendingInvitesList.map((invite) => (
               <div
-                key={invite.email}
+                key={invite.id}
                 className="flex items-center justify-between p-4 rounded-xl bg-white/5"
               >
                 <div className="flex items-center gap-3">
@@ -244,11 +303,11 @@ export default function TeamPage() {
                   <Badge className={cn("capitalize", roleColors[invite.role as keyof typeof roleColors])}>
                     {invite.role}
                   </Badge>
-                  <Button variant="ghost" size="sm" className="gap-1" onClick={() => handleResendInvite(invite.email)}>
+                  <Button variant="ghost" size="sm" className="gap-1" onClick={() => handleResendInvite(invite.id, invite.email)}>
                     <RefreshCw className="w-4 h-4" />
                     Resend
                   </Button>
-                  <Button variant="ghost" size="sm" className="text-red-400" onClick={() => handleDeleteInvite(invite.email)}>
+                  <Button variant="ghost" size="sm" className="text-red-400" onClick={() => handleDeleteInvite(invite.id, invite.email)}>
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
@@ -403,7 +462,7 @@ export default function TeamPage() {
               <Button variant="outline" onClick={() => setShowInviteModal(false)}>
                 Cancel
               </Button>
-              <Button className="gap-2">
+              <Button className="gap-2" onClick={handleInvite} disabled={inviteMember.isPending}>
                 <Mail className="w-4 h-4" />
                 Send Invite
               </Button>

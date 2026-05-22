@@ -28,11 +28,19 @@ import {
   FileDown,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
+import { Can } from "@/app/components/Can";
 import { toast } from "@/app/components/toast";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
-import { useLeads, useLeadStats } from "@/app/hooks/use-leads";
+import {
+  useLeads,
+  useLeadStats,
+  useCreateLead,
+  useUpdateLead,
+  useDeleteLead,
+  useBulkEnrichLeads,
+} from "@/app/hooks/use-leads";
 import { PageError, PageLoading } from "@/app/components/page-state";
 
 type LeadRow = {
@@ -77,6 +85,10 @@ export default function LeadsPage() {
   const router = useRouter();
   const { data: apiData, isLoading, isError, error, refetch } = useLeads();
   useLeadStats();
+  const createLead = useCreateLead();
+  const updateLead = useUpdateLead();
+  const deleteLead = useDeleteLead();
+  const bulkEnrich = useBulkEnrichLeads();
   const apiLeads = Array.isArray(apiData) ? apiData : apiData?.leads || apiData?.data || [];
   const leads: LeadRow[] = apiLeads.map(mapApiLead);
 
@@ -85,17 +97,40 @@ export default function LeadsPage() {
   const [enrichmentFilter, setEnrichmentFilter] = useState<string>("all");
   const [activeMenu, setActiveMenu] = useState<string | number | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingLead, setEditingLead] = useState<LeadRow | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | number | null>(null);
+  const [addForm, setAddForm] = useState({
+    email: "",
+    first_name: "",
+    last_name: "",
+    company_name: "",
+    job_title: "",
+    phone: "",
+  });
+  const [editForm, setEditForm] = useState({
+    email: "",
+    first_name: "",
+    last_name: "",
+    company_name: "",
+    job_title: "",
+    phone: "",
+  });
 
   if (isLoading && apiLeads.length === 0) {
     return <PageLoading label="Loading leads..." />;
   }
 
   const handleEnrichSelected = () => {
-    if (selectedLeads.length > 0) {
-      toast.info("Enriching leads...", `${selectedLeads.length} leads selected`);
-      setSelectedLeads([]);
-    }
+    if (selectedLeads.length === 0) return;
+    const ids = selectedLeads.map(String);
+    bulkEnrich.mutate(ids, {
+      onSuccess: (data: { enriched?: number }) => {
+        toast.success(`Enriched ${data?.enriched ?? ids.length} lead(s)`);
+        setSelectedLeads([]);
+      },
+      onError: () => toast.error("Failed to enrich leads"),
+    });
   };
 
   const handleSendEmail = (email: string) => {
@@ -111,8 +146,70 @@ export default function LeadsPage() {
   };
 
   const handleDeleteLead = (id: string | number) => {
-    setShowDeleteConfirm(null);
-    toast.delete(`Lead ${id}`);
+    deleteLead.mutate(String(id), {
+      onSuccess: () => {
+        setShowDeleteConfirm(null);
+        toast.delete("Lead");
+      },
+      onError: () => toast.error("Failed to delete lead"),
+    });
+  };
+
+  const handleCreateLead = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addForm.email.trim()) {
+      toast.required("email");
+      return;
+    }
+    createLead.mutate(
+      { ...addForm, source: "manual" },
+      {
+        onSuccess: () => {
+          setShowAddModal(false);
+          setAddForm({
+            email: "",
+            first_name: "",
+            last_name: "",
+            company_name: "",
+            job_title: "",
+            phone: "",
+          });
+          toast.success("Lead created");
+        },
+        onError: () => toast.error("Failed to create lead"),
+      }
+    );
+  };
+
+  const openEditLead = (lead: LeadRow) => {
+    const parts = lead.name.split(" ");
+    setEditingLead(lead);
+    setEditForm({
+      email: lead.email || "",
+      first_name: parts[0] || "",
+      last_name: parts.slice(1).join(" ") || "",
+      company_name: lead.company || "",
+      job_title: lead.title || "",
+      phone: lead.phone || "",
+    });
+    setShowEditModal(true);
+    setActiveMenu(null);
+  };
+
+  const handleUpdateLead = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingLead) return;
+    updateLead.mutate(
+      { id: String(editingLead.id), ...editForm },
+      {
+        onSuccess: () => {
+          setShowEditModal(false);
+          setEditingLead(null);
+          toast.success("Lead updated");
+        },
+        onError: () => toast.error("Failed to update lead"),
+      }
+    );
   };
 
   const downloadSampleCSV = () => {
@@ -158,44 +255,47 @@ export default function LeadsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="relative group">
-            <Button variant="outline" className="gap-2">
-              <Upload className="w-4 h-4" />
-              Import
-            </Button>
-            <div className="absolute left-0 top-full mt-1 z-50 w-48 p-1 rounded-lg bg-gray-900 border border-white/10 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-              <button
-                onClick={() => router.push("/app/scraping/csv-import")}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5 hover:text-white"
-              >
+          <Can permission="leads:create">
+            <div className="relative group">
+              <Button variant="outline" className="gap-2">
                 <Upload className="w-4 h-4" />
-                Import CSV
-              </button>
-              <button
-                onClick={downloadSampleCSV}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5 hover:text-white"
-              >
-                <FileDown className="w-4 h-4" />
-                Download Sample
-              </button>
+                Import
+              </Button>
+              <div className="absolute left-0 top-full mt-1 z-50 w-48 p-1 rounded-lg bg-gray-900 border border-white/10 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+                <button
+                  onClick={() => router.push("/app/scraping/csv-import")}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5 hover:text-white"
+                >
+                  <Upload className="w-4 h-4" />
+                  Import CSV
+                </button>
+                <button
+                  onClick={downloadSampleCSV}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5 hover:text-white"
+                >
+                  <FileDown className="w-4 h-4" />
+                  Download Sample
+                </button>
+              </div>
             </div>
-          </div>
-          <Button 
-            variant="outline" 
-            className="gap-2"
-            onClick={handleEnrichSelected}
-            disabled={selectedLeads.length === 0}
-          >
-            <RefreshCw className="w-4 h-4" />
-            Enrich Selected
-          </Button>
-          <Button 
-            className="gap-2"
-            onClick={() => setShowAddModal(true)}
-          >
-            <Plus className="w-4 h-4" />
-            Add Lead
-          </Button>
+          </Can>
+          <Can permission="leads:enrich">
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={handleEnrichSelected}
+              disabled={selectedLeads.length === 0}
+            >
+              <RefreshCw className="w-4 h-4" />
+              Enrich Selected
+            </Button>
+          </Can>
+          <Can permission="leads:create">
+            <Button className="gap-2" onClick={() => setShowAddModal(true)}>
+              <Plus className="w-4 h-4" />
+              Add Lead
+            </Button>
+          </Can>
         </div>
       </div>
 
@@ -280,10 +380,12 @@ export default function LeadsPage() {
               <Badge className="bg-purple-500/10 text-purple-400">
                 {selectedLeads.length} selected
               </Badge>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Zap className="w-4 h-4" />
-                Enrich
-              </Button>
+              <Can permission="leads:enrich">
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Zap className="w-4 h-4" />
+                  Enrich
+                </Button>
+              </Can>
               <Button variant="outline" size="sm" className="gap-2">
                 <Download className="w-4 h-4" />
                 Export
@@ -466,44 +568,50 @@ export default function LeadsPage() {
                                 <Eye className="w-4 h-4" />
                                 View
                               </button>
-                              <button
-                                onClick={() => { setActiveMenu(null); toast.info("Editing lead", lead.name); }}
-                                className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5 hover:text-white"
-                              >
-                                <Pencil className="w-4 h-4" />
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => { setActiveMenu(null); setShowDeleteConfirm(lead.id); }}
-                                className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-red-400 hover:bg-red-500/10"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                                Delete
-                              </button>
+                              <Can permission="leads:update">
+                                <button
+                                  onClick={() => openEditLead(lead)}
+                                  className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5 hover:text-white"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                  Edit
+                                </button>
+                              </Can>
+                              <Can permission="leads:delete">
+                                <button
+                                  onClick={() => { setActiveMenu(null); setShowDeleteConfirm(lead.id); }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-red-400 hover:bg-red-500/10"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Delete
+                                </button>
+                              </Can>
                             </div>
                           )}
                         </div>
-                        {showDeleteConfirm === lead.id && (
-                          <div className="absolute right-0 top-full mt-1 z-50 w-56 p-4 rounded-lg bg-gray-900 border border-red-500/20 shadow-xl">
-                            <p className="text-sm text-white mb-3">Are you sure you want to delete this lead?</p>
-                            <div className="flex gap-2">
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => setShowDeleteConfirm(null)}
-                              >
-                                Cancel
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                className="bg-red-500 hover:bg-red-600"
-                                onClick={() => handleDeleteLead(lead.id)}
-                              >
-                                Delete
-                              </Button>
+                        <Can permission="leads:delete">
+                          {showDeleteConfirm === lead.id && (
+                            <div className="absolute right-0 top-full mt-1 z-50 w-56 p-4 rounded-lg bg-gray-900 border border-red-500/20 shadow-xl">
+                              <p className="text-sm text-white mb-3">Are you sure you want to delete this lead?</p>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setShowDeleteConfirm(null)}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="bg-red-500 hover:bg-red-600"
+                                  onClick={() => handleDeleteLead(lead.id)}
+                                >
+                                  Delete
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
+                        </Can>
                       </div>
                     </td>
                   </motion.tr>
@@ -514,6 +622,124 @@ export default function LeadsPage() {
           </div>
         </div>
       </div>
+
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <form
+            onSubmit={handleCreateLead}
+            className="bg-gray-900 p-6 rounded-xl border border-white/10 w-full max-w-md space-y-4"
+          >
+            <h3 className="text-lg font-bold">Add Lead</h3>
+            <Input
+              required
+              type="email"
+              placeholder="Email"
+              value={addForm.email}
+              onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
+              className="bg-white/5 border-white/10"
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                placeholder="First name"
+                value={addForm.first_name}
+                onChange={(e) => setAddForm({ ...addForm, first_name: e.target.value })}
+                className="bg-white/5 border-white/10"
+              />
+              <Input
+                placeholder="Last name"
+                value={addForm.last_name}
+                onChange={(e) => setAddForm({ ...addForm, last_name: e.target.value })}
+                className="bg-white/5 border-white/10"
+              />
+            </div>
+            <Input
+              placeholder="Company"
+              value={addForm.company_name}
+              onChange={(e) => setAddForm({ ...addForm, company_name: e.target.value })}
+              className="bg-white/5 border-white/10"
+            />
+            <Input
+              placeholder="Job title"
+              value={addForm.job_title}
+              onChange={(e) => setAddForm({ ...addForm, job_title: e.target.value })}
+              className="bg-white/5 border-white/10"
+            />
+            <Input
+              placeholder="Phone"
+              value={addForm.phone}
+              onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })}
+              className="bg-white/5 border-white/10"
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setShowAddModal(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createLead.isPending}>
+                Save Lead
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {showEditModal && editingLead && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <form
+            onSubmit={handleUpdateLead}
+            className="bg-gray-900 p-6 rounded-xl border border-white/10 w-full max-w-md space-y-4"
+          >
+            <h3 className="text-lg font-bold">Edit Lead</h3>
+            <Input
+              required
+              type="email"
+              placeholder="Email"
+              value={editForm.email}
+              onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+              className="bg-white/5 border-white/10"
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                placeholder="First name"
+                value={editForm.first_name}
+                onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
+                className="bg-white/5 border-white/10"
+              />
+              <Input
+                placeholder="Last name"
+                value={editForm.last_name}
+                onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
+                className="bg-white/5 border-white/10"
+              />
+            </div>
+            <Input
+              placeholder="Company"
+              value={editForm.company_name}
+              onChange={(e) => setEditForm({ ...editForm, company_name: e.target.value })}
+              className="bg-white/5 border-white/10"
+            />
+            <Input
+              placeholder="Job title"
+              value={editForm.job_title}
+              onChange={(e) => setEditForm({ ...editForm, job_title: e.target.value })}
+              className="bg-white/5 border-white/10"
+            />
+            <Input
+              placeholder="Phone"
+              value={editForm.phone}
+              onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+              className="bg-white/5 border-white/10"
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setShowEditModal(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={updateLead.isPending}>
+                Save Changes
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

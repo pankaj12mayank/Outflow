@@ -20,7 +20,10 @@ api.interceptors.request.use(
       requestUrl.includes("/system-owner-auth") ||
       requestUrl.includes("/system-owner/") ||
       requestUrl.includes("/system-owner-dashboard") ||
-      requestUrl.includes("/system-owner/platform");
+      requestUrl.includes("/system-owner/platform") ||
+      requestUrl.includes("/notifications") ||
+      requestUrl.includes("/email-templates") ||
+      requestUrl.includes("/polls/");
     const accessToken = localStorage.getItem("access_token");
     const systemOwnerToken = localStorage.getItem("system_owner_token");
     const token = isSystemOwnerRoute
@@ -45,8 +48,11 @@ api.interceptors.response.use(
         requestUrl.includes("/system-owner-auth") ||
         requestUrl.includes("/system-owner/") ||
         requestUrl.includes("/system-owner-dashboard") ||
-        requestUrl.includes("/system-owner/platform");
-      
+        requestUrl.includes("/system-owner/platform") ||
+        requestUrl.includes("/notifications") ||
+        requestUrl.includes("/email-templates") ||
+        requestUrl.includes("/polls/");
+
       if (isSystemOwnerRoute) {
         localStorage.removeItem("system_owner_token");
         localStorage.removeItem("system_owner_refresh_token");
@@ -64,7 +70,10 @@ api.interceptors.response.use(
         requestUrl.includes("/system-owner-auth") ||
         requestUrl.includes("/system-owner/") ||
         requestUrl.includes("/system-owner-dashboard") ||
-        requestUrl.includes("/system-owner/platform");
+        requestUrl.includes("/system-owner/platform") ||
+        requestUrl.includes("/notifications") ||
+        requestUrl.includes("/email-templates") ||
+        requestUrl.includes("/polls/");
 
       const isAuthRoute = requestUrl.includes("/auth/login") || requestUrl.includes("/auth/register");
 
@@ -178,6 +187,23 @@ export const authAPI = {
     api.post("/api/v1/auth/verify-email", { token }),
 };
 
+export const settingsAPI = {
+  get: () => api.get("/api/v1/settings/me"),
+  updateProfile: (data: Record<string, unknown>) => api.patch("/api/v1/settings/profile", data),
+  updateOrganization: (data: Record<string, unknown>) =>
+    api.patch("/api/v1/settings/organization", data),
+  updateNotifications: (data: Record<string, boolean>) =>
+    api.patch("/api/v1/settings/notifications", data),
+};
+
+export const billingAPI = {
+  subscriptions: () => api.get("/api/v1/billing/subscriptions"),
+  invoices: () => api.get("/api/v1/billing/invoices"),
+  createSubscription: (data: Record<string, unknown>) =>
+    api.post("/api/v1/billing/subscriptions", data),
+  landingPlans: () => api.get("/api/v1/plans/landing"),
+};
+
 export const leadsAPI = {
   list: (params?: { page?: number; limit?: number; search?: string; status?: string }) =>
     api.get("/api/v1/leads/", { params }),
@@ -224,13 +250,23 @@ export const sequencesAPI = {
 export const emailsAPI = {
   list: (params?: { campaign_id?: string; lead_id?: string; page?: number; limit?: number }) =>
     api.get("/api/v1/emails/", { params }),
+  inbox: (params?: { page?: number; limit?: number }) =>
+    api.get("/api/v1/emails/inbox", { params }),
   get: (id: string) => api.get(`/api/v1/emails/${id}`),
   getThread: (leadId: string) => api.get(`/api/v1/emails/thread/${leadId}`),
   track: (id: string) => api.post(`/api/v1/emails/${id}/track`),
 };
 
+export const meetingsAPI = {
+  list: (params?: { status?: string }) => api.get("/api/v1/meetings", { params }),
+  get: (id: string) => api.get(`/api/v1/meetings/${id}`),
+  create: (data: Record<string, unknown>) => api.post("/api/v1/meetings", data),
+  cancel: (id: string) => api.delete(`/api/v1/meetings/${id}`),
+};
+
 export const teamAPI = {
   list: () => api.get("/api/v1/team/members"),
+  listInvitations: () => api.get("/api/v1/team/invitations"),
   invite: (email: string, role: string) =>
     api.post("/api/v1/team/invitations", { email, role }),
   updateMember: (id: string, data: { role?: string; status?: string }) =>

@@ -106,6 +106,65 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
+class OnboardingRequest(BaseModel):
+    """Optional wizard fields persisted after register (L18)."""
+    organization_website: Optional[str] = None
+    industry: Optional[str] = None
+    company_size: Optional[str] = None
+    primary_goal: Optional[str] = None
+    target_audience: Optional[str] = None
+    monthly_leads: Optional[str] = None
+    email_provider: Optional[str] = None
+    timezone: Optional[str] = None
+
+
+@router.patch("/onboarding", summary="Save registration wizard data")
+async def save_onboarding(
+    data: OnboardingRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    from bson import ObjectId
+    from app.db.mongodb import MongoDB
+
+    await MongoDB.connect()
+    org_id = current_user.get("organization_id")
+    user_id = str(current_user.get("sub") or current_user.get("id") or "")
+
+    onboarding_payload = data.model_dump(exclude_none=True)
+    timezone = onboarding_payload.pop("timezone", None)
+
+    if org_id and onboarding_payload:
+        org_update = {
+            "onboarding": onboarding_payload,
+            "updated_at": datetime.utcnow(),
+        }
+        if data.organization_website:
+            org_update["website"] = data.organization_website
+        for field in ("industry", "company_size", "primary_goal"):
+            if getattr(data, field, None):
+                org_update[field] = getattr(data, field)
+        try:
+            oid = ObjectId(str(org_id))
+        except Exception:
+            oid = org_id
+        await MongoDB.get_collection("organizations").update_one(
+            {"_id": oid},
+            {"$set": org_update},
+        )
+
+    if user_id and timezone:
+        try:
+            uid = ObjectId(user_id)
+        except Exception:
+            uid = user_id
+        await MongoDB.get_collection("users").update_one(
+            {"_id": uid},
+            {"$set": {"timezone": timezone, "updated_at": datetime.utcnow()}},
+        )
+
+    return {"success": True}
+
+
 @router.post("/register", status_code=status.HTTP_201_CREATED,
               summary="Register new user")
 async def register(data: RegisterRequest, request: Request):

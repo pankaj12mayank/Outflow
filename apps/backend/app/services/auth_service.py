@@ -306,31 +306,26 @@ class AuthService:
         try:
             async with await MongoDB.get_client().start_session() as session:
                 async with session.start_transaction():
-                    org_coll = MongoDB.get_collection("organizations")
-                    org_result = await org_coll.insert_one(organization, session=session)
-                    organization["id"] = str(org_result.inserted_id)
-
-                    user["organization_id"] = organization["id"]
-                    user_coll = MongoDB.get_collection("users")
-                    try:
-                        user_result = await user_coll.insert_one(user, session=session)
-                    except Exception as e:
-                        if "duplicate key" in str(e).lower() or "E11000" in str(e):
-                            raise ValueError("Email already registered")
-                        raise
-                    user["id"] = str(user_result.inserted_id)
-
-                    membership["user_id"] = user["id"]
-                    membership["organization_id"] = organization["id"]
-                    mem_coll = MongoDB.get_collection("memberships")
-                    await mem_coll.insert_one(membership, session=session)
-
-                    session_id = await self._create_session_txn(user, organization["id"], browser, os, client_info, session)
+                    await self._register_with_session(
+                        organization, user, membership, browser, os, client_info, session
+                    )
         except ValueError:
             raise
         except Exception as e:
-            print(f"Registration transaction failed: {e}")
-            raise ValueError("Registration failed. Please try again.")
+            err = str(e).lower()
+            if "replica set" in err or "illegaloperation" in err or "transaction numbers" in err:
+                try:
+                    await self._register_without_transaction(
+                        organization, user, membership, browser, os, client_info
+                    )
+                except ValueError:
+                    raise
+                except Exception as fallback_err:
+                    print(f"Registration fallback failed: {fallback_err}")
+                    raise ValueError("Registration failed. Please try again.")
+            else:
+                print(f"Registration transaction failed: {e}")
+                raise ValueError("Registration failed. Please try again.")
 
         await self._log_login(user["id"], organization["id"], "success", client_info)
         try:
@@ -353,6 +348,74 @@ class AuthService:
             "user": self._user_to_dict(user, organization),
             "tokens": tokens
         }
+
+    async def _register_with_session(
+        self,
+        organization: dict,
+        user: dict,
+        membership: dict,
+        browser: str,
+        os: str,
+        client_info: dict,
+        session,
+    ) -> None:
+        org_coll = MongoDB.get_collection("organizations")
+        org_result = await org_coll.insert_one(organization, session=session)
+        organization["id"] = str(org_result.inserted_id)
+
+        user["organization_id"] = organization["id"]
+        user_coll = MongoDB.get_collection("users")
+        try:
+            user_result = await user_coll.insert_one(user, session=session)
+        except Exception as e:
+            if "duplicate key" in str(e).lower() or "E11000" in str(e):
+                raise ValueError("Email already registered")
+            raise
+        user["id"] = str(user_result.inserted_id)
+
+        membership["user_id"] = user["id"]
+        membership["organization_id"] = organization["id"]
+        mem_coll = MongoDB.get_collection("memberships")
+        await mem_coll.insert_one(membership, session=session)
+
+        await self._create_session_txn(user, organization["id"], browser, os, client_info, session)
+
+    async def _register_without_transaction(
+        self,
+        organization: dict,
+        user: dict,
+        membership: dict,
+        browser: str,
+        os: str,
+        client_info: dict,
+    ) -> None:
+        """Standalone MongoDB (no replica set) cannot use multi-doc transactions."""
+        org_coll = MongoDB.get_collection("organizations")
+        org_result = await org_coll.insert_one(organization)
+        organization["id"] = str(org_result.inserted_id)
+
+        user["organization_id"] = organization["id"]
+        user_coll = MongoDB.get_collection("users")
+        try:
+            user_result = await user_coll.insert_one(user)
+        except Exception as e:
+            await org_coll.delete_one({"_id": org_result.inserted_id})
+            if "duplicate key" in str(e).lower() or "E11000" in str(e):
+                raise ValueError("Email already registered")
+            raise
+        user["id"] = str(user_result.inserted_id)
+
+        membership["user_id"] = user["id"]
+        membership["organization_id"] = organization["id"]
+        mem_coll = MongoDB.get_collection("memberships")
+        try:
+            await mem_coll.insert_one(membership)
+        except Exception:
+            await user_coll.delete_one({"_id": user_result.inserted_id})
+            await org_coll.delete_one({"_id": org_result.inserted_id})
+            raise
+
+        await self._create_session(user, organization["id"], browser, os, client_info)
 
     async def _create_session_txn(self, user: Dict, organization_id: str, browser: str, os: str, client_info: dict, session) -> str:
         access_token = generate_token()

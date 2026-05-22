@@ -179,9 +179,10 @@ export default function DashboardPage() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const [analyticsRes, campaignsRes] = await Promise.all([
+      const [analyticsRes, campaignsRes, activityRes] = await Promise.all([
         api.get("/api/v1/analytics/overview"),
         api.get("/api/v1/campaigns"),
+        api.get("/api/v1/analytics/activity-feed", { params: { limit: 10 } }),
       ]);
 
       const analytics = analyticsRes.data || {};
@@ -189,7 +190,7 @@ export default function DashboardPage() {
 
       const leads = analytics.leads || {};
       const campaignData = analytics.campaigns || {};
-      const emailAnalytics = analytics.emailAnalytics || {};
+      const emailAnalytics = analytics.emailAnalytics || analytics.emails || {};
       const sales = analytics.sales || {};
 
       const totalLeads = leads.total || 0;
@@ -228,9 +229,26 @@ export default function DashboardPage() {
       setCampaigns(formattedCampaigns);
       setEmailAnalytics(emailAnalytics);
 
-      setActivities([
-        { id: "1", type: "lead_enriched", message: "Dashboard data loaded successfully", time: "Just now", status: "success" },
-      ]);
+      const feed = Array.isArray(activityRes.data) ? activityRes.data : [];
+      const formatActivityTime = (iso?: string | null) => {
+        if (!iso) return "";
+        const d = new Date(iso);
+        const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+        if (mins < 1) return "Just now";
+        if (mins < 60) return `${mins}m ago`;
+        const hrs = Math.floor(mins / 60);
+        if (hrs < 24) return `${hrs}h ago`;
+        return d.toLocaleDateString();
+      };
+      setActivities(
+        feed.map((a: { id?: string; type?: string; description?: string; created_at?: string }) => ({
+          id: a.id || String(Math.random()),
+          type: a.type || "activity",
+          message: a.description || a.type || "Activity",
+          time: formatActivityTime(a.created_at),
+          status: "success",
+        }))
+      );
 
     } catch (error) {
       console.error("Failed to fetch dashboard data:", error);

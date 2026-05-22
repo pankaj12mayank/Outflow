@@ -9,3 +9,4 @@ from .team import router as team_router
 from .sequences import router as sequences_router
 from .emails import router as emails_router
 from .email_templates import router as email_templates_router
+from .settings import router as settings_router

@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { usePermission, Role } from "../hooks/usePermission";
 
@@ -17,26 +17,23 @@ export function PermissionGuard({
   requiredPermissions = [],
   requiredRole,
   fallback = null,
-  redirectTo = "/",
+  redirectTo = "/app/dashboard",
 }: PermissionGuardProps) {
   const router = useRouter();
-  const { hasPermission, hasAnyPermission, hasRole, isSystemOwner } = usePermission();
+  const { hasAnyPermission, hasRole } = usePermission();
 
-  if (requiredRole && !hasRole(requiredRole)) {
-    if (fallback) return <>{fallback}</>;
-    router.push(redirectTo);
-    return null;
-  }
+  const roleOk = !requiredRole || hasRole(requiredRole);
+  const permOk =
+    requiredPermissions.length === 0 || hasAnyPermission(requiredPermissions);
+  const allowed = roleOk && permOk;
 
-  if (requiredPermissions.length > 0) {
-    const hasAccess = hasAnyPermission(requiredPermissions);
-    if (!hasAccess) {
-      if (fallback) return <>{fallback}</>;
-      router.push(redirectTo);
-      return null;
+  useEffect(() => {
+    if (!allowed && !fallback) {
+      router.replace(redirectTo);
     }
-  }
+  }, [allowed, fallback, redirectTo, router]);
 
+  if (!allowed) return <>{fallback}</>;
   return <>{children}</>;
 }
 

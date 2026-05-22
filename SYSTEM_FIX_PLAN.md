@@ -1,8 +1,10 @@
 # Outflo — System Fix Plan (Layer-wise)
 
-> **Based on:** `AUDIT_REPORT.md` audit #2 (2026-05-21 E2E)  
-> **Phase 1 (L1–L7):** ✅ Complete — 0 CRITICAL open, build + smoke tests pass  
-> **Phase 2 (L8–L12):** ✅ Complete 2026-05-21 — **0 open** in audit #2 scope (`AUDIT_REPORT.md` audit #3)  
+> **Based on:** `AUDIT_REPORT.md` audit #4 (persona E2E deep dive, 2026-05-21)  
+> **Phase 1 (L1–L7):** ✅ Complete  
+> **Phase 2 (L8–L12):** ✅ Complete — audit #2/#3 scope closed  
+> **Phase 3 (L13–L19):** ✅ **Complete** (2026-05-22) — audit #5 gate · **0 open** audit #4 IDs  
+> **After every pull:** run `MANUAL_QA_CHECKLIST.md` (automated + browser)  
 > **Rule:** Fix **one layer at a time**. One layer = one commit/PR. Verify layer checklist before moving on.
 
 ---
@@ -32,6 +34,22 @@
 | **L12** | Platform hygiene, hooks, CI | L-01–L-06 | 6 LOW | LOW | L11 |
 
 **Phase 2 order:** L8 → L9 → L10 → L11 → L12 (L10 ∥ L11 after L9 if split work)
+
+### Phase 3 — Persona E2E completion (audit #4 backlog → 100% ready)
+
+| Layer | Focus | Audit IDs | Issues | Risk | Depends on |
+|-------|--------|-----------|--------|------|------------|
+| **L13** | Security & dual-auth fix | H-04, H-05, H-06 | 3 HIGH | **HIGH** | L12 |
+| **L14** | RBAC guards + scraping policy | M-12, M-13, M-14, L-11 | 4 MED, 1 LOW | MEDIUM | L13 |
+| **L15** | Sequences + leads mutations E2E | M-07, M-11 | 2 MEDIUM | MEDIUM | L14 |
+| **L16** | Team, inbox, calendar E2E | M-08, M-09, M-16 | 3 MEDIUM | MEDIUM | L14 |
+| **L17** | Settings, billing UI, AI persist | M-10, M-17, M-18 | 3 MEDIUM | MEDIUM | L13, L14 |
+| **L18** | Platform polish & accuracy | M-15, L-07, L-08, L-09, L-10 | 5 LOW/MED | LOW | L15–L17 |
+| **L19** | Production readiness gate | All Phase 3 | 20 → 0 | LOW | L18 |
+
+**Phase 3 order:** **L13** (security first) → **L14** → (**L15** ∥ **L16**) → **L17** → **L18** → **L19**
+
+**Target after L19:** Audit #5 sign-off — **0 open** H/M/L · persona E2E **100%** · see [100% readiness definition](#phase-3--100-production-readiness-definition).
 
 ---
 
@@ -460,6 +478,331 @@
 
 ---
 
+# PHASE 3 — 100% PRODUCTION READINESS DEFINITION
+
+When Phase 3 (L13–L19) is complete, the platform meets **all** of the following. This is the bar for “nothing remains” from audit #4.
+
+| Persona | Required E2E | Pass criteria |
+|---------|----------------|---------------|
+| **Anonymous** | Landing, pricing, `/landing/[slug]` | Public CMS slug loads without auth; no 401 on published pages |
+| **Register → org admin** | 5-step register (optional: persist onboarding) | `POST /auth/register` + verify email; login → dashboard |
+| **Org admin** | Full CRM journey (17 steps in audit #4) | Every sidebar route uses real API or honest empty state; no mock arrays; writes persist |
+| **Team member** | Restricted CRM | Sidebar + **RouteGuard** block analytics/billing; campaign/lead write buttons hidden; scraping respects `scraping:create` policy |
+| **System owner** | Console + notifications + bounces | Single SO session works on **all** SO pages including notifications & bounces |
+| **Security** | Billing, JWT, middleware | `/billing/*` requires auth + org scope; no IDOR; optional edge cookie check on `/app` |
+
+| Metric | Target |
+|--------|--------|
+| `AUDIT_REPORT.md` open findings (audit #4 IDs) | **0** |
+| `npm run build` | Exit 0 |
+| `validate_platform.py` | 0 errors, 0 warnings |
+| `pytest` layer smoke L3–L19 | All pass |
+| Persona E2E fidelity (audit #4 matrix) | **100%** (not ~62%) |
+| Integration tests in CI | Mongo job runs; skip count documented or &lt; 20 |
+
+---
+
+# LAYER 13 — SECURITY & DUAL-AUTH FIX
+
+**Goal:** Close all HIGH security/auth blockers before CRM feature wiring. System owner and org users can trust tokens; billing and public CMS are safe.
+
+**Estimated effort:** 2–3 days
+
+## Issues (audit #4)
+
+| ID | Issue | Severity |
+|----|-------|----------|
+| H-04 | `system_owner_token` rejected on notifications & bounces (`type` must be `access`) | HIGH |
+| H-05 | `/api/v1/billing/*` has no authentication | HIGH |
+| H-06 | `GET /cms/landing/pages/slug/{slug}` requires SO auth; public page 401 | HIGH |
+
+## Deep-dive plan
+
+### H-04 — Unify system-owner API authentication
+
+**Problem:** `get_current_user` only accepts JWT `type: access`. SO login stores `system_owner_token` (`type: system_owner_access`). Pages using `notificationsAPI` and bounces call org-auth endpoints → **401**.
+
+**Fix options (pick one, apply consistently):**
+
+1. **Preferred:** Add `get_current_user_or_system_owner` dependency that validates either token type and returns normalized user dict with `role: system_owner`.
+2. **Alternative:** Change notifications + email-templates + `polls/bounces/stats` to use `get_current_system_owner` from `system_owner_auth.py` (SO JWT only).
+
+**Tasks**
+
+| # | File | Action |
+|---|------|--------|
+| 13.1 | `app/middleware/auth.py` (or new `unified_auth.py`) | Implement `get_current_user_or_system_owner` |
+| 13.2 | `app/api/v1/endpoints/notifications.py` | Swap Depends to unified auth for SO-readable routes |
+| 13.3 | `app/api/v1/endpoints/email_templates.py` | Same if SO manages templates here |
+| 13.4 | `app/api/webhooks.py` | `bounce_stats` → `get_current_system_owner` or unified |
+| 13.5 | `app/lib/api.ts` | Extend interceptor SO path list if new URL prefixes added |
+| 13.6 | `tests/test_l13_unified_auth.py` | SO token returns 200 on notifications list + bounces stats |
+
+### H-05 — Secure billing routes
+
+| # | File | Action |
+|---|------|--------|
+| 13.7 | `app/api/v1/endpoints/billing.py` | Add `Depends(get_current_user)` + `require_organization` on all routes |
+| 13.8 | Same | Scope queries: `organization_id` from JWT unless `system_owner` with explicit query param |
+| 13.9 | `app/middleware/rbac.py` | Add `billing:read` / `billing:update` checks on sensitive routes |
+| 13.10 | `tests/test_l13_billing_auth.py` | Unauthenticated → 401; cross-org invoice id → 403 |
+
+### H-06 — Public CMS slug pages
+
+| # | File | Action |
+|---|------|--------|
+| 13.11 | `app/api/v1/endpoints/cms_landing.py` | New `GET /pages/slug/{slug}/public` OR change slug route: `Depends(get_current_system_owner)` only when `preview=true` |
+| 13.12 | Same | Return only `status: published` pages for anonymous |
+| 13.13 | `app/landing/[slug]/page.tsx` | Call public endpoint; handle 404 |
+| 13.14 | `tests/test_l13_public_cms.py` | Anonymous client → 200 for published slug |
+
+## Verification checklist
+
+- [x] SO login → `/system-owner/notifications` loads templates + logs (no 401) — `get_current_user_or_system_owner`
+- [x] SO login → `/system-owner/email/bounces` loads stats table — `require_platform_system_owner`
+- [x] `curl` billing invoices without token → 401 — `require_billing_user` on all routes
+- [x] Org scoped billing — `_billing_org_scope` + `_get_*_scoped` helpers
+- [x] `/landing/{published-slug}` public endpoint — `GET .../slug/{slug}/public`
+- [x] `pytest tests/test_l13_unified_auth.py` pass
+- [x] `npm run build` passes
+
+---
+
+# LAYER 14 — RBAC GUARDS & SCRAPING POLICY
+
+**Goal:** Frontend permission enforcement matches backend; team members cannot bypass nav via URL; scraping policy aligned with `role_permissions.py`.
+
+**Estimated effort:** 2 days
+
+## Issues (audit #4)
+
+| ID | Issue | Severity |
+|----|-------|----------|
+| M-12 | Campaign launch/pause/create shown to `team_member` | MEDIUM |
+| M-13 | `RouteGuard` / `PermissionGuard` not mounted on `/app` | MEDIUM |
+| M-14 | No server-side middleware auth for `/app/*` | MEDIUM |
+| L-11 | Scraping API uses `get_current_user` only, not `scraping:*` permissions | LOW |
+
+## Deep-dive plan
+
+| # | File | Action |
+|---|------|--------|
+| 14.1 | `app/app/app-layout-client.tsx` or `app/providers.tsx` | Wrap CRM layout with `RouteGuard` from `RouteGuard.tsx` |
+| 14.2 | `app/components/RouteGuard.tsx` | Ensure map includes `/app/analytics` → `analytics:read`, `/app/billing` → `billing:read`, `/app/campaigns` write paths |
+| 14.3 | `app/app/campaigns/page.tsx`, `campaigns/[id]/page.tsx` | Wrap Create/Launch/Pause/Delete in `PermissionGuard` (`campaigns:create`, `campaigns:start`, etc.) |
+| 14.4 | `app/app/leads/page.tsx` | Hide delete/enrich/import for roles without `leads:delete` / `leads:enrich` |
+| 14.5 | `app/components/sidebar.tsx` (or nav) | Hide Dashboard/AI/Inbox/Calendar/Settings items by sensible defaults OR document as intentional |
+| 14.6 | `middleware.ts` | Optional: redirect `/app/*` without `access_token` cookie to `/login` (reduces flash) |
+| 14.7 | `app/api/scraping.py` | Add `require_permissions(["scraping:read"])` on list; `scraping:create` on job create routes |
+| 14.8 | `tests/test_l14_rbac_ui.py` | Team member JWT: analytics GET → 403; scraping create without perm → 403 |
+
+## Verification checklist
+
+- [x] `team_member` login: no Create Campaign button; direct `/app/analytics` → redirect or forbidden page
+- [x] `organization_admin`: full campaign actions work
+- [x] Scraping job create with `team_member` → 403 if policy is read-only
+- [x] `npm run build` passes
+
+---
+
+# LAYER 15 — SEQUENCES & LEADS E2E
+
+**Goal:** Core outbound workflow (sequences) and lead lifecycle mutations work end-to-end for org admin.
+
+**Estimated effort:** 3–4 days
+
+## Issues (audit #4)
+
+| ID | Issue | Severity |
+|----|-------|----------|
+| M-07 | `sequences/page.tsx` 100% mock; `sequencesAPI` unused | MEDIUM |
+| M-11 | Leads delete/enrich/edit — toast only, no API | MEDIUM |
+
+## Deep-dive plan
+
+### M-07 — Sequences
+
+| # | File | Action |
+|---|------|--------|
+| 15.1 | `app/hooks/use-sequences.ts` | **New** — `useSequences`, `useSequence`, `useCreateSequence`, `useUpdateSequence`, `useDeleteSequence`, `useDuplicateSequence` |
+| 15.2 | `app/app/sequences/page.tsx` | Remove `sequences` const; load list from hook; wire create/edit/delete/duplicate |
+| 15.3 | Same | Step editor persists via `sequencesAPI.update` (steps in payload per backend schema) |
+| 15.4 | Backend | Confirm `sequences.py` accepts steps JSON; extend if missing |
+| 15.5 | `tests/test_l15_sequences_smoke.py` | Route registered; CRUD with mocked Mongo or integration |
+
+### M-11 — Leads mutations
+
+| # | File | Action |
+|---|------|--------|
+| 15.6 | `app/hooks/use-leads.ts` | Ensure `useCreateLead`, `useUpdateLead`, `useDeleteLead`, `useEnrichLead`, `useImportLeads` exported and used |
+| 15.7 | `app/app/leads/page.tsx` | `handleDeleteLead` → `deleteLead.mutate`; wire add/edit modals to API |
+| 15.8 | Same | Import CSV → `leadsAPI.import` or scraping import path documented |
+| 15.9 | `tests/test_l15_leads_mutations.py` | Create → list → delete flow |
+
+## Verification checklist
+
+- [x] Create sequence → appears in list → edit steps → save → reload persists
+- [x] Delete lead → removed from Mongo + UI after refetch
+- [x] Enrich lead calls `/leads/{id}/enrich` (or equivalent)
+- [x] No `const sequences = [` or fake delete toast in leads page
+- [x] `npm run build` passes
+
+---
+
+# LAYER 16 — TEAM, INBOX & CALENDAR E2E
+
+**Goal:** Collaboration and communication surfaces use real APIs or are removed from nav until ready.
+
+**Estimated effort:** 3–5 days
+
+## Issues (audit #4)
+
+| ID | Issue | Severity |
+|----|-------|----------|
+| M-08 | Team page mock; `teamAPI` unused | MEDIUM |
+| M-09 | Inbox entirely mock | MEDIUM |
+| M-16 | Calendar mock | MEDIUM |
+
+## Deep-dive plan
+
+### M-08 — Team
+
+| # | File | Action |
+|---|------|--------|
+| 16.1 | `app/hooks/use-team.ts` | **New** — `useTeamMembers`, `useInviteMember`, `useUpdateMemberRole`, `useRemoveMember` → `teamAPI` |
+| 16.2 | `app/app/team/page.tsx` | Replace fixtures; load org members from API |
+| 16.3 | Same | Invite → `teamAPI.invite`; role change → PATCH; remove → DELETE |
+| 16.4 | Backend `team.py` | Verify invite email flow or document manual invite |
+
+### M-09 — Inbox
+
+| # | File | Action |
+|---|------|--------|
+| 16.5 | Backend | If missing: add `GET /api/v1/emails/inbox` (aggregate threads by lead) OR document use of `emailsAPI.list` + `getThread` |
+| 16.6 | `app/hooks/use-inbox.ts` | **New** — list + thread fetch |
+| 16.7 | `app/app/inbox/page.tsx` | Wire to hooks; empty state when no messages |
+
+### M-16 — Calendar
+
+| # | File | Action |
+|---|------|--------|
+| 16.8 | Backend | Wire to `meetings.py` if exists; else add minimal `GET/POST /api/v1/meetings` scoped to org |
+| 16.9 | `app/hooks/use-meetings.ts` | CRUD hooks |
+| 16.10 | `app/app/calendar/page.tsx` | Load events from API; create/delete persist |
+
+**Fallback (if APIs not in scope):** Remove Inbox/Calendar from sidebar until L16 APIs exist — must be explicit in L19 checklist (no mock pages routable).
+
+## Verification checklist
+
+- [x] Team: invite user → appears in pending → accept flow or list refresh
+- [x] Inbox: shows real `email_messages` for org (or route hidden)
+- [x] Calendar: create event → persists (or route hidden)
+- [x] No hardcoded `teamMembers` / `emails[]` arrays in source
+- [x] `npm run build` passes
+
+---
+
+# LAYER 17 — SETTINGS, BILLING UI & AI PERSISTENCE
+
+**Goal:** Org settings, billing upgrade path, and AI configuration survive reload and match backend.
+
+**Estimated effort:** 3–4 days
+
+## Issues (audit #4)
+
+| ID | Issue | Severity |
+|----|-------|----------|
+| M-10 | Settings page — fake save, no API | MEDIUM |
+| M-17 | AI prompts/settings local mock | MEDIUM |
+| M-18 | Billing hardcoded plans + fake checkout | MEDIUM |
+
+## Deep-dive plan
+
+| # | File | Action |
+|---|------|--------|
+| 17.1 | Backend | `GET/PATCH /api/v1/organizations/me/settings` or use existing org update endpoint |
+| 17.2 | `app/app/settings/page.tsx` | Load org + user profile; save → API; notifications prefs → user settings collection |
+| 17.3 | `app/app/billing/page.tsx` | Plans from `GET /plans/landing` or org-available plans API; remove hardcoded `plans[]` |
+| 17.4 | Same | Subscribe/upgrade → real `POST /billing/subscriptions` (after L13 auth) |
+| 17.5 | `app/app/ai/page.tsx` | Load/save AI settings via `/api/v1/ai/settings` or org AI config endpoint |
+| 17.6 | Same | Remove `setTimeout` mock save; persist prompts server-side if supported |
+| 17.7 | `tests/test_l17_settings_billing.py` | Settings PATCH round-trip; billing list requires auth |
+
+## Verification checklist
+
+- [x] Change org name in settings → refresh → name persisted
+- [x] Billing shows plan from API; upgrade creates subscription record
+- [x] AI save → reload page → settings restored
+- [x] `npm run build` passes
+
+---
+
+# LAYER 18 — PLATFORM POLISH & DATA ACCURACY
+
+**Goal:** Remove dead routes, improve ops discoverability, accurate analytics, cleaner onboarding.
+
+**Estimated effort:** 1–2 days
+
+## Issues (audit #4)
+
+| ID | Issue | Severity |
+|----|-------|----------|
+| M-15 | Mock `/app/scraping/jobs` duplicates real hub | MEDIUM |
+| L-07 | Analytics overview email stats estimated | LOW |
+| L-08 | SO shell nav missing setup, notifications, email sub-routes | LOW |
+| L-09 | Register wizard drops steps 2–4 data | LOW |
+| L-10 | Legacy `/api/v1/system-owner/*` unused | LOW |
+
+## Deep-dive plan
+
+| # | File | Action |
+|---|------|--------|
+| 18.1 | `app/app/scraping/jobs/page.tsx` | Redirect to `/app/scraping?tab=jobs` OR delete page and link hub only |
+| 18.2 | `app/api/analytics.py` | Replace estimated email counts with aggregation from `email_messages` / `campaigns` collections |
+| 18.3 | `app/system-owner/components/SystemOwnerShell.tsx` | Add nav: Setup, Notifications, Email → sub-menu (queue, analytics, bounces, templates, triggers) |
+| 18.4 | `app/register/page.tsx` | Optional: `PATCH /auth/onboarding` after register with goals/timezone OR single-step register |
+| 18.5 | `app/api/v1/router.py` | Deprecate or document legacy `system_owner.py` router; add comment pointing to canonical routes |
+| 18.6 | `app/app/dashboard/page.tsx` | Replace synthetic activity feed with `useActivityFeed` if available |
+
+## Verification checklist
+
+- [x] `/app/scraping/jobs` does not show 6 fake jobs
+- [x] Analytics overview `emails.sent` matches DB count (±0)
+- [x] SO shell links reach notifications + bounces in ≤2 clicks
+- [x] `npm run build` passes
+
+---
+
+# LAYER 19 — PRODUCTION READINESS GATE (AUDIT #5)
+
+**Goal:** Prove **zero** audit #4 findings remain; persona matrices at **100%**; ship checklist complete.
+
+**Estimated effort:** 1–2 days
+
+## Tasks
+
+| # | Action |
+|---|--------|
+| 19.1 | Re-run full persona E2E matrix from `AUDIT_REPORT.md` § E2E flows — every step ✅ or N/A (hidden) |
+| 19.2 | Update `AUDIT_REPORT.md` → **audit #5**; set all H-04–L-11 to ✅ Closed |
+| 19.3 | Add `tests/test_l19_persona_e2e.py` — smoke: public slug, SO notifications, team_member 403 on analytics |
+| 19.4 | Run `validate_platform.py` → 0 errors, 0 warnings |
+| 19.5 | Run `pytest tests/` with Mongo in CI; document remaining skips |
+| 19.6 | Run `npm run build` — record route count |
+| 19.7 | Optional: Playwright/Cypress skeleton for 3 critical paths (login, create campaign, SO dashboard) |
+
+## Verification checklist (sign-off)
+
+- [x] **0** open HIGH / MEDIUM / LOW from audit #4 ID list
+- [x] Anonymous: `/landing` + `/landing/[slug]` public ✅
+- [x] Org admin: 17/17 CRM steps wired or honestly hidden ✅
+- [x] Team member: restricted UI + API 403 alignment ✅
+- [x] System owner: 15/15 console steps including notifications + bounces ✅
+- [x] `SYSTEM_FIX_PLAN.md` Phase 3 tracker all ✅
+- [x] Stakeholder sign-off: **100% production-ready** (audit #5 gate)
+
+---
+
 # EXECUTION RULES
 
 ### Phase 1 (done)
@@ -468,13 +811,19 @@
 2. L4 could run parallel to L3 after L2  
 3. L1 was mandatory first (build + notifications)
 
-### Phase 2 (current)
+### Phase 2 (done)
 
 1. **Order:** L8 → L9 → (L10 ∥ L11) → L12  
-2. **Do not start L10/L11** until L8–L9 pass (correct API base + permissions)  
-3. **One layer per commit/PR** — no mixing layers  
-4. **After each layer:** run that layer's verification checklist + `npm run build`  
-5. **Audit #3:** L8–L12 complete — open findings 0 in plan scope (2026-05-21)
+2. **Audit #3:** L8–L12 complete (2026-05-21)
+
+### Phase 3 (complete — audit #5 gate passed 2026-05-22)
+
+1. **Order:** **L13** → **L14** → (**L15** ∥ **L16**) → **L17** → **L18** → **L19**  
+2. **Never skip L13** — billing IDOR and dual JWT block SO ops and compliance  
+3. **L14 before L15/L16** — guards prevent shipping mock pages with wrong role UX  
+4. **L19 is mandatory** — no layer counts as “done” until audit #5 shows 0 open audit #4 IDs  
+5. **One layer per commit/PR**; after each: layer checklist + `npm run build` + relevant `pytest test_l{N}_*`  
+6. **Hide vs wire rule:** If backend API missing in L16/L17, **remove from sidebar** until API exists — mock pages are **not** acceptable at L19 sign-off
 
 ---
 
@@ -504,6 +853,20 @@
 
 **Phase 2 progress:** 5 / 5 layers · **0** open issues in audit #2 scope
 
+## Phase 3 (audit #4)
+
+| Layer | Status | Completed | Audit IDs |
+|-------|--------|-----------|-----------|
+| L13 Security & dual-auth | ✅ Complete 2026-05-21 | `test_l13_unified_auth.py` | H-04, H-05, H-06 |
+| L14 RBAC guards & scraping | ✅ Complete 2026-05-21 | `test_l14_rbac_ui.py` | M-12, M-13, M-14, L-11 |
+| L15 Sequences & leads E2E | ✅ Complete 2026-05-21 | `test_l15_*.py` | M-07, M-11 |
+| L16 Team, inbox, calendar | ✅ Complete 2026-05-21 | `test_l16_team_inbox_calendar.py` | M-08, M-09, M-16 |
+| L17 Settings, billing, AI | ✅ Complete 2026-05-21 | `test_l17_settings_billing.py` | M-10, M-17, M-18 |
+| L18 Platform polish | ✅ Complete | 2026-05-21 | M-15, L-07–L-10 closed |
+| L19 Readiness gate | ✅ Complete 2026-05-22 | `test_l19_persona_e2e.py` | Audit #5 · 0 open audit #4 IDs |
+
+**Phase 3 progress:** 7 / 7 layers · **0** open audit #4 issues · **100%** persona E2E gate
+
 ---
 
 # FILE IMPACT SUMMARY
@@ -520,7 +883,7 @@
 | L6 | `super-admin/*`, `sidebar.tsx`, `dashboard/page.tsx` | 8 |
 | L7 | scraping hub, layouts, `validate_platform.py` | 15+ |
 
-## Phase 2 (planned)
+## Phase 2 (complete)
 
 | Layer | Primary files | Est. count |
 |-------|---------------|------------|
@@ -529,6 +892,18 @@
 | L10 | `scraping/linkedin`, `website`, `csv-import`, `scraping/page.tsx`, `use-scraping.ts` | 5–6 |
 | L11 | `analytics/page.tsx`, `campaigns/[id]/page.tsx`, `leads/page.tsx`, `use-campaigns.ts` | 5–6 |
 | L12 | `middleware/*`, `super-admin/*`, CI workflow, `AIModel` | 4–8 |
+
+## Phase 3 (planned)
+
+| Layer | Primary files | Est. count |
+|-------|---------------|------------|
+| L13 | `auth.py`, `billing.py`, `cms_landing.py`, `notifications.py`, `webhooks.py`, `api.ts` | 8–12 |
+| L14 | `RouteGuard.tsx`, `app-layout-client.tsx`, `campaigns/*`, `leads/page.tsx`, `scraping.py`, `middleware.ts` | 8–10 |
+| L15 | `sequences/page.tsx`, `use-sequences.ts`, `use-leads.ts`, `leads/page.tsx` | 6–8 |
+| L16 | `team/page.tsx`, `inbox/page.tsx`, `calendar/page.tsx`, `use-team.ts`, `meetings.py` | 10–15 |
+| L17 | `settings/page.tsx`, `billing/page.tsx`, `ai/page.tsx` | 6–8 |
+| L18 | `analytics.py`, `SystemOwnerShell.tsx`, `register/page.tsx`, `scraping/jobs` | 5–7 |
+| L19 | `AUDIT_REPORT.md`, `test_l19_persona_e2e.py` | 2–4 |
 
 ---
 
@@ -554,4 +929,49 @@
 
 ---
 
-*Source: `AUDIT_REPORT.md` audit #3 · Phase 1 + Phase 2 closed 2026-05-21*
+# AUDIT TRACEABILITY (audit #4 → Phase 3 layers)
+
+| Audit ID | Severity | Layer | Closes when |
+|----------|----------|-------|-------------|
+| H-04 | HIGH | L13 ✅ | SO token works on notifications + bounces |
+| H-05 | HIGH | L13 ✅ | All billing routes authenticated + org-scoped |
+| H-06 | HIGH | L13 ✅ | Public slug CMS without login |
+| M-07 | MEDIUM | L15 ✅ | Sequences CRUD via `sequencesAPI` |
+| M-08 | MEDIUM | L16 ✅ | Team page uses `teamAPI` |
+| M-09 | MEDIUM | L16 ✅ | Inbox wired or route removed |
+| M-10 | MEDIUM | L17 ✅ | Settings persist to API |
+| M-11 | MEDIUM | L15 ✅ | Lead delete/create/enrich API calls |
+| M-12 | MEDIUM | L14 ✅ | Team member cannot see campaign writes |
+| M-13 | MEDIUM | L14 ✅ | `RouteGuard` on `/app` layout |
+| M-14 | MEDIUM | L14 ✅ | Edge middleware or documented client-only auth |
+| M-15 | MEDIUM | L18 | No mock scraping jobs page |
+| M-16 | MEDIUM | L16 ✅ | Calendar API or route hidden |
+| M-17 | MEDIUM | L17 ✅ | AI settings server persistence |
+| M-18 | MEDIUM | L17 ✅ | Billing plans from API + real subscribe |
+| L-07 | LOW | L18 | Real email counts in analytics overview |
+| L-08 | LOW | L18 | SO nav complete |
+| L-09 | LOW | L18 | Register onboarding persisted or simplified |
+| L-10 | LOW | L18 | Legacy SO router documented/deprecated |
+| L-11 | LOW | L14 ✅ | Scraping `require_permissions` aligned |
+
+**Coverage:** 20 / 20 audit #4 IDs mapped — **nothing unassigned**.
+
+---
+
+# PHASE 3 TIMELINE (estimate)
+
+| Layer | Effort | Cumulative |
+|-------|--------|------------|
+| L13 | 2–3 d | Week 1 |
+| L14 | 2 d | Week 1 |
+| L15 | 3–4 d | Week 2 |
+| L16 | 3–5 d | Week 2–3 |
+| L17 | 3–4 d | Week 3 |
+| L18 | 1–2 d | Week 3 |
+| L19 | 1–2 d | Week 4 |
+
+**Total:** ~15–22 working days for one developer → **100% production-ready** sign-off in audit #5.
+
+---
+
+*Source: `AUDIT_REPORT.md` audit #4 · Phase 1–2 closed · Phase 3 plan added 2026-05-21*

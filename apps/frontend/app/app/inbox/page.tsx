@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   Search,
@@ -26,9 +26,11 @@ import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
+import { PageError, PageLoading } from "@/app/components/page-state";
+import { useInbox } from "@/app/hooks/use-inbox";
 
 interface Email {
-  id: number;
+  id: string;
   from: {
     name: string;
     email: string;
@@ -46,229 +48,6 @@ interface Email {
   labels: string[];
 }
 
-const emails: Email[] = [
-  {
-    id: 1,
-    from: {
-      name: "Sarah Chen",
-      email: "sarah.chen@techscale.io",
-      avatar: "SC",
-    },
-    subject: "Re: Question about your outreach platform",
-    preview: "Hi! Thanks for reaching out. I'd love to learn more about how you handle...",
-    body: `Hi there!
-
-Thanks for reaching out. I'd love to learn more about how you handle personalization at scale.
-
-We've been looking for a solution that can help us automate our outbound campaigns while still maintaining that human touch. Our current process is quite manual and we're spending too much time on repetitive tasks.
-
-Could you schedule a quick 15-minute call this week? I'm free on Thursday or Friday afternoon.
-
-Best regards,
-Sarah Chen
-VP of Sales at TechScale Inc.`,
-    date: "2026-05-14",
-    time: "10:32 AM",
-    read: false,
-    starred: true,
-    folder: "inbox",
-    classification: "lead",
-    labels: ["enterprise", "high-priority"],
-  },
-  {
-    id: 2,
-    from: {
-      name: "Michael Torres",
-      email: "m.torres@dataflow.com",
-      avatar: "MT",
-    },
-    subject: "Demo request - DataFlow Systems",
-    preview: "Thanks for your interest in Outflo! I'd be happy to schedule a demo...",
-    body: `Hello!
-
-Thanks for your interest in Outflo! I'd be happy to schedule a demo for your team.
-
-At DataFlow, we're currently evaluating different outreach platforms to streamline our sales pipeline. We send about 5000 emails per month and need better tracking and analytics.
-
-What times work for you this week?
-
-Best,
-Michael Torres
-Head of Growth`,
-    date: "2026-05-14",
-    time: "09:15 AM",
-    read: false,
-    starred: false,
-    folder: "unread",
-    classification: "opportunity",
-    labels: ["demo-request"],
-  },
-  {
-    id: 3,
-    from: {
-      name: "Emma Williams",
-      email: "emma.w@cloudnine.co",
-      avatar: "EW",
-    },
-    subject: "Following up on our conversation",
-    preview: "Just wanted to bump this to the top of your inbox. Would love to chat about...",
-    body: `Hi!
-
-Just wanted to bump this to the top of your inbox. Would love to chat about how we might be able to work together.
-
-I saw your case study with Acme Corp and was impressed by the results. We're looking for something similar for our team of 20 SDRs.
-
-Let me know if you're free for a quick call this week.
-
-Thanks,
-Emma Williams
-CRO at CloudNine Solutions`,
-    date: "2026-05-13",
-    time: "4:45 PM",
-    read: true,
-    starred: false,
-    folder: "inbox",
-    classification: "opportunity",
-    labels: ["follow-up"],
-  },
-  {
-    id: 4,
-    from: {
-      name: "James Miller",
-      email: "james@nexusai.io",
-      avatar: "JM",
-    },
-    subject: "Not interested, but thanks",
-    preview: "Appreciate the outreach but we're currently not in the market for...",
-    body: `Hi,
-
-Appreciate the outreach but we're currently not in the market for this type of solution. We're working with another vendor already.
-
-Thanks for your time though.
-
-James
-CEO at Nexus AI`,
-    date: "2026-05-13",
-    time: "2:20 PM",
-    read: true,
-    starred: false,
-    folder: "inbox",
-    classification: "spam",
-    labels: ["rejection"],
-  },
-  {
-    id: 5,
-    from: {
-      name: "Lisa Park",
-      email: "lisa.park@synthetix.com",
-      avatar: "LP",
-    },
-    subject: "Integration question",
-    preview: "We use Salesforce and HubSpot - can Outflo integrate with both?",
-    body: `Hey!
-
-Quick question - we use both Salesforce and HubSpot in our tech stack. Can Outflo integrate with both?
-
-We're currently manually syncing data between the two which is a pain. Would love to find a solution that handles this automatically.
-
-Let me know!
-
-Lisa Park
-Director of Marketing`,
-    date: "2026-05-12",
-    time: "11:08 AM",
-    read: true,
-    starred: true,
-    folder: "starred",
-    classification: "lead",
-    labels: ["technical", "integration"],
-  },
-  {
-    id: 6,
-    from: {
-      name: "David Kim",
-      email: "d.kim@brightstack.io",
-      avatar: "DK",
-    },
-    subject: "Pricing inquiry",
-    preview: "Hi there! I'm interested in the Enterprise plan. Could you share more details...",
-    body: `Hi there!
-
-I'm interested in the Enterprise plan. Could you share more details about volume discounts and annual commitment options?
-
-We're a team of 50 and looking to scale our outbound efforts significantly over the next quarter.
-
-Thanks!
-David Kim
-VP of Sales`,
-    date: "2026-05-12",
-    time: "10:30 AM",
-    read: true,
-    starred: false,
-    folder: "inbox",
-    classification: "lead",
-    labels: ["pricing", "enterprise"],
-  },
-  {
-    id: 7,
-    from: {
-      name: "Alex Johnson",
-      email: "alex@startupxyz.com",
-      avatar: "AJ",
-    },
-    subject: "Re: Quick question",
-    preview: "Thanks for the quick response! Actually, I have one more question about...",
-    body: `Thanks for the quick response!
-
-Actually, I have one more question about the personalization features. Can we use dynamic variables not just in the subject line and body, but also in attachments?
-
-That would be a game changer for us.
-
-Cheers,
-Alex`,
-    date: "2026-05-11",
-    time: "3:15 PM",
-    read: true,
-    starred: false,
-    folder: "inbox",
-    classification: "lead",
-    labels: ["technical"],
-  },
-  {
-    id: 8,
-    from: {
-      name: "You",
-      email: "you@outflo.com",
-      avatar: "YO",
-    },
-    subject: "Initial outreach - TechScale Inc",
-    preview: "Hi Sarah, I came across your profile and wanted to reach out about...",
-    body: `Hi Sarah,
-
-I came across your profile and wanted to reach out about how Outflo can help TechScale scale your outreach efforts.
-
-We've helped companies like yours increase reply rates by an average of 3x through intelligent personalization and automation.
-
-Would you be open to a quick 15-minute call this week?
-
-Best regards`,
-    date: "2026-05-10",
-    time: "9:00 AM",
-    read: true,
-    starred: false,
-    folder: "sent",
-    classification: null,
-    labels: ["outbound"],
-  },
-];
-
-const tabs = [
-  { id: "all", label: "All", icon: Mail, count: 0 },
-  { id: "unread", label: "Unread", icon: Clock, count: 2 },
-  { id: "starred", label: "Starred", icon: Star, count: 2 },
-  { id: "sent", label: "Sent", icon: Send, count: 1 },
-];
-
 const classificationColors = {
   lead: "bg-blue-500/10 text-blue-400 border-blue-500/20",
   opportunity: "bg-green-500/10 text-green-400 border-green-500/20",
@@ -276,11 +55,61 @@ const classificationColors = {
   spam: "bg-red-500/10 text-red-400 border-red-500/20",
 };
 
+function mapInboxEmail(row: Record<string, unknown>): Email {
+  const from = (row.from as Email["from"]) || {
+    name: "Unknown",
+    email: "",
+    avatar: "?",
+  };
+  return {
+    id: String(row.id),
+    from,
+    subject: String(row.subject || "(No subject)"),
+    preview: String(row.preview || ""),
+    body: String(row.body || row.preview || ""),
+    date: String(row.date || ""),
+    time: String(row.time || ""),
+    read: Boolean(row.read),
+    starred: Boolean(row.starred),
+    folder: (row.folder as Email["folder"]) || "inbox",
+    classification: (row.classification as Email["classification"]) || null,
+    labels: (row.labels as string[]) || [],
+  };
+}
+
 export default function InboxPage() {
+  const { data, isLoading, isError, error, refetch } = useInbox();
   const [selectedTab, setSelectedTab] = useState("all");
-  const [selectedEmail, setSelectedEmail] = useState<Email | null>(emails[0]);
+  const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [emailList, setEmailList] = useState(emails);
+  const [emailList, setEmailList] = useState<Email[]>([]);
+
+  useEffect(() => {
+    const rows = Array.isArray(data) ? data : [];
+    const mapped = rows.map((row) => mapInboxEmail(row as Record<string, unknown>));
+    setEmailList(mapped);
+    setSelectedEmail((prev) => {
+      if (prev && mapped.some((m) => m.id === prev.id)) return prev;
+      return mapped[0] ?? null;
+    });
+  }, [data]);
+
+  const tabCounts = useMemo(
+    () => ({
+      all: emailList.length,
+      unread: emailList.filter((e) => !e.read).length,
+      starred: emailList.filter((e) => e.starred).length,
+      sent: emailList.filter((e) => e.folder === "sent").length,
+    }),
+    [emailList]
+  );
+
+  const tabs = [
+    { id: "all", label: "All", icon: Mail, count: tabCounts.all },
+    { id: "unread", label: "Unread", icon: Clock, count: tabCounts.unread },
+    { id: "starred", label: "Starred", icon: Star, count: tabCounts.starred },
+    { id: "sent", label: "Sent", icon: Send, count: tabCounts.sent },
+  ];
 
   const filteredEmails = emailList.filter((email) => {
     const matchesSearch =
@@ -295,20 +124,33 @@ export default function InboxPage() {
     return matchesSearch && matchesTab;
   });
 
-  const toggleRead = (id: number) => {
+  const toggleRead = (id: string) => {
     setEmailList((prev) =>
       prev.map((e) => (e.id === id ? { ...e, read: !e.read } : e))
     );
+    setSelectedEmail((prev) => (prev?.id === id ? { ...prev, read: !prev.read } : prev));
   };
 
-  const toggleStar = (id: number) => {
+  const toggleStar = (id: string) => {
     setEmailList((prev) =>
       prev.map((e) => (e.id === id ? { ...e, starred: !e.starred } : e))
     );
+    setSelectedEmail((prev) => (prev?.id === id ? { ...prev, starred: !prev.starred } : prev));
   };
 
+  if (isLoading && emailList.length === 0) {
+    return <PageLoading label="Loading inbox..." />;
+  }
+
   return (
-    <div className="h-[calc(100vh-8rem)] flex gap-6">
+    <div className="h-[calc(100vh-8rem)] flex flex-col gap-4">
+      {isError && (
+        <PageError
+          message={(error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Could not load inbox."}
+          onRetry={() => refetch()}
+        />
+      )}
+    <div className="flex flex-1 gap-6 min-h-0">
       <div className="w-80 flex flex-col border-r border-white/5">
         <div className="p-4 space-y-4">
           <h1 className="text-2xl font-bold">Inbox</h1>
@@ -410,9 +252,10 @@ export default function InboxPage() {
           ))}
 
           {filteredEmails.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-500 px-4">
               <Mail className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No emails found</p>
+              <p className="text-sm">No messages yet</p>
+              <p className="text-xs mt-1">Sent campaign emails will appear here.</p>
             </div>
           )}
         </div>
@@ -520,6 +363,7 @@ export default function InboxPage() {
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }

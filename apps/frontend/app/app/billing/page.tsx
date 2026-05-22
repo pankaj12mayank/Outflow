@@ -22,7 +22,8 @@ import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Input } from "@/app/components/ui/input";
 import { toast } from "@/app/components/toast";
-import api from "@/app/lib/api";
+import api, { billingAPI } from "@/app/lib/api";
+import { useAuth } from "@/app/hooks/useAuth";
 
 interface Subscription {
   id: string;
@@ -47,26 +48,17 @@ interface Usage {
   percentage: number;
 }
 
-const plans = [
-  {
-    name: "Starter",
-    price: 49,
-    features: ["5,000 emails/month", "1,000 lead enrichments", "5 campaigns", "Basic analytics"],
-  },
-  {
-    name: "Professional",
-    price: 149,
-    features: ["25,000 emails/month", "10,000 lead enrichments", "Unlimited campaigns", "Advanced analytics", "AI personalization"],
-    popular: true,
-  },
-  {
-    name: "Enterprise",
-    price: 499,
-    features: ["Unlimited emails", "Unlimited enrichments", "Custom AI models", "Dedicated CSM", "SSO & advanced security"],
-  },
-];
+type LandingPlan = {
+  id?: string;
+  name: string;
+  price: string;
+  price_monthly?: number;
+  features: string[];
+  popular?: boolean;
+};
 
 export default function BillingPage() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -74,7 +66,9 @@ export default function BillingPage() {
   const [usage, setUsage] = useState<Usage[]>([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState("Professional");
+  const [plans, setPlans] = useState<LandingPlan[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState("");
+  const [subscribing, setSubscribing] = useState(false);
   const [cardNumber, setCardNumber] = useState("");
   const [expiry, setExpiry] = useState("");
   const [cvc, setCvc] = useState("");
@@ -87,10 +81,16 @@ export default function BillingPage() {
     setLoading(true);
     setError(null);
     try {
-      const [subscriptionRes, invoicesRes] = await Promise.all([
-        api.get("/api/v1/billing/subscriptions"),
-        api.get("/api/v1/billing/invoices"),
+      const [subscriptionRes, invoicesRes, plansRes] = await Promise.all([
+        billingAPI.subscriptions(),
+        billingAPI.invoices(),
+        billingAPI.landingPlans(),
       ]);
+
+      const pricing = plansRes.data?.pricing || plansRes.data?.plans || [];
+      if (Array.isArray(pricing) && pricing.length > 0) {
+        setPlans(pricing);
+      }
 
       if (subscriptionRes.data) {
         const data = subscriptionRes.data;
@@ -164,10 +164,32 @@ export default function BillingPage() {
     toast.success("Payment method updated");
   };
 
-  const handleChangePlan = (plan: string) => {
-    setSelectedPlan(plan);
-    setShowSubscriptionModal(false);
-    toast.success("Plan changed", `Switched to ${plan}`);
+  const handleSubscribe = async (plan: LandingPlan) => {
+    const orgId = user?.organization?.id;
+    if (!plan.id || !orgId) {
+      toast.error("Cannot subscribe", "Plan or organization context is missing.");
+      return;
+    }
+    setSubscribing(true);
+    try {
+      await billingAPI.createSubscription({
+        organization_id: String(orgId),
+        plan_id: plan.id,
+        plan_name: plan.name,
+        price_amount: plan.price_monthly ?? Number(plan.price) ?? 0,
+        billing_interval: "monthly",
+        trial_days: 0,
+      });
+      setSelectedPlan(plan.name);
+      setShowSubscriptionModal(false);
+      toast.success("Subscription updated", `Subscribed to ${plan.name}`);
+      await fetchBillingData();
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error("Subscription failed", detail || "Could not create subscription");
+    } finally {
+      setSubscribing(false);
+    }
   };
 
   const formatDate = (dateStr: string) => {
@@ -366,6 +388,79 @@ export default function BillingPage() {
           </div>
         )}
       </div>
+
+      {showSubscriptionModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-3xl p-6 rounded-2xl border border-white/10 bg-[#0a0a0f] max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold">Choose a plan</h2>
+              <Button variant="ghost" size="icon" onClick={() => setShowSubscriptionModal(false)}>
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            {plans.length === 0 ? (
+              <p className="text-gray-400 text-sm">No plans available. Ask your administrator to configure pricing plans.</p>
+            ) : (
+              <div className="grid md:grid-cols-3 gap-4">
+                {plans.map((plan) => (
+                  <div
+                    key={plan.id || plan.name}
+                    className={cn(
+                      "p-5 rounded-xl border",
+                      plan.popular ? "border-purple-500/40 bg-purple-500/5" : "border-white/10 bg-white/5"
+                    )}
+                  >
+                    {plan.popular && (
+                      <Badge className="mb-2 bg-purple-500/10 text-purple-400 border-purple-500/20">Popular</Badge>
+                    )}
+                    <h3 className="font-bold text-lg">{plan.name}</h3>
+                    <div className="text-3xl font-bold my-2">
+                      ${plan.price_monthly ?? plan.price}
+                      <span className="text-sm text-gray-400 font-normal">/mo</span>
+                    </div>
+                    <ul className="text-sm text-gray-400 space-y-1 mb-4">
+                      {plan.features.slice(0, 5).map((f) => (
+                        <li key={f} className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-green-400 shrink-0 mt-0.5" />
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                    <Button
+                      className="w-full"
+                      variant={plan.popular ? "default" : "outline"}
+                      disabled={subscribing}
+                      onClick={() => handleSubscribe(plan)}
+                    >
+                      {subscribing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Subscribe"}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-md p-6 rounded-2xl border border-white/10 bg-[#0a0a0f]">
+            <h2 className="text-xl font-bold mb-4">Update payment method</h2>
+            <p className="text-sm text-gray-400 mb-4">
+              Payment gateway integration is pending. Card details are not stored yet.
+            </p>
+            <Input placeholder="Card number" value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} className="mb-3" />
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <Input placeholder="MM/YY" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
+              <Input placeholder="CVC" value={cvc} onChange={(e) => setCvc(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowPaymentModal(false)}>Cancel</Button>
+              <Button onClick={handleUpdatePayment}>Save</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

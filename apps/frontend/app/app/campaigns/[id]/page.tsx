@@ -19,6 +19,7 @@ import {
   FlaskConical,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
+import { Can } from "@/app/components/Can";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
@@ -208,15 +209,19 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
         </div>
         <div className="flex items-center gap-2">
           {campaign.status === "running" || campaign.status === "active" ? (
-            <Button variant="outline" className="gap-2" onClick={handleToggleRun} disabled={pauseMutation.isPending}>
-              <Pause className="w-4 h-4" />
-              Pause Campaign
-            </Button>
+            <Can permission="campaigns:pause">
+              <Button variant="outline" className="gap-2" onClick={handleToggleRun} disabled={pauseMutation.isPending}>
+                <Pause className="w-4 h-4" />
+                Pause Campaign
+              </Button>
+            </Can>
           ) : (
-            <Button className="gap-2" onClick={handleToggleRun} disabled={launchMutation.isPending}>
-              <Play className="w-4 h-4" />
-              Launch Campaign
-            </Button>
+            <Can permission="campaigns:start">
+              <Button className="gap-2" onClick={handleToggleRun} disabled={launchMutation.isPending}>
+                <Play className="w-4 h-4" />
+                Launch Campaign
+              </Button>
+            </Can>
           )}
           <Button variant="ghost" size="icon">
             <MoreHorizontal className="w-5 h-5" />

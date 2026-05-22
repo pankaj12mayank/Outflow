@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   ChevronLeft,
@@ -19,18 +19,77 @@ import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Textarea } from "@/app/components/ui/textarea";
+import { Can } from "@/app/components/Can";
+import { PageError, PageLoading } from "@/app/components/page-state";
+import { toast } from "@/app/components/toast";
+import { useMeetings, useCreateMeeting, useCancelMeeting } from "@/app/hooks/use-meetings";
+
+type CalendarEvent = {
+  id: string;
+  title: string;
+  time: string;
+  type: string;
+  color: string;
+  scheduled_at: string;
+};
+
+const typeColors: Record<string, string> = {
+  meeting: "purple",
+  task: "green",
+  call: "blue",
+  email: "yellow",
+};
+
+function mapMeeting(row: Record<string, unknown>): CalendarEvent {
+  const eventType = String(row.event_type || "meeting");
+  return {
+    id: String(row.id),
+    title: String(row.title || "Untitled"),
+    time: String(row.time || ""),
+    type: eventType,
+    color: typeColors[eventType] || "purple",
+    scheduled_at: String(row.scheduled_at || ""),
+  };
+}
+
+function eventOnDay(scheduledAt: string, year: number, month: number, day: number): boolean {
+  if (!scheduledAt) return false;
+  try {
+    const dt = new Date(scheduledAt);
+    return dt.getFullYear() === year && dt.getMonth() === month && dt.getDate() === day;
+  } catch {
+    return scheduledAt.slice(0, 10) === `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+}
 
 export default function CalendarPage() {
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 4, 14));
-  const [selectedDate, setSelectedDate] = useState(14);
-  const [events, setEvents] = useState([
-    { id: 1, title: "Demo with Sarah Chen", time: "10:00 AM", type: "meeting", color: "purple" },
-    { id: 2, title: "Campaign Review", time: "2:00 PM", type: "task", color: "green" },
-    { id: 3, title: "Team Sync", time: "4:00 PM", type: "meeting", color: "blue" },
-  ]);
+  const { data, isLoading, isError, error, refetch } = useMeetings();
+  const createMeeting = useCreateMeeting();
+  const cancelMeeting = useCancelMeeting();
+
+  const today = new Date();
+  const [currentDate, setCurrentDate] = useState(today);
+  const [selectedDate, setSelectedDate] = useState(today.getDate());
   const [showNewEventModal, setShowNewEventModal] = useState(false);
-  const [showEventDetails, setShowEventDetails] = useState<any>(null);
+  const [showEventDetails, setShowEventDetails] = useState<CalendarEvent | null>(null);
   const [newEvent, setNewEvent] = useState({ title: "", time: "", type: "meeting" });
+
+  const allEvents = useMemo(() => {
+    const rows = Array.isArray(data) ? data : [];
+    return rows.map((row) => mapMeeting(row as Record<string, unknown>));
+  }, [data]);
+
+  const events = useMemo(
+    () =>
+      allEvents.filter((e) =>
+        eventOnDay(e.scheduled_at, currentDate.getFullYear(), currentDate.getMonth(), selectedDate)
+      ),
+    [allEvents, currentDate, selectedDate]
+  );
+
+  if (isLoading && allEvents.length === 0) {
+    return <PageLoading label="Loading calendar..." />;
+  }
 
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
@@ -61,36 +120,63 @@ export default function CalendarPage() {
   };
 
   const handleCreateEvent = () => {
-    if (newEvent.title && newEvent.time) {
-      const colors = { meeting: "purple", task: "green", call: "blue", email: "yellow" };
-      setEvents([...events, { 
-        id: Date.now(), 
-        title: newEvent.title, 
-        time: newEvent.time, 
-        type: newEvent.type, 
-        color: colors[newEvent.type as keyof typeof colors] || "purple" 
-      }]);
-      setShowNewEventModal(false);
-      setNewEvent({ title: "", time: "", type: "meeting" });
-    }
+    if (!newEvent.title || !newEvent.time) return;
+    const [hours, minutes] = newEvent.time.split(":").map(Number);
+    const scheduled = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      selectedDate,
+      hours || 9,
+      minutes || 0
+    );
+    createMeeting.mutate(
+      {
+        title: newEvent.title,
+        scheduled_at: scheduled.toISOString(),
+        duration_minutes: 30,
+        event_type: newEvent.type,
+        lead_id: "calendar",
+      },
+      {
+        onSuccess: () => {
+          setShowNewEventModal(false);
+          setNewEvent({ title: "", time: "", type: "meeting" });
+          toast.success("Event created");
+        },
+        onError: () => toast.error("Failed to create event"),
+      }
+    );
   };
 
-  const handleDeleteEvent = (id: number) => {
-    setEvents(events.filter(e => e.id !== id));
-    setShowEventDetails(null);
+  const handleDeleteEvent = (id: string) => {
+    cancelMeeting.mutate(id, {
+      onSuccess: () => {
+        setShowEventDetails(null);
+        toast.delete("Event");
+      },
+      onError: () => toast.error("Failed to delete event"),
+    });
   };
 
   return (
     <div className="space-y-6">
+      {isError && (
+        <PageError
+          message={(error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Could not load calendar."}
+          onRetry={() => refetch()}
+        />
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold mb-2">Calendar</h1>
           <p className="text-gray-400">Schedule and manage your outreach activities</p>
         </div>
-        <Button className="gap-2" onClick={() => setShowNewEventModal(true)}>
-          <Plus className="w-4 h-4" />
-          New Event
-        </Button>
+        <Can permission="settings:update">
+          <Button className="gap-2" onClick={() => setShowNewEventModal(true)}>
+            <Plus className="w-4 h-4" />
+            New Event
+          </Button>
+        </Can>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
@@ -134,7 +220,11 @@ export default function CalendarPage() {
                       ? "bg-purple-600 text-white"
                       : "hover:bg-white/10 text-white"
                     : "text-transparent",
-                  day === 14 && selectedDate !== 14 && "ring-1 ring-purple-500"
+                  day === today.getDate() &&
+                    currentDate.getMonth() === today.getMonth() &&
+                    currentDate.getFullYear() === today.getFullYear() &&
+                    selectedDate !== day &&
+                    "ring-1 ring-purple-500"
                 )}
               >
                 {day}
@@ -258,7 +348,9 @@ export default function CalendarPage() {
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <Button variant="outline" onClick={() => setShowNewEventModal(false)}>Cancel</Button>
-              <Button onClick={handleCreateEvent}>Create Event</Button>
+              <Button onClick={handleCreateEvent} disabled={createMeeting.isPending}>
+                Create Event
+              </Button>
             </div>
           </motion.div>
         </div>
@@ -297,10 +389,12 @@ export default function CalendarPage() {
                 <Edit3 className="w-4 h-4" />
                 Edit
               </Button>
-              <Button variant="outline" className="gap-2 text-red-400" onClick={() => handleDeleteEvent(showEventDetails.id)}>
+              <Can permission="settings:update">
+                <Button variant="outline" className="gap-2 text-red-400" onClick={() => handleDeleteEvent(showEventDetails.id)}>
                 <Trash2 className="w-4 h-4" />
                 Delete
               </Button>
+              </Can>
             </div>
           </motion.div>
         </div>

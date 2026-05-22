@@ -67,37 +67,66 @@ async def get_overview(
         "status": "active"
     })
     
-    # Get email stats
-    email_stats = await leads_coll.count_documents({
-        "organization_id": org_id,
-        "emails_sent": {"$gt": 0}
+    email_coll = MongoDB.get_collection("email_messages")
+    org_match = {"organization_id": org_id}
+
+    emails_sent = await email_coll.count_documents({
+        **org_match,
+        "$or": [
+            {"status": "sent"},
+            {"sent_at": {"$exists": True, "$ne": None}},
+        ],
     })
-    
-    # Get meeting stats
+    emails_opened = await email_coll.count_documents({
+        **org_match,
+        "$or": [
+            {"opened_at": {"$exists": True, "$ne": None}},
+            {"status": "opened"},
+        ],
+    })
+    emails_clicked = await email_coll.count_documents({
+        **org_match,
+        "clicked_at": {"$exists": True, "$ne": None},
+    })
+    emails_replied = await email_coll.count_documents({
+        **org_match,
+        "$or": [
+            {"replied_at": {"$exists": True, "$ne": None}},
+            {"status": "replied"},
+        ],
+    })
+
     meetings = await leads_coll.count_documents({
         "organization_id": org_id,
-        "meeting_booked": True
+        "meeting_booked": True,
     })
-    
+    positive_replies = await leads_coll.count_documents({
+        "organization_id": org_id,
+        "reply_sentiment": {"$in": ["positive", "interested"]},
+    })
+
+    email_block = {
+        "sent": emails_sent,
+        "opened": emails_opened,
+        "clicked": emails_clicked,
+        "replied": emails_replied,
+    }
+
     return {
         "leads": {
             "total": total_leads,
-            "active": total_leads
+            "active": total_leads,
         },
         "campaigns": {
             "total": total_campaigns,
-            "active": active_campaigns
+            "active": active_campaigns,
         },
-        "emails": {
-            "sent": email_stats * 2,  # Estimate
-            "opened": int(email_stats * 0.3),
-            "clicked": int(email_stats * 0.1),
-            "replied": int(email_stats * 0.05)
-        },
+        "emails": email_block,
+        "emailAnalytics": email_block,
         "sales": {
             "meetings_booked": meetings,
-            "positive_replies": int(email_stats * 0.03)
-        }
+            "positive_replies": positive_replies,
+        },
     }
 
 

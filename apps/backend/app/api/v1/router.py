@@ -1,10 +1,11 @@
 from fastapi import APIRouter
-from .endpoints import auth_router, users_router, leads_router, campaigns_router, tasks_router, health_router, scraping_router, team_router, sequences_router, emails_router, email_templates_router
+from .endpoints import auth_router, users_router, leads_router, campaigns_router, tasks_router, health_router, scraping_router, team_router, sequences_router, emails_router, email_templates_router, settings_router
 
 from app.api.admin import router as admin_router
 from app.api.cms import router as cms_router
 from app.api.ai import router as ai_router
 from app.api.analytics import router as analytics_router
+# Legacy RBAC/plan routes — prefer system_owner_auth, system_owner_dashboard, organizations, plans.
 from app.api.v1.endpoints.system_owner import router as system_owner_router
 from app.api.v1.endpoints.system_owner_auth import router as system_owner_auth_router
 from app.api.v1.endpoints.system_owner_dashboard import router as system_owner_dashboard_router
@@ -49,6 +50,7 @@ api_router.include_router(campaigns_router)
 api_router.include_router(tasks_router)
 api_router.include_router(users_router)
 api_router.include_router(team_router)
+api_router.include_router(settings_router)
 api_router.include_router(sequences_router)
 api_router.include_router(emails_router)
 api_router.include_router(email_templates_router)
