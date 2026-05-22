@@ -22,21 +22,7 @@ class OrganizationService:
         limit: int = 20
     ) -> Dict:
         filter_dict = {}
-        # Only organizations with at least one registered user (exclude seed/demo orphans)
-        user_org_ids = await MongoDB.get_collection("users").distinct("organization_id")
-        valid_ids = []
-        for oid in user_org_ids:
-            if not oid:
-                continue
-            try:
-                valid_ids.append(ObjectId(oid) if isinstance(oid, str) else oid)
-            except Exception:
-                pass
-        if valid_ids:
-            filter_dict["_id"] = {"$in": valid_ids}
-        else:
-            return {"organizations": [], "total": 0, "page": 1, "page_size": limit}
-        
+
         if query:
             filter_dict["$or"] = [
                 {"name": {"$regex": query, "$options": "i"}},
@@ -131,7 +117,7 @@ class OrganizationService:
         result = await MongoDB.get_collection("organizations").update_one(
             {"_id": ObjectId(organization_id)},
             {"$set": {
-                "status": OrganizationStatus.SUSPENDED.value,
+                "status": "suspended",
                 "is_active": False,
                 "updated_at": datetime.utcnow()
             }}
@@ -143,7 +129,7 @@ class OrganizationService:
         result = await MongoDB.get_collection("organizations").update_one(
             {"_id": ObjectId(organization_id)},
             {"$set": {
-                "status": OrganizationStatus.ACTIVE.value,
+                "status": "active",
                 "is_active": True,
                 "updated_at": datetime.utcnow()
             }}
@@ -164,6 +150,47 @@ class OrganizationService:
             {"$set": {"plan_id": plan_id, "updated_at": datetime.utcnow()}}
         )
         
+        return True
+
+    @staticmethod
+    async def delete_organization(organization_id: str) -> bool:
+        """Hard-delete org and scoped CRM data (system-owner action)."""
+        try:
+            oid = ObjectId(organization_id)
+        except Exception:
+            return False
+
+        org = await MongoDB.get_collection("organizations").find_one({"_id": oid})
+        if not org:
+            return False
+
+        org_id_str = str(oid)
+        scoped = {"organization_id": org_id_str}
+        scoped_oid = {"organization_id": oid}
+
+        for coll_name in (
+            "leads",
+            "campaigns",
+            "sequences",
+            "email_messages",
+            "scraping_jobs",
+            "meetings",
+            "tasks",
+            "deals",
+            "activity_logs",
+            "subscriptions",
+            "memberships",
+            "notifications",
+        ):
+            coll = MongoDB.get_collection(coll_name)
+            await coll.delete_many({**scoped})
+            try:
+                await coll.delete_many({**scoped_oid})
+            except Exception:
+                pass
+
+        await MongoDB.get_collection("users").delete_many(scoped)
+        await MongoDB.get_collection("organizations").delete_one({"_id": oid})
         return True
 
 

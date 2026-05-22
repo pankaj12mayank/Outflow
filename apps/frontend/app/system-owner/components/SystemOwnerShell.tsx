@@ -15,7 +15,7 @@ import {
   Wallet,
   Menu,
   X,
-  Wrench,
+  HeartPulse,
   Bell,
   ChevronDown,
   ListOrdered,
@@ -36,7 +36,7 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { href: "/system-owner/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/system-owner/setup", label: "Setup", icon: Wrench },
+  { href: "/system-owner/health", label: "System Health", icon: HeartPulse },
   { href: "/system-owner/notifications", label: "Notifications", icon: Bell },
   { href: "/system-owner/plans", label: "Pricing Plans", icon: CreditCard },
   { href: "/system-owner/cms", label: "Landing Page", icon: FileText },

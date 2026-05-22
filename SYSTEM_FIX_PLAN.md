@@ -803,6 +803,43 @@ When Phase 3 (L13–L19) is complete, the platform meets **all** of the followin
 
 ---
 
+# LAYER 20 — SYSTEM OWNER ACCESS & OPS (AUDIT #6)
+
+**Goal:** Fix real-world SO session failures, replace Setup with System Health, show/delete organizations, reset demo CRM metrics.
+
+**Audit reference:** `AUDIT_REPORT.md` audit #6
+
+## Issues (user-reported)
+
+| ID | Issue |
+|----|-------|
+| U1 | SO console “Access denied” (dual JWT) |
+| U2 | Remove Setup → System Health checker |
+| U3 | Dashboard leads/org noise — purge demo data |
+| U4 | Organizations not visible |
+| U5 | Delete organization (modal) |
+
+## Plan
+
+| # | Action |
+|---|--------|
+| 20.1 | `api-auth.ts` — SO token on `/organizations`, `/plans`, `/smtp`, `/cms`, … + pathname guard |
+| 20.2 | Clear org tokens on SO login; clear SO tokens on org login |
+| 20.3 | `system_owner: ["*"]` in `useAuth.tsx` |
+| 20.4 | `/system-owner/health` + redirect `/setup` |
+| 20.5 | `GET /organizations` list all; `DELETE /organizations/{id}` |
+| 20.6 | `POST /system-owner/platform/purge-demo-data` |
+
+## Verification checklist
+
+- [x] SO login → Organizations loads (no access denied toast)
+- [x] System Health runs health-check
+- [x] Purge demo data clears dashboard CRM counts
+- [x] Organization row → modal → delete works
+- [x] `AUDIT_REPORT.md` replaced with audit #6
+
+---
+
 # EXECUTION RULES
 
 ### Phase 1 (done)
@@ -864,8 +901,9 @@ When Phase 3 (L13–L19) is complete, the platform meets **all** of the followin
 | L17 Settings, billing, AI | ✅ Complete 2026-05-21 | `test_l17_settings_billing.py` | M-10, M-17, M-18 |
 | L18 Platform polish | ✅ Complete | 2026-05-21 | M-15, L-07–L-10 closed |
 | L19 Readiness gate | ✅ Complete 2026-05-22 | `test_l19_persona_e2e.py` | Audit #5 · 0 open audit #4 IDs |
+| L20 SO access, health, orgs | ✅ Complete 2026-05-22 | Audit #6 | U1–U5, role `*` sync |
 
-**Phase 3 progress:** 7 / 7 layers · **0** open audit #4 issues · **100%** persona E2E gate
+**Phase 3 progress:** 8 / 8 layers · **0** open audit #4 issues · audit #6 user pass closed
 
 ---
 

@@ -1,5 +1,6 @@
 import axios from "axios";
 import { toast } from "@/app/components/toast/toast-store";
+import { isSystemOwnerApiRequest, pickAuthToken } from "@/app/lib/api-auth";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -16,19 +17,7 @@ api.interceptors.request.use(
       return config;
     }
     const requestUrl = `${config.url || ""}`;
-    const isSystemOwnerRoute =
-      requestUrl.includes("/system-owner-auth") ||
-      requestUrl.includes("/system-owner/") ||
-      requestUrl.includes("/system-owner-dashboard") ||
-      requestUrl.includes("/system-owner/platform") ||
-      requestUrl.includes("/notifications") ||
-      requestUrl.includes("/email-templates") ||
-      requestUrl.includes("/polls/");
-    const accessToken = localStorage.getItem("access_token");
-    const systemOwnerToken = localStorage.getItem("system_owner_token");
-    const token = isSystemOwnerRoute
-      ? systemOwnerToken || accessToken
-      : accessToken || systemOwnerToken;
+    const token = pickAuthToken(requestUrl);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -44,16 +33,7 @@ api.interceptors.response.use(
 
     if (!error.response) {
       const requestUrl = `${error.config?.url || ""}`;
-      const isSystemOwnerRoute =
-        requestUrl.includes("/system-owner-auth") ||
-        requestUrl.includes("/system-owner/") ||
-        requestUrl.includes("/system-owner-dashboard") ||
-        requestUrl.includes("/system-owner/platform") ||
-        requestUrl.includes("/notifications") ||
-        requestUrl.includes("/email-templates") ||
-        requestUrl.includes("/polls/");
-
-      if (isSystemOwnerRoute) {
+      if (isSystemOwnerApiRequest(requestUrl)) {
         localStorage.removeItem("system_owner_token");
         localStorage.removeItem("system_owner_refresh_token");
         if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
@@ -66,14 +46,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       const requestUrl = `${originalRequest.url || ""}`;
-      const isSystemOwnerRoute =
-        requestUrl.includes("/system-owner-auth") ||
-        requestUrl.includes("/system-owner/") ||
-        requestUrl.includes("/system-owner-dashboard") ||
-        requestUrl.includes("/system-owner/platform") ||
-        requestUrl.includes("/notifications") ||
-        requestUrl.includes("/email-templates") ||
-        requestUrl.includes("/polls/");
+      const isSystemOwnerRoute = isSystemOwnerApiRequest(requestUrl);
 
       const isAuthRoute = requestUrl.includes("/auth/login") || requestUrl.includes("/auth/register");
 
@@ -144,7 +117,17 @@ api.interceptors.response.use(
     }
 
     if (error.response?.status === 403) {
-      toast.error("Access denied", "You don't have permission for this action.");
+      const requestUrl = `${error.config?.url || ""}`;
+      const onSoConsole =
+        typeof window !== "undefined" &&
+        (window.location.pathname.startsWith("/system-owner") ||
+          isSystemOwnerApiRequest(requestUrl));
+      toast.error(
+        onSoConsole ? "Session mismatch" : "Access denied",
+        onSoConsole
+          ? "Log out, then sign in again as system owner (admin@outflo.com)."
+          : "You don't have permission for this action."
+      );
     }
 
     if (error.response?.status === 404) {

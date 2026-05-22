@@ -71,6 +71,30 @@ async def run_health_check(_user: dict = Depends(get_current_system_owner)):
     return {"backend": backend, "mongodb": mongodb, "ollama": ollama}
 
 
+@router.post("/purge-demo-data")
+async def purge_demo_crm_data(_user: dict = Depends(get_current_system_owner)):
+    """
+    Remove operational CRM/demo documents so dashboard counts reflect only new real usage.
+    Does not delete organizations or users.
+    """
+    purged: dict = {}
+    for coll_name in (
+        "leads",
+        "campaigns",
+        "sequences",
+        "email_messages",
+        "scraping_jobs",
+        "meetings",
+        "tasks",
+        "deals",
+        "activity_logs",
+    ):
+        coll = MongoDB.get_collection(coll_name)
+        result = await coll.delete_many({})
+        purged[coll_name] = result.deleted_count
+    return {"success": True, "purged": purged}
+
+
 @router.post("/test-email")
 async def send_platform_test_email(
     data: TestEmailRequest,

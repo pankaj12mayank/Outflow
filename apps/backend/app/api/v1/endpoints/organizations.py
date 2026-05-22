@@ -118,6 +118,18 @@ async def activate_organization(
     return {"message": "Organization activated successfully"}
 
 
+@router.delete("/{organization_id}")
+async def delete_organization(
+    organization_id: str,
+    current_user: dict = Depends(get_current_system_owner),
+):
+    """Permanently delete an organization and its CRM data."""
+    deleted = await OrganizationService.delete_organization(organization_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    return {"success": True, "message": "Organization deleted"}
+
+
 @router.post("/{organization_id}/change-plan")
 async def change_plan(
     organization_id: str,

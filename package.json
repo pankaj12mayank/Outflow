@@ -14,7 +14,7 @@
     "test": "npm run test:frontend && npm run test:backend",
     "test:frontend": "cd apps/frontend && npm run test",
     "test:backend": "cd apps/backend && pytest",
-    "verify:automated": "python validate_platform.py && cd apps/backend && python -m pytest tests/test_l13_unified_auth.py tests/test_l14_rbac_ui.py tests/test_l15_sequences_smoke.py tests/test_l15_leads_mutations.py tests/test_l16_team_inbox_calendar.py tests/test_l17_settings_billing.py tests/test_l18_platform_polish.py tests/test_l19_persona_e2e.py -q && python scripts/live_smoke_l19.py"
+    "verify:automated": "python validate_platform.py && cd apps/backend && python -m pytest tests/test_l13_unified_auth.py tests/test_l14_rbac_ui.py tests/test_l15_sequences_smoke.py tests/test_l15_leads_mutations.py tests/test_l16_team_inbox_calendar.py tests/test_l17_settings_billing.py tests/test_l18_platform_polish.py tests/test_l19_persona_e2e.py tests/test_l20_system_owner_ops.py -q && python scripts/live_smoke_l19.py"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"

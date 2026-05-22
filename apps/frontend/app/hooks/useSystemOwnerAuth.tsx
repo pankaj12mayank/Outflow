@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/app/lib/api";
+import { clearOrgAuthTokens } from "@/app/lib/api-auth";
 
 interface SystemOwnerUser {
   id: string;
@@ -115,10 +116,12 @@ export function SystemOwnerAuthProvider({ children }: { children: ReactNode }) {
   const clearAuth = () => {
     localStorage.removeItem("system_owner_token");
     localStorage.removeItem("system_owner_refresh_token");
+    clearOrgAuthTokens();
     setState({ user: null, isAuthenticated: false, isLoading: false });
   };
 
   const login = async (email: string, password: string, deviceInfo?: any) => {
+    clearOrgAuthTokens();
     const response = await api.post("/api/v1/system-owner-auth/login", {
       email,
       password,

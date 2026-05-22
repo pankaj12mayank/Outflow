@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import api from "@/app/lib/api";
+import { clearSystemOwnerAuthTokens } from "@/app/lib/api-auth";
 
 export interface User {
   id: number;
@@ -21,24 +22,7 @@ export interface User {
 
 /** Keep in sync with apps/backend/app/core/role_permissions.py */
 export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
-  system_owner: [
-    "organizations:read", "organizations:create", "organizations:update", "organizations:delete",
-    "plans:read", "plans:create", "plans:update", "plans:delete",
-    "pricing:read", "pricing:create", "pricing:update", "pricing:delete",
-    "smtp:read", "smtp:create", "smtp:update", "smtp:delete",
-    "cms:read", "cms:create", "cms:update", "cms:delete",
-    "analytics:read", "analytics:export",
-    "invoices:read", "invoices:create", "invoices:update",
-    "features:read", "features:create", "features:update", "features:delete",
-    "billing:read", "billing:update",
-    "teams:read", "teams:create", "teams:update", "teams:delete",
-    "leads:read", "leads:create", "leads:update", "leads:delete", "leads:enrich",
-    "campaigns:read", "campaigns:create", "campaigns:update", "campaigns:delete", "campaigns:start", "campaigns:pause",
-    "sequences:read", "sequences:create", "sequences:update", "sequences:delete",
-    "scraping:read", "scraping:create", "scraping:update", "scraping:delete",
-    "settings:read", "settings:update",
-    "users:read", "users:create", "users:update", "users:delete",
-  ],
+  system_owner: ["*"],
   organization_admin: [
     "organizations:read",
     "analytics:read", "analytics:export",
@@ -143,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearAuth = useCallback(() => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
+    clearSystemOwnerAuthTokens();
     delete api.defaults.headers.common["Authorization"];
     syncAccessTokenCookie(null);
     setState({ user: null, isAuthenticated: false, isLoading: false });
@@ -239,6 +224,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
+      clearSystemOwnerAuthTokens();
       const response = await api.post("/api/v1/auth/login", { email, password });
       const { user: rawUser, tokens } = response.data;
       const user = addPermissionsToUser(rawUser);
@@ -266,6 +252,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     onboarding?: Record<string, string | undefined>
   ) => {
     try {
+      clearSystemOwnerAuthTokens();
       const response = await api.post("/api/v1/auth/register", {
         email,
         password,

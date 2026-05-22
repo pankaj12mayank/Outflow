@@ -36,6 +36,8 @@ Or from root: `npm run dev` (both services).
 
 **Default system owner (dev):** `admin@outflo.com` / see `SYSTEM_OWNER_PASSWORD` in `apps/backend/.env`
 
+**Important:** Log out before SO login so old org `access_token` is cleared (fixes “Access denied”).
+
 ---
 
 ## 2. Automated gate (run first — ~2 min)
@@ -57,7 +59,7 @@ python validate_platform.py
 
 ```powershell
 cd apps\backend
-python -m pytest tests/test_l13_unified_auth.py tests/test_l14_rbac_ui.py tests/test_l15_sequences_smoke.py tests/test_l15_leads_mutations.py tests/test_l16_team_inbox_calendar.py tests/test_l17_settings_billing.py tests/test_l18_platform_polish.py tests/test_l19_persona_e2e.py -q
+python -m pytest tests/test_l13_unified_auth.py tests/test_l14_rbac_ui.py tests/test_l15_sequences_smoke.py tests/test_l15_leads_mutations.py tests/test_l16_team_inbox_calendar.py tests/test_l17_settings_billing.py tests/test_l18_platform_polish.py tests/test_l19_persona_e2e.py tests/test_l20_system_owner_ops.py -q
 ```
 
 | Expected |
@@ -152,11 +154,13 @@ Login with `admin@outflo.com` (routes to SO auth).
 | # | Step | URL | Pass? | Notes |
 |---|------|-----|-------|-------|
 | S1 | SO dashboard | `/system-owner/dashboard` | ☐ | Stats load |
-| S2 | Setup in nav (≤2 clicks) | `/system-owner/setup` | ☐ | |
+| S2 | System Health in nav (≤2 clicks) | `/system-owner/health` | ☐ | Replaces Setup; run health-check |
+| S2b | Purge demo CRM data (optional) | `/system-owner/health` | ☐ | Dashboard counts reset |
 | S3 | Notifications (≤2 clicks) | `/system-owner/notifications` | ☐ | **No 401** with SO session |
 | S4 | Email → Bounces (≤2 clicks) | `/system-owner/email/bounces` | ☐ | Stats load |
 | S5 | Email sub-routes | queue, analytics, templates, triggers | ☐ | Nav expandable |
-| S6 | Organizations | `/system-owner/organizations` | ☐ | |
+| S6 | Organizations list loads | `/system-owner/organizations` | ☐ | No “Access denied”; rows visible |
+| S6b | Delete org (modal) | `/system-owner/organizations` | ☐ | Click row → Delete → confirm |
 | S7 | Plans / SMTP / CMS | respective routes | ☐ | |
 
 ---
